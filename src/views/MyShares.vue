@@ -1,0 +1,179 @@
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { api } from '@/api'
+import Layout from '@/components/Layout.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+
+interface Share {
+  id: number
+  file_path: string
+  file_type: string
+  share_code: string
+  password: string | null
+  expires_at: string | null
+  download_count: number
+  max_downloads: number | null
+  created_at: string
+}
+
+const shares = ref<Share[]>([])
+const loading = ref(true)
+const showDeleteConfirm = ref(false)
+const shareToDelete = ref<Share | null>(null)
+const copiedId = ref<number | null>(null)
+
+const origin = window.location.origin
+
+async function fetchShares() {
+  loading.value = true
+  try {
+    const res = await api.get<{ shares: Share[] }>('/share/list')
+    shares.value = res.shares
+  } catch (err) {
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchShares)
+
+function confirmDelete(share: Share) {
+  shareToDelete.value = share
+  showDeleteConfirm.value = true
+}
+
+async function handleDelete() {
+  if (!shareToDelete.value) return
+  try {
+    await api.delete(`/share/${shareToDelete.value.id}`)
+    await fetchShares()
+  } catch (err: any) {
+    alert(err.message)
+  }
+  showDeleteConfirm.value = false
+  shareToDelete.value = null
+}
+
+async function copyLink(code: string, id: number) {
+  await navigator.clipboard.writeText(`${origin}/s/${code}`)
+  copiedId.value = id
+  setTimeout(() => { copiedId.value = null }, 2000)
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('zh-CN') + ' ' + new Date(dateStr).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function isExpired(share: Share): boolean {
+  return share.expires_at ? new Date(share.expires_at) < new Date() : false
+}
+
+function isMaxedOut(share: Share): boolean {
+  return share.max_downloads ? share.download_count >= share.max_downloads : false
+}
+</script>
+
+<template>
+  <Layout>
+    <div class="max-w-4xl mx-auto">
+      <h1 class="text-2xl font-bold mb-6 dark:text-dark-text text-light-text">我的分享</h1>
+
+      <!-- 加载状态 -->
+      <div v-if="loading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </div>
+
+      <!-- 空状态 -->
+      <div v-else-if="shares.length === 0" class="card flex flex-col items-center justify-center py-16 text-gray-400 dark:text-dark-text-secondary">
+        <svg class="w-16 h-16 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+        <p>暂无分享链接</p>
+        <p class="text-sm mt-1">在文件列表中右键点击文件即可创建分享</p>
+      </div>
+
+      <!-- 分享列表 -->
+      <div v-else class="space-y-3">
+        <div v-for="share in shares" :key="share.id" class="card">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="font-medium dark:text-dark-text text-light-text truncate">
+                  {{ share.file_path.split('/').pop() }}
+                </h3>
+                <span
+                  v-if="isExpired(share)"
+                  class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                >
+                  已过期
+                </span>
+                <span
+                  v-else-if="isMaxedOut(share)"
+                  class="px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                >
+                  已达上限
+                </span>
+                <span
+                  v-else
+                  class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                >
+                  有效
+                </span>
+              </div>
+
+              <p class="text-xs font-mono text-gray-500 dark:text-dark-text-secondary mb-2">
+                {{ origin }}/s/{{ share.share_code }}
+              </p>
+
+              <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-dark-text-secondary">
+                <span>下载次数：{{ share.download_count }}{{ share.max_downloads ? `/${share.max_downloads}` : '' }}</span>
+                <span v-if="share.password">🔒 有密码</span>
+                <span v-if="share.expires_at">过期：{{ formatDate(share.expires_at) }}</span>
+                <span>创建：{{ formatDate(share.created_at) }}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <button
+                @click="copyLink(share.share_code, share.id)"
+                class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                title="复制链接"
+              >
+                <svg v-if="copiedId === share.id" class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <svg v-else class="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                </svg>
+              </button>
+              <button
+                @click="confirmDelete(share)"
+                class="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="删除分享"
+              >
+                <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认 -->
+    <ConfirmDialog
+      :show="showDeleteConfirm"
+      title="删除分享"
+      :message="`确定要删除「${shareToDelete?.file_path.split('/').pop()}」的分享链接吗？`"
+      confirm-text="删除"
+      :danger="true"
+      @confirm="handleDelete"
+      @cancel="showDeleteConfirm = false"
+    />
+  </Layout>
+</template>

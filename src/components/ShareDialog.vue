@@ -1,0 +1,158 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { api } from '@/api'
+
+const props = defineProps<{
+  show: boolean
+  filePath: string
+  fileName: string
+}>()
+
+const emit = defineEmits<{
+  close: []
+}>()
+
+const password = ref('')
+const usePassword = ref(false)
+const expiresIn = ref<number | ''>('')
+const maxDownloads = ref<number | ''>('')
+const loading = ref(false)
+const shareResult = ref<{ shareCode: string; url: string } | null>(null)
+const copied = ref(false)
+
+const origin = window.location.origin
+
+const expirationOptions = [
+  { value: '', label: '永不过期' },
+  { value: 1, label: '1 小时' },
+  { value: 24, label: '1 天' },
+  { value: 72, label: '3 天' },
+  { value: 168, label: '7 天' },
+  { value: 720, label: '30 天' },
+]
+
+async function createShare() {
+  loading.value = true
+  try {
+    const res = await api.post<{ shareCode: string; url: string }>('/share/create', {
+      filePath: props.filePath,
+      fileType: 'file',
+      password: usePassword.value ? password.value : undefined,
+      expiresIn: expiresIn.value || undefined,
+      maxDownloads: maxDownloads.value || undefined,
+    })
+    shareResult.value = res
+  } catch (err: any) {
+    alert(err.message)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function copyLink() {
+  if (!shareResult.value) return
+  await navigator.clipboard.writeText(`${origin}${shareResult.value.url}`)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2000)
+}
+
+function close() {
+  shareResult.value = null
+  password.value = ''
+  usePassword.value = false
+  expiresIn.value = ''
+  maxDownloads.value = ''
+  emit('close')
+}
+</script>
+
+<template>
+  <Teleport to="body">
+    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="close"/>
+      <div class="relative card w-full max-w-md" style="padding: 1.5rem">
+        <!-- 分享结果 -->
+        <template v-if="shareResult">
+          <h3 class="text-lg font-semibold mb-2" style="color: var(--text-color)">分享链接已创建</h3>
+          <p class="text-sm mb-4" style="color: var(--text-secondary-color)">
+            文件：{{ fileName }}
+          </p>
+
+          <div class="p-3 rounded-lg mb-4" style="background-color: var(--hover-color)">
+            <p class="text-xs mb-1" style="color: var(--text-secondary-color)">分享链接</p>
+            <p class="font-mono text-sm break-all" style="color: var(--text-color)">
+              {{ origin }}{{ shareResult.url }}
+            </p>
+          </div>
+
+          <div v-if="usePassword && password" class="p-3 rounded-lg mb-4" style="background-color: var(--hover-color)">
+            <p class="text-xs mb-1" style="color: var(--text-secondary-color)">访问密码</p>
+            <p class="font-mono text-sm" style="color: var(--text-color)">{{ password }}</p>
+          </div>
+
+          <div class="flex justify-end gap-3">
+            <button @click="close" class="btn-secondary text-sm">关闭</button>
+            <button @click="copyLink" class="btn-primary text-sm">
+              {{ copied ? '✓ 已复制' : '复制链接' }}
+            </button>
+          </div>
+        </template>
+
+        <!-- 创建表单 -->
+        <template v-else>
+          <h3 class="text-lg font-semibold mb-2" style="color: var(--text-color)">创建分享链接</h3>
+          <p class="text-sm mb-4" style="color: var(--text-secondary-color)">
+            文件：{{ fileName }}
+          </p>
+
+          <div class="space-y-4">
+            <!-- 密码保护 -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input v-model="usePassword" type="checkbox" class="rounded border-gray-300 text-blue-500 focus:ring-blue-500" />
+                <span class="text-sm" style="color: var(--text-color)">密码保护</span>
+              </label>
+              <input
+                v-if="usePassword"
+                v-model="password"
+                type="text"
+                class="input-field mt-2"
+                placeholder="设置访问密码"
+              />
+            </div>
+
+            <!-- 过期时间 -->
+            <div>
+              <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">过期时间</label>
+              <select v-model="expiresIn" class="input-field">
+                <option v-for="opt in expirationOptions" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- 下载次数限制 -->
+            <div>
+              <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">最大下载次数</label>
+              <input
+                v-model="maxDownloads"
+                type="number"
+                class="input-field"
+                placeholder="留空表示不限制"
+                min="1"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 mt-6">
+            <button @click="close" class="btn-secondary text-sm">取消</button>
+            <button @click="createShare" class="btn-primary text-sm" :disabled="loading">
+              <span v-if="loading">创建中...</span>
+              <span v-else>创建分享</span>
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </Teleport>
+</template>

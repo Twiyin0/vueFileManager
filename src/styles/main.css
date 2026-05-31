@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 基础颜色变量 */
+:root {
+  --bg-color: #f8f9fa;
+  --surface-color: #ffffff;
+  --card-color: #ffffff;
+  --border-color: #e5e7eb;
+  --hover-color: #f3f4f6;
+  --text-color: #1f2937;
+  --text-secondary-color: #6b7280;
+  --accent-color: #4f6ef7;
+  --accent-soft-color: #dbeafe;
+}
+
+.dark {
+  --bg-color: #1a1b1e;
+  --surface-color: #222326;
+  --card-color: #2a2b2f;
+  --border-color: #3a3b3f;
+  --hover-color: #323337;
+  --text-color: #e0e0e2;
+  --text-secondary-color: #a0a0a4;
+  --accent-color: #6b7cff;
+  --accent-soft-color: #4a5080;
+}
+
+/* 全局样式 */
+html {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #555;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* 过渡动画 */
+* {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* 文件列表行悬浮 */
+.file-row:hover {
+  background-color: var(--hover-color);
+}
+
+/* 按钮通用样式 */
+.btn-primary {
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  background-color: var(--hover-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  opacity: 0.85;
+}
+
+.btn-danger {
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  background-color: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.dark .btn-danger {
+  background-color: #3a2020;
+  color: #f87171;
+  border-color: #5a2a2a;
+}
+
+.btn-danger:hover {
+  opacity: 0.85;
+}
+
+/* 输入框 */
+.input-field {
+  @apply w-full px-3 py-2 rounded-lg transition-all duration-200;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.15);
+}
+
+.dark .input-field:focus {
+  box-shadow: 0 0 0 3px rgba(107, 124, 255, 0.15);
+}
+
+/* 卡片 */
+.card {
+  @apply rounded-xl p-5 transition-all duration-200;
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
+}
+
+.dark .card {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
