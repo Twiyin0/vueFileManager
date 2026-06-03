@@ -45,6 +45,10 @@ const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
 const selectedFiles = ref<Set<string>>(new Set())
 const isSelectMode = ref(false)
 
+// 视图模式
+const viewMode = ref<'list' | 'grid'>((localStorage.getItem('viewMode') as 'list' | 'grid') || 'list')
+watch(viewMode, (v) => localStorage.setItem('viewMode', v))
+
 // 文件详情面板
 const showDetailPanel = ref(false)
 const detailItem = ref<any>(null)
@@ -330,7 +334,7 @@ async function handleDelete() {
 
 // 下载
 async function handleDownload(file: FileItem) {
-  await filesStore.downloadFile(file.path)
+  await filesStore.downloadFile(file.path, file.poolId || currentPoolId.value)
 }
 
 // 搜索
@@ -502,6 +506,22 @@ function formatSize(bytes: number) {
                 上级
               </button>
 
+              <!-- 视图模式切换 -->
+              <div class="flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
+                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :style="viewMode === 'list' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'"
+                  title="列表模式">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                  </svg>
+                </button>
+                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :style="viewMode === 'grid' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'"
+                  title="图片模式">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                  </svg>
+                </button>
+              </div>
+
               <!-- 批量选择模式 -->
               <button @click="toggleSelectMode"
                 :class="isSelectMode ? 'btn-primary' : 'btn-secondary'" class="text-sm flex items-center gap-1">
@@ -576,6 +596,7 @@ function formatSize(bytes: number) {
             :show-actions="true"
             :select-mode="isSelectMode"
             :selected-files="selectedFiles"
+            :view-mode="viewMode"
             @open="openFile"
             @download="handleDownload"
             @delete="confirmDelete"
@@ -676,7 +697,7 @@ function formatSize(bytes: number) {
     />
 
     <!-- 文件预览 -->
-    <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" @close="showPreview = false" />
+    <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" :pool-id="fileToPreview.poolId || currentPoolId" @close="showPreview = false" />
 
     <!-- 分享对话框 -->
     <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" @close="showShare = false" />

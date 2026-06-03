@@ -5,6 +5,7 @@ const props = defineProps<{
   show: boolean
   filePath: string
   fileName: string
+  poolId?: number
   token?: string
 }>()
 
@@ -16,6 +17,9 @@ const previewUrl = computed(() => {
   if (!props.filePath) return ''
   const base = '/api/files/preview'
   const params = new URLSearchParams({ path: props.filePath })
+  if (props.poolId) params.set('poolId', String(props.poolId))
+  const token = localStorage.getItem('token')
+  if (token) params.set('token', token)
   return `${base}?${params.toString()}`
 })
 

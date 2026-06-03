@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { FileItem } from '@/stores/files'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   files: FileItem[]
   loading: boolean
   showActions?: boolean
   selectMode?: boolean
   selectedFiles?: Set<string>
-}>()
+  viewMode?: 'list' | 'grid'
+}>(), {
+  viewMode: 'list'
+})
 
 const emit = defineEmits<{
   open: [file: FileItem]
@@ -42,6 +45,14 @@ function getFileIcon(file: FileItem): string {
   if (['txt', 'md', 'json', 'yaml', 'yml', 'xml'].includes(ext)) return 'text'
   return 'file'
 }
+
+function getPreviewUrl(file: FileItem): string {
+  const params = new URLSearchParams({ path: file.path })
+  if (file.poolId) params.set('poolId', String(file.poolId))
+  const token = localStorage.getItem('token')
+  if (token) params.set('token', token)
+  return `/api/files/preview?${params.toString()}`
+}
 </script>
 
 <template>
@@ -62,7 +73,73 @@ function getFileIcon(file: FileItem): string {
       <p>暂无文件</p>
     </div>
 
-    <!-- 文件列表 -->
+    <!-- 网格模式（缩略图） -->
+    <div v-else-if="viewMode === 'grid'" class="p-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div
+          v-for="file in files"
+          :key="file.path"
+          class="group cursor-pointer rounded-lg overflow-hidden border transition-all"
+          :class="selectedFiles?.has(file.path) ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-600' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'"
+          style="background-color: var(--hover-color)"
+          @click="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
+          @contextmenu="emit('contextmenu', $event, file)"
+        >
+          <!-- 缩略图区域 -->
+          <div class="thumb-container relative">
+            <!-- 选择框 -->
+            <div v-if="selectMode" class="absolute top-1.5 left-1.5 z-10" @click.stop>
+              <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)"
+                class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            </div>
+            <!-- 图片缩略图 -->
+            <img v-if="getFileIcon(file) === 'image'" :src="getPreviewUrl(file)" :alt="file.name" class="thumb-img" loading="lazy" />
+            <!-- 非图片：大图标 -->
+            <div v-else class="thumb-icon">
+              <!-- 文件夹 -->
+              <svg v-if="getFileIcon(file) === 'folder'" class="w-10 h-10 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+              </svg>
+              <!-- 视频 -->
+              <svg v-else-if="getFileIcon(file) === 'video'" class="w-10 h-10 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <!-- 音频 -->
+              <svg v-else-if="getFileIcon(file) === 'audio'" class="w-10 h-10 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
+              </svg>
+              <!-- PDF -->
+              <svg v-else-if="getFileIcon(file) === 'pdf'" class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+              <!-- 压缩包 -->
+              <svg v-else-if="getFileIcon(file) === 'archive'" class="w-10 h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+              </svg>
+              <!-- 代码 -->
+              <svg v-else-if="getFileIcon(file) === 'code'" class="w-10 h-10 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+              </svg>
+              <!-- 文本 -->
+              <svg v-else-if="getFileIcon(file) === 'text'" class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <!-- 默认 -->
+              <svg v-else class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+            </div>
+          </div>
+          <!-- 文件名 -->
+          <div class="px-2 py-1.5">
+            <p class="text-xs truncate text-center" style="color: var(--text-color)" :title="file.name">{{ file.name }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 列表模式 -->
     <div v-else>
       <!-- 表头 -->
       <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium border-b" style="color: var(--text-secondary-color); border-color: var(--border-color)">

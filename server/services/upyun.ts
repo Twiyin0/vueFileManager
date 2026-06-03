@@ -1,4 +1,5 @@
 import upyun from 'upyun'
+import { PassThrough } from 'stream'
 import { StorageProvider, FileInfo } from './storage'
 
 export class UpyunStorage implements StorageProvider {
@@ -56,9 +57,13 @@ export class UpyunStorage implements StorageProvider {
 
   async download(filePath: string): Promise<Buffer> {
     const remotePath = this.normalizePath(filePath)
-    const data = await this.client.getFile(remotePath)
-    if (!data) throw new Error('文件不存在')
-    return Buffer.isBuffer(data) ? data : Buffer.from(data)
+    // 使用 stream 模式下载，避免 responseType:null 导致二进制数据被当文本解析
+    const chunks: Buffer[] = []
+    const passThrough = new PassThrough()
+    passThrough.on('data', (chunk: Buffer) => chunks.push(chunk))
+    await this.client.getFile(remotePath, passThrough)
+    if (chunks.length === 0) throw new Error('文件不存在')
+    return Buffer.concat(chunks)
   }
 
   async remove(filePath: string): Promise<void> {

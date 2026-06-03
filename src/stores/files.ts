@@ -58,9 +58,11 @@ export const useFilesStore = defineStore('files', () => {
     await fetchFiles(currentPath.value)
   }
 
-  async function downloadFile(path: string) {
+  async function downloadFile(path: string, poolId?: number) {
     const token = localStorage.getItem('token')
-    const url = `/api/files/download?path=${encodeURIComponent(path)}`
+    const params = new URLSearchParams({ path })
+    if (poolId) params.set('poolId', String(poolId))
+    const url = `/api/files/download?${params.toString()}`
     const response = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
