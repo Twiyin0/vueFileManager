@@ -2,17 +2,20 @@ import express from 'express'
 import cors from 'cors'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import config from './config.js'
+import config from './config'
 
 // 初始化数据库（确保建表和默认管理员）
-import './db.js'
+import './db'
 
-import authRoutes from './routes/auth.js'
-import filesRoutes from './routes/files.js'
-import userRoutes from './routes/user.js'
-import adminRoutes from './routes/admin.js'
-import guestRoutes from './routes/guest.js'
-import shareRoutes from './routes/share.js'
+import authRoutes from './routes/auth'
+import filesRoutes from './routes/files'
+import userRoutes from './routes/user'
+import adminRoutes from './routes/admin'
+import guestRoutes from './routes/guest'
+import shareRoutes from './routes/share'
+import storagePoolsRoutes from './routes/storage-pools'
+import trashRoutes from './routes/trash'
+import favouritesRoutes from './routes/favourites'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -36,6 +39,9 @@ app.use('/api/user', userRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/guest', guestRoutes)
 app.use('/api/share', shareRoutes)
+app.use('/api/storage-pools', storagePoolsRoutes)
+app.use('/api/trash', trashRoutes)
+app.use('/api/favourites', favouritesRoutes)
 
 // SPA fallback（生产模式）
 app.get('*', (req, res) => {

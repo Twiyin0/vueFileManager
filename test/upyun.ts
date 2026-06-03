@@ -7,7 +7,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { UpyunStorage } from '../server/services/upyun.js'
+import { UpyunStorage } from '../server/services/upyun'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 

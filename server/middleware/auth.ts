@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-import db from '../db.js'
-import config from '../config.js'
+import db from '../db'
+import config from '../config'
 
 const JWT_SECRET = config.server.jwt_secret
 
@@ -20,9 +20,12 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
-    const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(decoded.userId) as any
+    const user = db.prepare('SELECT id, role, banned FROM users WHERE id = ?').get(decoded.userId) as any
     if (!user) {
       return res.status(401).json({ error: '用户不存在' })
+    }
+    if (user.banned) {
+      return res.status(403).json({ error: '账号已被封禁' })
     }
     req.userId = user.id
     req.userRole = user.role

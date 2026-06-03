@@ -1,8 +1,8 @@
 import { Router, Response, Request } from 'express'
 import crypto from 'crypto'
-import db from '../db.js'
-import { authMiddleware, AuthRequest } from '../middleware/auth.js'
-import { getStorage } from '../services/factory.js'
+import db from '../db'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { getStorage } from '../services/factory'
 
 const router = Router()
 

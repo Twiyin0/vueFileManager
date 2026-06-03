@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { FileItem } from '@/stores/files'
 
-defineProps<{
+const props = defineProps<{
   files: FileItem[]
   loading: boolean
   showActions?: boolean
+  selectMode?: boolean
+  selectedFiles?: Set<string>
 }>()
 
 const emit = defineEmits<{
   open: [file: FileItem]
   download: [file: FileItem]
   delete: [file: FileItem]
+  contextmenu: [e: MouseEvent, file: FileItem]
+  toggleSelect: [path: string]
+  detail: [file: FileItem]
 }>()
 
 function formatSize(bytes: number): string {
@@ -61,7 +66,8 @@ function getFileIcon(file: FileItem): string {
     <div v-else>
       <!-- 表头 -->
       <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium border-b" style="color: var(--text-secondary-color); border-color: var(--border-color)">
-        <div class="col-span-6 sm:col-span-5">名称</div>
+        <div v-if="selectMode" class="col-span-1"></div>
+        <div :class="selectMode ? 'col-span-5 sm:col-span-4' : 'col-span-6 sm:col-span-5'">名称</div>
         <div class="col-span-3 sm:col-span-2 text-right hidden sm:block">大小</div>
         <div class="col-span-3 text-right hidden md:block">修改时间</div>
         <div v-if="showActions" class="col-span-6 sm:col-span-2 text-right">操作</div>
@@ -72,11 +78,18 @@ function getFileIcon(file: FileItem): string {
         v-for="file in files"
         :key="file.path"
         class="file-row grid grid-cols-12 gap-2 px-4 py-2.5 items-center cursor-pointer border-b last:border-0"
+        :class="selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : ''"
         style="border-color: var(--border-color)"
-        @click="emit('open', file)"
+        @click="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
+        @contextmenu="emit('contextmenu', $event, file)"
       >
+        <!-- 选择框 -->
+        <div v-if="selectMode" class="col-span-1 flex items-center" @click.stop>
+          <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)"
+            class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+        </div>
         <!-- 名称 + 图标 -->
-        <div class="col-span-6 sm:col-span-5 flex items-center gap-2.5 min-w-0">
+        <div :class="selectMode ? 'col-span-5 sm:col-span-4' : 'col-span-6 sm:col-span-5'" class="flex items-center gap-2.5 min-w-0">
           <!-- 文件夹图标 -->
           <svg v-if="getFileIcon(file) === 'folder'" class="w-5 h-5 flex-shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
             <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
@@ -129,6 +142,15 @@ function getFileIcon(file: FileItem): string {
 
         <!-- 操作 -->
         <div v-if="showActions" class="col-span-6 sm:col-span-2 flex items-center justify-end gap-1" @click.stop>
+          <button
+            @click="emit('detail', file)"
+            class="p-1.5 rounded-md hover:opacity-80 transition-colors"
+            title="详情"
+          >
+            <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </button>
           <button
             v-if="file.type === 'file'"
             @click="emit('download', file)"

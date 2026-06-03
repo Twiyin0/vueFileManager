@@ -31,6 +31,12 @@ const router = createRouter({
       component: () => import('@/views/Guest.vue')
     },
     {
+      path: '/storage-pools',
+      name: 'StoragePools',
+      component: () => import('@/views/StoragePools.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/settings',
       name: 'Settings',
       component: () => import('@/views/UserSettings.vue'),
@@ -57,6 +63,18 @@ const router = createRouter({
       path: '/my-shares',
       name: 'MyShares',
       component: () => import('@/views/MyShares.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/trash',
+      name: 'Trash',
+      component: () => import('@/views/Trash.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/favourites',
+      name: 'Favourites',
+      component: () => import('@/views/Favourites.vue'),
       meta: { requiresAuth: true }
     }
   ]

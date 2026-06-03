@@ -1,5 +1,5 @@
 import upyun from 'upyun'
-import { StorageProvider, FileInfo } from './storage.js'
+import { StorageProvider, FileInfo } from './storage'
 
 export class UpyunStorage implements StorageProvider {
   private client: upyun.Client

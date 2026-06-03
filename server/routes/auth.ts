@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
-import db from '../db.js'
-import config from '../config.js'
-import { generateToken, AuthRequest } from '../middleware/auth.js'
+import db, { syncStoragePoolsFromConfig } from '../db'
+import config from '../config'
+import { generateToken, AuthRequest } from '../middleware/auth'
 
 const JWT_SECRET = config.server.jwt_secret
 
@@ -48,9 +48,13 @@ router.post('/register', (req: Request, res: Response) => {
     ).run(username, hashedPassword, ip, ip)
 
     // 创建默认设置
-    db.prepare('INSERT INTO user_settings (user_id) VALUES (?)').run(result.lastInsertRowid)
+    const userId = result.lastInsertRowid as number
+    db.prepare('INSERT INTO user_settings (user_id) VALUES (?)').run(userId)
 
-    const token = generateToken(result.lastInsertRowid as number)
+    // 从配置文件同步存储池
+    syncStoragePoolsFromConfig(userId)
+
+    const token = generateToken(userId)
 
     res.json({
       message: '注册成功',
@@ -116,10 +120,15 @@ router.get('/me', (req: AuthRequest, res: Response) => {
 
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
 
+    // 检查封禁
+    const banCheck = db.prepare('SELECT banned FROM users WHERE id = ?').get(decoded.userId) as any
+    if (banCheck?.banned) {
+      return res.status(403).json({ error: '账号已被封禁' })
+    }
+
     const user = db.prepare(`
       SELECT u.id, u.username, u.role, u.register_ip, u.last_login_ip, u.created_at,
-             s.storage_type, s.local_path, s.guest_enabled, s.guest_path, s.theme,
-             s.upyun_operator, s.upyun_bucket, s.upyun_endpoint
+             s.guest_enabled, s.guest_path, s.theme
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
       WHERE u.id = ?
@@ -138,14 +147,9 @@ router.get('/me', (req: AuthRequest, res: Response) => {
         lastLoginIp: user.last_login_ip,
         createdAt: user.created_at,
         settings: {
-          storageType: user.storage_type,
-          localPath: user.local_path,
           guestEnabled: !!user.guest_enabled,
           guestPath: user.guest_path,
-          theme: user.theme,
-          upyunOperator: user.upyun_operator,
-          upyunBucket: user.upyun_bucket,
-          upyunEndpoint: user.upyun_endpoint
+          theme: user.theme
         }
       }
     })

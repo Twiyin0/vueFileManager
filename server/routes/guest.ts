@@ -1,6 +1,6 @@
 import { Router, Response } from 'express'
-import db from '../db.js'
-import { getGuestStorage } from '../services/factory.js'
+import db from '../db'
+import { getGuestStorage } from '../services/factory'
 import { Request } from 'express'
 
 const router = Router()

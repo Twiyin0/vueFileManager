@@ -16,12 +16,6 @@ const messageType = ref<'success' | 'error'>('success')
 
 // 设置表单
 const form = ref({
-  storageType: 'local' as string,
-  localPath: './uploads',
-  upyunOperator: '',
-  upyunPassword: '',
-  upyunBucket: '',
-  upyunEndpoint: 'v0.api.upyun.com',
   guestEnabled: false,
   guestPath: '',
   theme: 'system' as ThemeMode
@@ -32,12 +26,6 @@ onMounted(async () => {
   try {
     const res = await api.get<{ settings: any }>('/user/settings')
     form.value = {
-      storageType: res.settings.storageType || 'local',
-      localPath: res.settings.localPath || './uploads',
-      upyunOperator: res.settings.upyunOperator || '',
-      upyunPassword: '',
-      upyunBucket: res.settings.upyunBucket || '',
-      upyunEndpoint: res.settings.upyunEndpoint || 'v0.api.upyun.com',
       guestEnabled: res.settings.guestEnabled || false,
       guestPath: res.settings.guestPath || '',
       theme: (res.settings.theme as ThemeMode) || 'system'
@@ -64,8 +52,6 @@ async function saveSettings() {
     // 应用到 auth store
     if (authStore.user?.settings) {
       authStore.user.settings.theme = form.value.theme
-      authStore.user.settings.storageType = form.value.storageType
-      authStore.user.settings.localPath = form.value.localPath
       authStore.user.settings.guestEnabled = form.value.guestEnabled
       authStore.user.settings.guestPath = form.value.guestPath
     }
@@ -127,70 +113,18 @@ async function saveSettings() {
           </div>
         </div>
 
-        <!-- 存储类型 -->
+        <!-- 存储池管理入口 -->
         <div class="card">
-          <h2 class="text-lg font-semibold mb-4 dark:text-dark-text text-light-text">存储配置</h2>
-          <div class="flex gap-3 mb-4">
-            <label class="flex-1 cursor-pointer">
-              <input
-                v-model="form.storageType"
-                type="radio"
-                value="local"
-                class="hidden peer"
-              />
-              <div class="p-4 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border hover:border-blue-300 dark:hover:border-blue-600">
-                <svg class="w-8 h-8 mx-auto mb-2 text-gray-500 dark:text-dark-text-secondary peer-checked:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
-                </svg>
-                <p class="font-medium dark:text-dark-text text-light-text">本地存储</p>
-                <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">保存在服务器磁盘</p>
-              </div>
-            </label>
-            <label class="flex-1 cursor-pointer">
-              <input
-                v-model="form.storageType"
-                type="radio"
-                value="upyun"
-                class="hidden peer"
-              />
-              <div class="p-4 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border hover:border-blue-300 dark:hover:border-blue-600">
-                <svg class="w-8 h-8 mx-auto mb-2 text-gray-500 dark:text-dark-text-secondary peer-checked:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-                </svg>
-                <p class="font-medium dark:text-dark-text text-light-text">又拍云</p>
-                <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">Upyun 云存储</p>
-              </div>
-            </label>
-          </div>
-
-          <!-- 本地存储配置 -->
-          <div v-if="form.storageType === 'local'" class="space-y-3">
-            <div>
-              <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">存储路径</label>
-              <input v-model="form.localPath" type="text" class="input-field" placeholder="./uploads" />
-              <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">服务器上的本地目录路径</p>
-            </div>
-          </div>
-
-          <!-- Upyun 配置 -->
-          <div v-if="form.storageType === 'upyun'" class="space-y-3">
-            <div>
-              <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">操作员名称</label>
-              <input v-model="form.upyunOperator" type="text" class="input-field" placeholder="又拍云操作员" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">操作员密码</label>
-              <input v-model="form.upyunPassword" type="password" class="input-field" placeholder="留空则不修改" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">服务名（Bucket）</label>
-              <input v-model="form.upyunBucket" type="text" class="input-field" placeholder="your-bucket-name" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">API 端点</label>
-              <input v-model="form.upyunEndpoint" type="text" class="input-field" placeholder="v0.api.upyun.com" />
-            </div>
-          </div>
+          <h2 class="text-lg font-semibold mb-4 dark:text-dark-text text-light-text">存储管理</h2>
+          <p class="text-sm text-gray-500 dark:text-dark-text-secondary mb-4">
+            在存储池管理页面中，您可以添加、编辑和删除多个存储池，支持本地存储和又拍云。
+          </p>
+          <router-link to="/storage-pools" class="btn-primary inline-flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+            </svg>
+            管理存储池
+          </router-link>
         </div>
 
         <!-- 访客模式 -->

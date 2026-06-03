@@ -6,6 +6,19 @@ import yaml from 'js-yaml'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const configPath = path.join(__dirname, '..', 'config.yml')
 
+interface StoragePoolConfig {
+  name: string
+  type: 'local' | 'upyun'
+  default: boolean
+  config: {
+    localPath?: string
+    upyunOperator?: string
+    upyunPassword?: string
+    upyunBucket?: string
+    upyunEndpoint?: string
+  }
+}
+
 interface Config {
   admin: {
     username: string
@@ -15,10 +28,7 @@ interface Config {
     port: number
     jwt_secret: string
   }
-  storage: {
-    default_type: string
-    local_path: string
-  }
+  storage_pools: StoragePoolConfig[]
 }
 
 const defaultConfig: Config = {
@@ -30,10 +40,14 @@ const defaultConfig: Config = {
     port: 3000,
     jwt_secret: 'vue-file-manager-secret-key-2024'
   },
-  storage: {
-    default_type: 'local',
-    local_path: './uploads'
-  }
+  storage_pools: [
+    {
+      name: '本地存储',
+      type: 'local',
+      default: true,
+      config: { localPath: './uploads' }
+    }
+  ]
 }
 
 let config: Config = defaultConfig
@@ -41,11 +55,12 @@ let config: Config = defaultConfig
 try {
   if (fs.existsSync(configPath)) {
     const fileContents = fs.readFileSync(configPath, 'utf8')
-    const loaded = yaml.load(fileContents) as Partial<Config>
+    const loaded = yaml.load(fileContents) as any
+
     config = {
       admin: { ...defaultConfig.admin, ...loaded.admin },
       server: { ...defaultConfig.server, ...loaded.server },
-      storage: { ...defaultConfig.storage, ...loaded.storage }
+      storage_pools: loaded.storage_pools || defaultConfig.storage_pools
     }
     console.log('✅ 已加载配置文件 config.yml')
   } else {
@@ -56,4 +71,4 @@ try {
 }
 
 export default config
-export type { Config }
+export type { Config, StoragePoolConfig }

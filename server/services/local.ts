@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import fsSync from 'fs'
 import path from 'path'
-import { StorageProvider, FileInfo } from './storage.js'
+import { StorageProvider, FileInfo } from './storage'
 
 export class LocalStorage implements StorageProvider {
   private basePath: string

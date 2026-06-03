@@ -18,35 +18,38 @@ server:
   jwt_secret: vue-file-manager-secret-key-2024
 
 # ============================================================
-# 存储配置
+# 存储池配置
 # ============================================================
-storage:
-  # 默认存储类型：local（本地）或 upyun（又拍云）
-  default_type: local
-  # 本地存储默认路径
-  local_path: ./uploads
+# 在这里预配置存储池，新注册用户会自动继承这些配置
+# 也可以在前端「存储池」页面中管理
+#
+# 格式说明：
+#   name: 存储池名称
+#   type: 存储类型 (local / upyun)
+#   default: 是否为默认存储池
+#   config: 存储配置（根据类型不同）
+#
+# 本地存储 config：
+#   localPath: 本地目录路径
+#
+# 又拍云 config：
+#   upyunOperator: 操作员名称
+#   upyunPassword: 操作员密码
+#   upyunBucket: 服务名（Bucket）
+#   upyunEndpoint: API 端点（默认 v0.api.upyun.com）
+storage_pools:
+  - name: 本地存储
+    type: local
+    default: true
+    config:
+      localPath: ./uploads
 
-# ============================================================
-# Upyun（又拍云）配置示例
-# ============================================================
-# 以下为 Upyun 配置示例，实际使用时请在 .env 文件中配置
-# 复制 .env.example 为 .env 并填入真实信息
-#
-# .env 配置格式：
-#   ENV_upyun_operator=操作员名称
-#   ENV_upyun_password=操作员密码
-#   ENV_upyun_bucket=服务名称
-#   ENV_upyun_endpoint=API端点（默认 v0.api.upyun.com）
-#
-# 示例（又拍云控制台获取）：
-#   服务名称: upyun-service
-#   加速域名: alist.example.com
-#   操作员: operator
-#   操作员密码: 在又拍云控制台创建
-#
-# API 端点说明：
-#   v0.api.upyun.com  - 默认（自动选择最优节点）
-#   v1.api.upyun.com  - 备用
-#   v2.api.upyun.com  - 备用
-#
-# 用户也可以在前端设置页面独立配置自己的 Upyun 存储
+  # 又拍云示例（取消注释并填入真实信息）
+  # - name: 又拍云存储
+  #   type: upyun
+  #   default: false
+  #   config:
+  #     upyunOperator: your-operator
+  #     upyunPassword: your-password
+  #     upyunBucket: your-bucket
+  #     upyunEndpoint: v0.api.upyun.com
