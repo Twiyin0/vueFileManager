@@ -5,12 +5,16 @@
  */
 
 const BASE = 'http://localhost:3000/api'
+const PUBLIC_BASE = 'http://localhost:3000'
 let adminToken = ''
 let userToken = ''
 let apiKey = ''
 let shareCode = ''
+let signKey = ''
+let signUrl = ''
 let testUserId = 0
 let testPoolId = 0
+let uploadId = ''
 
 // 颜色输出
 const green = (s: string) => `\x1b[32m✓ ${s}\x1b[0m`
@@ -30,6 +34,13 @@ async function api(method: string, path: string, body?: any, headers: Record<str
   const res = await fetch(`${BASE}${path}`, opts)
   const data = await res.json().catch(() => null)
   return { status: res.status, data }
+}
+
+// 带完整 URL 的请求（用于公开路由等非 /api 路径）
+async function rawApi(method: string, url: string, headers: Record<string, string> = {}) {
+  const opts: RequestInit = { method, headers }
+  const res = await fetch(url, opts)
+  return { status: res.status, data: await res.text() }
 }
 
 async function test(name: string, fn: () => Promise<void>) {
@@ -203,8 +214,15 @@ async function testFiles() {
     assert(status === 200, `状态码 ${status}`)
   })
 
-  await test('GET /files/list - 根目录列表', async () => {
+  await test('GET /files/list - 根目录列表（返回存储池虚拟文件夹）', async () => {
     const { status, data } = await api('GET', '/files/list', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(Array.isArray(data.files), '返回非数组')
+    assert(data.files.some((f: any) => f.isPool === true), '未找到虚拟存储池文件夹')
+  })
+
+  await test('GET /files/list?poolId= - 存储池内列表', async () => {
+    const { status, data } = await api('GET', `/files/list?poolId=${testPoolId}`, null, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)
     assert(Array.isArray(data.files), '返回非数组')
     assert(data.files.some((f: any) => f.name === 'test-dir'), '未找到 test-dir')
@@ -380,46 +398,90 @@ async function testFavourites() {
   await api('DELETE', '/files/delete?path=fav-test-dir&permanent=true', null, auth(adminToken))
 }
 
-// ==================== 6. 分享 ====================
+// ==================== 6. 分享（含 signToken） ====================
 async function testShare() {
-  console.log(cyan('\n━━━ 6. 分享 API ━━━'))
+  console.log(cyan('\n━━━ 6. 分享 API（signToken 鉴权） ━━━'))
 
+  // 先上传一个测试文件用于下载测试
   await api('POST', '/files/mkdir', { path: 'share-test' }, auth(adminToken))
+  const testContent = Buffer.from('hello share test')
+  const uploadRes = await fetch(`${BASE}/files/upload?path=share-test`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: (() => { const fd = new FormData(); fd.append('file', new Blob([testContent]), 'test.txt'); return fd })()
+  })
+  assert(uploadRes.ok, '上传测试文件失败')
 
-  await test('POST /share/create - 创建分享', async () => {
+  await test('POST /share/create - 创建分享（返回 signKey 和 signUrl）', async () => {
     const { status, data } = await api('POST', '/share/create', {
-      filePath: 'share-test',
-      fileType: 'folder',
+      filePath: 'share-test/test.txt',
+      fileType: 'file',
       expiresIn: 24,
       maxDownloads: 100
     }, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)
     assert(data.shareCode, '缺少 shareCode')
+    assert(data.signKey, '缺少 signKey')
+    assert(data.signUrl, '缺少 signUrl')
     shareCode = data.shareCode
+    signKey = data.signKey
+    signUrl = data.signUrl
+    console.log(yellow(`  shareCode: ${shareCode}, signKey: ${signKey}`))
   })
 
   await test('POST /share/create - 创建带密码分享', async () => {
     const { status, data } = await api('POST', '/share/create', {
-      filePath: 'share-test',
-      fileType: 'folder',
+      filePath: 'share-test/test.txt',
+      fileType: 'file',
       password: '123456'
     }, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)
     assert(data.shareCode, '缺少 shareCode')
+    assert(data.signKey, '缺少 signKey')
   })
 
-  await test('GET /share/list - 我的分享列表', async () => {
+  await test('GET /share/list - 我的分享列表（含 signUrl）', async () => {
     const { status, data } = await api('GET', '/share/list', null, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)
     assert(Array.isArray(data.shares), '返回非数组')
     assert(data.shares.length >= 2, `分享数量不正确: ${data.shares.length}`)
+    assert(data.shares[0].signUrl, '列表中缺少 signUrl')
+    assert(data.shares[0].sign_key, '列表中缺少 sign_key')
   })
 
-  await test('GET /share/s/:code - 访问分享（无需密码）', async () => {
+  await test('GET /share/s/:code - 访问分享（查看信息）', async () => {
     const { status, data } = await api('GET', `/share/s/${shareCode}`)
     assert(status === 200, `状态码 ${status}`)
     assert(data.needPassword === false, '不应需要密码')
     assert(data.owner === 'admin', '分享者不正确')
+  })
+
+  await test('GET /share/download/:code - 无 signToken 应 403', async () => {
+    const { status } = await api('GET', `/share/download/${shareCode}`)
+    assert(status === 403, `状态码 ${status}`)
+  })
+
+  await test('GET /share/download/:code - 错误 signToken 应 403', async () => {
+    const { status } = await api('GET', `/share/download/${shareCode}?sign=badbadbad&t=9999999999`)
+    assert(status === 403, `状态码 ${status}`)
+  })
+
+  await test('GET /share/download/:code - 正确 signToken 下载成功', async () => {
+    // 从 signUrl 提取 sign 和 t 参数，调用 API 下载端点
+    const url = new URL(`${PUBLIC_BASE}${signUrl}`)
+    const sign = url.searchParams.get('sign')
+    const t = url.searchParams.get('t')
+    const res = await fetch(`${BASE}/share/download/${shareCode}?sign=${sign}&t=${t}`)
+    assert(res.ok, `下载失败: ${res.status}`)
+    const text = await res.text()
+    assert(text === 'hello share test', `内容不匹配: ${text}`)
+  })
+
+  await test('GET /share/preview/:code - 正确 signToken 预览成功', async () => {
+    const t = signUrl.split('t=')[1]
+    const sign = new URL(`${PUBLIC_BASE}${signUrl}`).searchParams.get('sign')
+    const res = await fetch(`${BASE}/share/preview/${shareCode}?sign=${sign}&t=${t}`)
+    assert(res.ok, `预览失败: ${res.status}`)
   })
 
   await test('GET /share/s/:code - 访问带密码分享（返回 needPassword）', async () => {
@@ -434,20 +496,217 @@ async function testShare() {
 
   await test('DELETE /share/:id - 删除分享', async () => {
     const shares = await api('GET', '/share/list', null, auth(adminToken))
-    const shareId = shares.data.shares[0]?.id
-    if (shareId) {
-      const { status } = await api('DELETE', `/share/${shareId}`, null, auth(adminToken))
-      assert(status === 200, `状态码 ${status}`)
+    for (const s of shares.data.shares) {
+      await api('DELETE', `/share/${s.id}`, null, auth(adminToken))
     }
+    const after = await api('GET', '/share/list', null, auth(adminToken))
+    assert(after.data.shares.length === 0, '分享未全部删除')
   })
 
   // 清理
   await api('DELETE', '/files/delete?path=share-test&permanent=true', null, auth(adminToken))
 }
 
-// ==================== 7. API Key ====================
+// ==================== 7. 流式上传 ====================
+async function testUploadStream() {
+  console.log(cyan('\n━━━ 7. 流式上传 API ━━━'))
+
+  await api('POST', '/files/mkdir', { path: 'stream-test' }, auth(adminToken))
+
+  await test('POST /files/upload-stream - 流式上传文件', async () => {
+    const content = Buffer.from('hello streaming upload test content')
+    const res = await fetch(`${BASE}/files/upload-stream`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'X-File-Name': 'stream-file.txt',
+        'X-Dir-Path': 'stream-test',
+      },
+      body: content,
+    })
+    const data = await res.json()
+    assert(res.ok, `状态码 ${res.status}`)
+    assert(data.path === 'stream-test/stream-file.txt', `路径不正确: ${data.path}`)
+    assert(data.poolId, '缺少 poolId')
+    assert(data.storageType, '缺少 storageType')
+    console.log(yellow(`  上传结果: path=${data.path}, poolId=${data.poolId}, type=${data.storageType}`))
+  })
+
+  await test('POST /files/upload-stream - 无文件名应 400', async () => {
+    const res = await fetch(`${BASE}/files/upload-stream`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: Buffer.from('test'),
+    })
+    assert(res.status === 400, `状态码 ${res.status}`)
+  })
+
+  // 验证文件已上传
+  await test('GET /files/list - 验证流式上传文件存在', async () => {
+    const { status, data } = await api('GET', '/files/list?path=stream-test', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.files.some((f: any) => f.name === 'stream-file.txt'), '未找到 stream-file.txt')
+  })
+
+  // 清理
+  await api('DELETE', '/files/delete?path=stream-test&permanent=true', null, auth(adminToken))
+}
+
+// ==================== 8. 断点续传 ====================
+async function testChunkedUpload() {
+  console.log(cyan('\n━━━ 8. 断点续传 API ━━━'))
+
+  const chunkSize = 1024 // 1KB 分片
+  const totalChunks = 3
+  const fileContent = Buffer.alloc(chunkSize * totalChunks)
+  for (let i = 0; i < fileContent.length; i++) fileContent[i] = i % 256
+  const totalSize = fileContent.length
+  const fileName = 'chunked-file.txt'
+
+  await test('POST /files/upload/init - 初始化分片上传', async () => {
+    const { status, data } = await api('POST', '/files/upload/init', {
+      fileName,
+      fileSize: totalSize,
+      dirPath: 'chunk-test',
+    }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.uploadId, '缺少 uploadId')
+    uploadId = data.uploadId
+    console.log(yellow(`  uploadId: ${uploadId}`))
+  })
+
+  // 上传第一个分片
+  await test('PATCH /files/upload/:id/chunk - 上传分片 1', async () => {
+    const chunk = fileContent.subarray(0, chunkSize)
+    const res = await fetch(`${BASE}/files/upload/${uploadId}/chunk`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Range': `bytes 0-${chunkSize - 1}/${totalSize}`,
+      },
+      body: chunk,
+    })
+    const data = await res.json()
+    assert(res.ok, `状态码 ${res.status}`)
+    assert(data.partIndex === 0, `分片索引不正确: ${data.partIndex}`)
+    assert(data.uploadedParts.includes(0), '分片 0 未记录')
+  })
+
+  // 查询状态（断点续传场景）
+  await test('GET /files/upload/:id/status - 查询已上传分片', async () => {
+    const { status, data } = await api('GET', `/files/upload/${uploadId}/status`, null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.fileName === fileName, '文件名不匹配')
+    assert(data.uploadedParts.includes(0), '分片 0 未记录')
+    console.log(yellow(`  已上传分片: ${JSON.stringify(data.uploadedParts)}`))
+  })
+
+  // 上传剩余分片
+  for (let i = 1; i < totalChunks; i++) {
+    await test(`PATCH /files/upload/:id/chunk - 上传分片 ${i + 1}`, async () => {
+      const start = i * chunkSize
+      const end = start + chunkSize - 1
+      const chunk = fileContent.subarray(start, end + 1)
+      const res = await fetch(`${BASE}/files/upload/${uploadId}/chunk`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+        },
+        body: chunk,
+      })
+      assert(res.ok, `状态码 ${res.status}`)
+    })
+  }
+
+  // 完成上传
+  await test('POST /files/upload/:id/complete - 合并分片完成上传', async () => {
+    const { status, data } = await api('POST', `/files/upload/${uploadId}/complete`, null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.path, '缺少 path')
+    assert(data.poolId, '缺少 poolId')
+    assert(data.storageType, '缺少 storageType')
+    console.log(yellow(`  完成: path=${data.path}, poolId=${data.poolId}, type=${data.storageType}`))
+  })
+
+  // 验证文件内容
+  await test('POST /files/download - 下载验证合并后文件', async () => {
+    const res = await fetch(`${BASE}/files/download?path=chunk-test/${fileName}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+    assert(res.ok, `下载失败: ${res.status}`)
+    const downloaded = Buffer.from(await res.arrayBuffer())
+    console.log(yellow(`  期望大小: ${totalSize}, 实际大小: ${downloaded.length}`))
+    assert(downloaded.length === totalSize, `文件大小不匹配: 期望 ${totalSize}, 实际 ${downloaded.length}`)
+    assert(downloaded.equals(fileContent), '文件内容不匹配')
+  })
+
+  // 清理
+  await api('DELETE', '/files/delete?path=chunk-test&permanent=true', null, auth(adminToken))
+}
+
+// ==================== 9. 匿名公网访问 ====================
+async function testPublicAccess() {
+  console.log(cyan('\n━━━ 9. 匿名公网访问 API ━━━'))
+
+  // 确保 testuser 有默认存储池
+  const userPools = await api('GET', '/storage-pools', null, auth(userToken))
+  if (!userPools.data?.pools?.length) {
+    await api('POST', '/storage-pools', {
+      name: 'testuser本地存储',
+      storageType: 'local',
+      config: { localPath: './test-user-uploads' }
+    }, auth(userToken))
+  }
+  // 确保存在默认存储池
+  const poolsAfter = await api('GET', '/storage-pools', null, auth(userToken))
+  const defaultPool = poolsAfter.data?.pools?.find((p: any) => p.isDefault)
+  if (!defaultPool && poolsAfter.data?.pools?.length) {
+    await api('POST', `/storage-pools/${poolsAfter.data.pools[0].id}/set-default`, null, auth(userToken))
+  }
+
+  // 开启 testuser 访客模式
+  await api('PUT', '/user/settings', { guestEnabled: true, guestPath: 'public' }, auth(userToken))
+
+  // 在 public 目录创建测试文件
+  await api('POST', '/files/mkdir', { path: 'public' }, auth(userToken))
+  const testContent = 'hello public access test'
+  await fetch(`${BASE}/files/upload?path=public`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${userToken}` },
+    body: (() => { const fd = new FormData(); fd.append('file', new Blob([testContent]), 'public-test.txt'); return fd })()
+  })
+
+  await test('GET /f/:username/* - 公网访问文件成功', async () => {
+    const res = await rawApi('GET', `${PUBLIC_BASE}/f/testuser/public-test.txt`)
+    assert(res.status === 200, `状态码 ${res.status}`)
+    assert(res.data === testContent, `内容不匹配: ${res.data}`)
+  })
+
+  await test('GET /f/:username/* - 路径越权应 403', async () => {
+    const res = await rawApi('GET', `${PUBLIC_BASE}/f/testuser/../../../etc/passwd`)
+    assert(res.status === 403 || res.status === 404, `状态码 ${res.status}`)
+  })
+
+  await test('GET /f/:username/* - 不存在的用户应 404', async () => {
+    const res = await rawApi('GET', `${PUBLIC_BASE}/f/nouser123/file.txt`)
+    assert(res.status === 404, `状态码 ${res.status}`)
+  })
+
+  await test('GET /f/:username/* - 访客模式关闭后应 403', async () => {
+    await api('PUT', '/user/settings', { guestEnabled: false }, auth(userToken))
+    const res = await rawApi('GET', `${PUBLIC_BASE}/f/testuser/public-test.txt`)
+    assert(res.status === 403, `状态码 ${res.status}`)
+  })
+
+  // 清理
+  await api('PUT', '/user/settings', { guestEnabled: false }, auth(userToken))
+  await api('DELETE', '/files/delete?path=public&permanent=true', null, auth(userToken))
+}
+
+// ==================== 10. API Key ====================
 async function testApiKeys() {
-  console.log(cyan('\n━━━ 7. API Key API ━━━'))
+  console.log(cyan('\n━━━ 10. API Key API ━━━'))
 
   await test('POST /user/apikeys - 创建 API Key', async () => {
     const { status, data } = await api('POST', '/user/apikeys', {
@@ -493,9 +752,9 @@ async function testApiKeys() {
   })
 }
 
-// ==================== 8. 用户设置 ====================
+// ==================== 11. 用户设置 ====================
 async function testUserSettings() {
-  console.log(cyan('\n━━━ 8. 用户设置 API ━━━'))
+  console.log(cyan('\n━━━ 11. 用户设置 API ━━━'))
 
   await test('GET /user/settings - 获取设置', async () => {
     const { status, data } = await api('GET', '/user/settings', null, auth(userToken))
@@ -527,9 +786,9 @@ async function testUserSettings() {
   })
 }
 
-// ==================== 9. 访客 ====================
+// ==================== 12. 访客 ====================
 async function testGuest() {
-  console.log(cyan('\n━━━ 9. 访客 API ━━━'))
+  console.log(cyan('\n━━━ 12. 访客 API ━━━'))
 
   // 先开启 testuser 的访客模式
   await api('PUT', '/user/settings', { guestEnabled: true, guestPath: '' }, auth(userToken))
@@ -551,9 +810,9 @@ async function testGuest() {
   await api('PUT', '/user/settings', { guestEnabled: false }, auth(userToken))
 }
 
-// ==================== 10. 管理面板 ====================
+// ==================== 13. 管理面板 ====================
 async function testAdmin() {
-  console.log(cyan('\n━━━ 10. 管理 API ━━━'))
+  console.log(cyan('\n━━━ 13. 管理 API ━━━'))
 
   await test('GET /admin/users - 用户列表', async () => {
     const { status, data } = await api('GET', '/admin/users', null, auth(adminToken))
@@ -664,9 +923,9 @@ async function testAdmin() {
   })
 }
 
-// ==================== 11. 清理 ====================
+// ==================== 14. 清理 ====================
 async function testCleanup() {
-  console.log(cyan('\n━━━ 11. 清理 ━━━'))
+  console.log(cyan('\n━━━ 14. 清理 ━━━'))
 
   await test('DELETE /admin/users/:id - 删除 admin-created 用户', async () => {
     const users = await api('GET', '/admin/users', null, auth(adminToken))
@@ -707,6 +966,9 @@ async function main() {
     await testTrash()
     await testFavourites()
     await testShare()
+    await testUploadStream()
+    await testChunkedUpload()
+    await testPublicAccess()
     await testApiKeys()
     await testUserSettings()
     await testGuest()

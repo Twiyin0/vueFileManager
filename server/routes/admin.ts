@@ -10,7 +10,7 @@ const router = Router()
 router.get('/users', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const users = db.prepare(`
-      SELECT u.id, u.username, u.role, u.banned, u.register_ip, u.last_login_ip, u.created_at,
+      SELECT u.id, u.username, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
              s.guest_enabled
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
@@ -27,7 +27,7 @@ router.get('/users/:id', authMiddleware, adminMiddleware, (req: AuthRequest, res
   try {
     const userId = parseInt(req.params.id)
     const user = db.prepare(`
-      SELECT u.id, u.username, u.role, u.banned, u.register_ip, u.last_login_ip, u.created_at,
+      SELECT u.id, u.username, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
              s.guest_enabled, s.guest_path, s.theme
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
@@ -66,6 +66,7 @@ router.get('/users/:id', authMiddleware, adminMiddleware, (req: AuthRequest, res
         banned: !!user.banned,
         registerIp: user.register_ip,
         lastLoginIp: user.last_login_ip,
+        lastLoginAt: user.last_login_at,
         createdAt: user.created_at,
         settings: {
           guestEnabled: !!user.guest_enabled,

@@ -31,7 +31,8 @@ const form = ref({
     upyunOperator: '',
     upyunPassword: '',
     upyunBucket: '',
-    upyunEndpoint: 'v0.api.upyun.com'
+    upyunEndpoint: 'v0.api.upyun.com',
+    rootPath: '/'
   }
 })
 
@@ -67,7 +68,8 @@ function openAddDialog() {
       upyunOperator: '',
       upyunPassword: '',
       upyunBucket: '',
-      upyunEndpoint: 'v0.api.upyun.com'
+      upyunEndpoint: 'v0.api.upyun.com',
+      rootPath: '/'
     }
   }
   showAddDialog.value = true
@@ -83,7 +85,8 @@ function openEditDialog(pool: StoragePool) {
       upyunOperator: pool.config.upyunOperator || '',
       upyunPassword: '', // 不显示密码
       upyunBucket: pool.config.upyunBucket || '',
-      upyunEndpoint: pool.config.upyunEndpoint || 'v0.api.upyun.com'
+      upyunEndpoint: pool.config.upyunEndpoint || 'v0.api.upyun.com',
+      rootPath: pool.config.rootPath || '/'
     }
   }
   showAddDialog.value = true
@@ -223,6 +226,9 @@ function getStorageLabel(type: string) {
                 <span v-else-if="pool.storageType === 'upyun'" class="ml-2 font-mono text-xs">
                   {{ pool.config.upyunBucket }}
                 </span>
+                <span v-if="pool.config.rootPath && pool.config.rootPath !== '/'" class="ml-1 font-mono text-xs text-blue-500">
+                  → {{ pool.config.rootPath }}
+                </span>
               </p>
             </div>
           </div>
@@ -270,7 +276,7 @@ function getStorageLabel(type: string) {
 
       <!-- 添加/编辑对话框 -->
       <div v-if="showAddDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4" style="background-color: var(--card-color)">
           <div class="p-6">
             <h2 class="text-xl font-bold mb-4 dark:text-dark-text text-light-text">
               {{ editingPool ? '编辑存储池' : '添加存储池' }}
@@ -327,6 +333,11 @@ function getStorageLabel(type: string) {
                   <input v-model="form.config.localPath" type="text" class="input-field" placeholder="./uploads" />
                   <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">服务器上的本地目录路径</p>
                 </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
+                  <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
+                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">存储池映射到的子目录，/ 表示根目录</p>
+                </div>
               </div>
 
               <!-- Upyun 配置 -->
@@ -349,6 +360,11 @@ function getStorageLabel(type: string) {
                 <div>
                   <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">API 端点</label>
                   <input v-model="form.config.upyunEndpoint" type="text" class="input-field" placeholder="v0.api.upyun.com" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
+                  <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
+                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">映射到 Bucket 内的子目录，/ 表示 Bucket 根目录</p>
                 </div>
               </div>
 

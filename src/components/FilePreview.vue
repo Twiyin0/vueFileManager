@@ -97,7 +97,7 @@ const fileType = computed(() => {
 
           <!-- 文本/代码 -->
           <div v-else-if="fileType === 'text' || fileType === 'markdown'" class="flex items-center justify-center">
-            <iframe :src="previewUrl" class="w-full h-[75vh] rounded-lg border" style="border-color: var(--border-color); background: white" />
+            <iframe :src="previewUrl" class="w-full h-[75vh] rounded-lg border" style="border-color: var(--border-color); background-color: var(--surface-color)" />
           </div>
 
           <!-- 不支持预览 -->

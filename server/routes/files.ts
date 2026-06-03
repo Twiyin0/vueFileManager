@@ -1,9 +1,16 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
+import crypto from 'crypto'
+import fs from 'fs/promises'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { flexibleAuth, ApiKeyRequest, requirePermission } from '../middleware/apikey'
 import { getStorage, getStorageByPoolId } from '../services/factory'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const UPLOAD_TEMP_DIR = path.join(__dirname, '..', '..', 'data', 'uploads')
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } })
@@ -20,8 +27,30 @@ function getStorageForRequest(req: ApiKeyRequest) {
 // 文件列表
 router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    const storage = getStorageForRequest(req)
+    const poolId = req.query.poolId as string
     const prefix = (req.query.path as string) || ''
+
+    // 无 poolId 且无路径时，返回所有存储池作为虚拟文件夹
+    if (!poolId && !prefix) {
+      const pools = db.prepare(`
+        SELECT id, name, storage_type, is_default, created_at
+        FROM storage_pools WHERE user_id = ?
+        ORDER BY is_default DESC, created_at ASC
+      `).all(req.userId!) as any[]
+
+      const virtualFiles = pools.map(pool => ({
+        name: pool.name,
+        type: 'folder' as const,
+        size: 0,
+        modified: pool.created_at || new Date().toISOString(),
+        path: '',
+        poolId: pool.id,
+        isPool: true
+      }))
+      return res.json({ files: virtualFiles })
+    }
+
+    const storage = getStorageForRequest(req)
     const files = await storage.list(prefix)
     res.json({ files })
   } catch (err: any) {
@@ -44,7 +73,7 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
   }
 })
 
-// 上传文件
+// 上传文件（传统方式）
 router.post('/upload', flexibleAuth, requirePermission('write'), upload.single('file'), async (req: ApiKeyRequest, res: Response) => {
   try {
     if (!req.file) {
@@ -54,7 +83,241 @@ router.post('/upload', flexibleAuth, requirePermission('write'), upload.single('
     const dirPath = (req.query.path as string) || ''
     const filePath = dirPath ? `${dirPath}/${req.file.originalname}` : req.file.originalname
     await storage.upload(filePath, req.file.buffer)
-    res.json({ message: '上传成功', path: filePath })
+
+    // 获取存储池信息
+    const poolId = req.query.poolId as string || req.body.poolId as string
+    const resolvedPoolId = poolId ? parseInt(poolId) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+
+    res.json({ message: '上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 流式上传（支持 chunked transfer encoding）
+router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const fileName = req.headers['x-file-name'] as string
+    const dirPath = (req.headers['x-dir-path'] as string) || ''
+    const poolIdStr = req.headers['x-pool-id'] as string
+
+    if (!fileName) {
+      return res.status(400).json({ error: '缺少 X-File-Name 头' })
+    }
+
+    // 写入临时文件
+    const tempId = crypto.randomBytes(16).toString('hex')
+    const tempPath = path.join(UPLOAD_TEMP_DIR, tempId)
+    await fs.mkdir(UPLOAD_TEMP_DIR, { recursive: true })
+
+    const writeStream = await fs.open(tempPath, 'w')
+    let totalBytes = 0
+
+    await new Promise<void>((resolve, reject) => {
+      req.on('data', async (chunk: Buffer) => {
+        totalBytes += chunk.length
+        try {
+          await writeStream.write(chunk)
+        } catch (err) {
+          reject(err)
+        }
+      })
+      req.on('end', () => resolve())
+      req.on('error', (err) => reject(err))
+    })
+
+    await writeStream.close()
+
+    // 读取临时文件并上传到存储池
+    const buffer = await fs.readFile(tempPath)
+    const storage = poolIdStr ? getStorageByPoolId(req.userId!, parseInt(poolIdStr)) : getStorageForRequest(req)
+    const filePath = dirPath ? `${dirPath}/${fileName}` : fileName
+    await storage.upload(filePath, buffer)
+
+    // 清理临时文件
+    await fs.unlink(tempPath).catch(() => {})
+
+    // 获取存储池信息
+    const resolvedPoolId = poolIdStr ? parseInt(poolIdStr) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+
+    res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 断点续传：初始化分片上传
+router.post('/upload/init', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { fileName, fileSize, dirPath, poolId } = req.body
+    if (!fileName || !fileSize) {
+      return res.status(400).json({ error: '缺少文件名或文件大小' })
+    }
+
+    const uploadId = crypto.randomBytes(16).toString('hex')
+    const uploadDir = path.join(UPLOAD_TEMP_DIR, uploadId)
+    await fs.mkdir(uploadDir, { recursive: true })
+
+    // 保存上传元数据
+    const meta = {
+      fileName,
+      fileSize,
+      dirPath: dirPath || '',
+      poolId: poolId || null,
+      userId: req.userId,
+      uploadedParts: [] as number[],
+      nextPartIndex: 0,
+      createdAt: Date.now()
+    }
+    await fs.writeFile(path.join(uploadDir, 'meta.json'), JSON.stringify(meta))
+
+    res.json({ uploadId, message: '分片上传已初始化' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 断点续传：上传分片
+router.patch('/upload/:uploadId/chunk', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { uploadId } = req.params
+    const contentRange = req.headers['content-range'] as string
+    if (!contentRange) {
+      return res.status(400).json({ error: '缺少 Content-Range 头' })
+    }
+
+    // 解析 Content-Range: bytes start-end/total
+    const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/)
+    if (!match) {
+      return res.status(400).json({ error: 'Content-Range 格式错误' })
+    }
+
+    const start = parseInt(match[1])
+    const end = parseInt(match[2])
+
+    const uploadDir = path.join(UPLOAD_TEMP_DIR, uploadId)
+    const metaPath = path.join(uploadDir, 'meta.json')
+
+    // 检查上传任务是否存在
+    try {
+      await fs.access(metaPath)
+    } catch {
+      return res.status(404).json({ error: '上传任务不存在' })
+    }
+
+    // 读取元数据
+    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'))
+    if (meta.userId !== req.userId) {
+      return res.status(403).json({ error: '无权操作此上传任务' })
+    }
+
+    // 使用顺序分片索引（支持任意分片大小）
+    const partIndex = meta.nextPartIndex ?? meta.uploadedParts.length
+
+    // 写入分片
+    const partPath = path.join(uploadDir, `part-${String(partIndex).padStart(6, '0')}`)
+    const writeStream = await fs.open(partPath, 'w')
+
+    await new Promise<void>((resolve, reject) => {
+      req.on('data', async (chunk: Buffer) => {
+        try {
+          await writeStream.write(chunk)
+        } catch (err) {
+          reject(err)
+        }
+      })
+      req.on('end', () => resolve())
+      req.on('error', (err) => reject(err))
+    })
+
+    await writeStream.close()
+
+    // 更新已上传分片列表和索引
+    if (!meta.uploadedParts.includes(partIndex)) {
+      meta.uploadedParts.push(partIndex)
+    }
+    meta.nextPartIndex = partIndex + 1
+    await fs.writeFile(metaPath, JSON.stringify(meta))
+
+    res.json({ message: '分片上传成功', partIndex, uploadedParts: meta.uploadedParts })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 断点续传：查询上传状态
+router.get('/upload/:uploadId/status', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { uploadId } = req.params
+    const uploadDir = path.join(UPLOAD_TEMP_DIR, uploadId)
+    const metaPath = path.join(uploadDir, 'meta.json')
+
+    try {
+      await fs.access(metaPath)
+    } catch {
+      return res.status(404).json({ error: '上传任务不存在' })
+    }
+
+    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'))
+    if (meta.userId !== req.userId) {
+      return res.status(403).json({ error: '无权查看此上传任务' })
+    }
+
+    res.json({
+      fileName: meta.fileName,
+      fileSize: meta.fileSize,
+      uploadedParts: meta.uploadedParts,
+      createdAt: meta.createdAt
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 断点续传：合并分片完成上传
+router.post('/upload/:uploadId/complete', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { uploadId } = req.params
+    const uploadDir = path.join(UPLOAD_TEMP_DIR, uploadId)
+    const metaPath = path.join(uploadDir, 'meta.json')
+
+    try {
+      await fs.access(metaPath)
+    } catch {
+      return res.status(404).json({ error: '上传任务不存在' })
+    }
+
+    const meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'))
+    if (meta.userId !== req.userId) {
+      return res.status(403).json({ error: '无权操作此上传任务' })
+    }
+
+    // 读取所有分片并合并
+    const parts = (await fs.readdir(uploadDir))
+      .filter(f => f.startsWith('part-'))
+      .sort()
+
+    const buffers: Buffer[] = []
+    for (const part of parts) {
+      buffers.push(await fs.readFile(path.join(uploadDir, part)))
+    }
+    const finalBuffer = Buffer.concat(buffers)
+
+    // 上传到存储池
+    const storage = meta.poolId ? getStorageByPoolId(req.userId!, meta.poolId) : getStorage(req.userId!)
+    const filePath = meta.dirPath ? `${meta.dirPath}/${meta.fileName}` : meta.fileName
+    await storage.upload(filePath, finalBuffer)
+
+    // 清理临时文件
+    await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})
+
+    // 获取存储池信息
+    const resolvedPoolId = meta.poolId || (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+
+    res.json({ message: '分片上传完成', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -341,12 +604,12 @@ router.post('/download-zip', flexibleAuth, requirePermission('read'), async (req
 // 远程URL上传
 router.post('/remote-upload', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    const { url, dirPath } = req.body
+    const { url, dirPath, poolId } = req.body
     if (!url) {
       return res.status(400).json({ error: '缺少URL' })
     }
 
-    const storage = getStorageForRequest(req)
+    const storage = poolId ? getStorageByPoolId(req.userId!, poolId) : getStorageForRequest(req)
 
     // 下载远程文件
     const response = await fetch(url)
@@ -366,7 +629,11 @@ router.post('/remote-upload', flexibleAuth, requirePermission('write'), async (r
     const filePath = dirPath ? `${dirPath}/${fileName}` : fileName
     await storage.upload(filePath, buffer)
 
-    res.json({ message: '远程上传成功', path: filePath })
+    // 获取存储池信息
+    const resolvedPoolId = poolId || (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+
+    res.json({ message: '远程上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

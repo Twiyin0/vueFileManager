@@ -16,6 +16,7 @@ import shareRoutes from './routes/share'
 import storagePoolsRoutes from './routes/storage-pools'
 import trashRoutes from './routes/trash'
 import favouritesRoutes from './routes/favourites'
+import publicRoutes from './routes/public'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -42,6 +43,9 @@ app.use('/api/share', shareRoutes)
 app.use('/api/storage-pools', storagePoolsRoutes)
 app.use('/api/trash', trashRoutes)
 app.use('/api/favourites', favouritesRoutes)
+
+// 公开访问路由（无需认证）
+app.use('/f', publicRoutes)
 
 // SPA fallback（生产模式）
 app.get('*', (req, res) => {

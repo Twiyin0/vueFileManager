@@ -1,23 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps<{
   show: boolean
   currentPath: string
+  pools?: { id: number; name: string }[]
+  currentPoolId?: number
 }>()
 
 const emit = defineEmits<{
   close: []
-  upload: [files: FileList]
+  upload: [files: FileList, poolId?: number]
 }>()
 
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const selectedPoolId = ref<number | undefined>(undefined)
+
+// 初始化选中的存储池
+const effectivePoolId = computed(() => selectedPoolId.value ?? props.currentPoolId)
 
 function handleDrop(e: DragEvent) {
   isDragging.value = false
   if (e.dataTransfer?.files) {
-    emit('upload', e.dataTransfer.files)
+    emit('upload', e.dataTransfer.files, effectivePoolId.value)
     emit('close')
   }
 }
@@ -25,7 +31,7 @@ function handleDrop(e: DragEvent) {
 function handleFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
   if (input.files) {
-    emit('upload', input.files)
+    emit('upload', input.files, effectivePoolId.value)
     emit('close')
   }
 }
@@ -44,6 +50,20 @@ function openFilePicker() {
         <p class="text-sm mb-4" style="color: var(--text-secondary-color)">
           上传到：{{ currentPath || '根目录' }}
         </p>
+
+        <!-- 存储池选择 -->
+        <div v-if="pools && pools.length > 0" class="mb-4">
+          <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">目标存储池</label>
+          <select
+            v-model="selectedPoolId"
+            class="input-field"
+          >
+            <option :value="undefined">当前存储池</option>
+            <option v-for="pool in pools" :key="pool.id" :value="pool.id">
+              {{ pool.name }}
+            </option>
+          </select>
+        </div>
 
         <!-- 拖拽区域 -->
         <div

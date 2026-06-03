@@ -66,7 +66,11 @@ const uploadProgress = ref<{ file: string; percent: number }[]>([])
 const showUploadProgress = ref(false)
 
 // 存储池
-const currentPoolId = ref<number | undefined>(undefined)
+const currentPoolId = computed(() => {
+  const pool = route.query.pool as string
+  return pool ? parseInt(pool) : undefined
+})
+const pools = ref<{ id: number; name: string }[]>([])
 
 const currentPath = computed(() => (route.query.path as string) || '')
 
@@ -75,27 +79,36 @@ const pathSegments = computed(() => {
   return currentPath.value.split('/').filter(Boolean)
 })
 
-onMounted(() => {
-  const pool = route.query.pool as string
-  if (pool) currentPoolId.value = parseInt(pool)
-  filesStore.fetchFiles(currentPath.value)
+onMounted(async () => {
+  // 加载存储池列表
+  try {
+    const res = await api.get<{ pools: any[] }>('/storage-pools')
+    pools.value = res.pools.map(p => ({ id: p.id, name: p.name }))
+  } catch {}
+  filesStore.fetchFiles(currentPath.value, currentPoolId.value)
 })
 
-watch(currentPath, (newPath) => {
-  filesStore.fetchFiles(newPath)
+watch([currentPath, currentPoolId], ([newPath]) => {
+  filesStore.fetchFiles(newPath, currentPoolId.value)
   showSearch.value = false
   searchQuery.value = ''
   selectedFiles.value.clear()
   isSelectMode.value = false
 })
 
-function navigateToPath(path: string) {
-  router.push({ path: '/', query: path ? { path } : {} })
+function navigateToPath(path: string, poolId?: number) {
+  const query: Record<string, string> = {}
+  if (poolId) query.pool = String(poolId)
+  if (path) query.path = path
+  router.push({ path: '/', query })
 }
 
 function openFile(file: FileItem) {
-  if (file.type === 'folder') {
-    navigateToPath(file.path)
+  if (file.isPool && file.poolId) {
+    // 点击存储池虚拟文件夹，进入该池
+    navigateToPath('', file.poolId)
+  } else if (file.type === 'folder') {
+    navigateToPath(file.path, currentPoolId.value)
   } else {
     fileToPreview.value = file
     showPreview.value = true
@@ -105,11 +118,23 @@ function openFile(file: FileItem) {
 function goUp() {
   const segments = currentPath.value.split('/').filter(Boolean)
   segments.pop()
-  navigateToPath(segments.join('/'))
+  const newPath = segments.join('/')
+  if (!newPath && currentPoolId.value) {
+    // 在池根目录点上级，退回存储池列表
+    goBackToPools()
+  } else {
+    navigateToPath(newPath, currentPoolId.value)
+  }
+}
+
+// 返回存储池列表（从池内退回根目录）
+function goBackToPools() {
+  router.push({ path: '/' })
 }
 
 // 上传（带进度）
-async function handleUpload(files: FileList) {
+async function handleUpload(files: FileList, uploadPoolId?: number) {
+  const targetPoolId = uploadPoolId || currentPoolId.value
   showUploadProgress.value = true
   uploadProgress.value = Array.from(files).map(f => ({ file: f.name, percent: 0 }))
 
@@ -139,8 +164,11 @@ async function handleUpload(files: FileList) {
         xhr.onerror = () => reject(new Error('上传失败'))
 
         const dirPath = currentPath.value || ''
-        const poolQuery = currentPoolId.value ? `&poolId=${currentPoolId.value}` : ''
-        xhr.open('POST', `/api/files/upload?path=${encodeURIComponent(dirPath)}${poolQuery}`)
+        const params = new URLSearchParams()
+        if (dirPath) params.set('path', dirPath)
+        if (targetPoolId) params.set('poolId', String(targetPoolId))
+        const query = params.toString() ? `?${params}` : ''
+        xhr.open('POST', `/api/files/upload${query}`)
         xhr.setRequestHeader('Authorization', `Bearer ${token}`)
         xhr.send(formData)
       })
@@ -149,7 +177,7 @@ async function handleUpload(files: FileList) {
     }
   }
 
-  await filesStore.fetchFiles(currentPath.value)
+  await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
   setTimeout(() => { showUploadProgress.value = false }, 2000)
 }
 
@@ -184,8 +212,8 @@ async function handleRemoteUpload() {
   if (!remoteUrl.value.trim()) return
   remoteUploading.value = true
   try {
-    await api.post('/files/remote-upload', { url: remoteUrl.value, dirPath: currentPath.value })
-    await filesStore.fetchFiles(currentPath.value)
+    await api.post('/files/remote-upload', { url: remoteUrl.value, dirPath: currentPath.value, poolId: currentPoolId.value })
+    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
     showRemoteUpload.value = false
     remoteUrl.value = ''
   } catch (err: any) {
@@ -223,10 +251,10 @@ async function handleBatchDelete() {
   if (selectedFiles.value.size === 0) return
   if (!confirm(`确定要删除选中的 ${selectedFiles.value.size} 个项目吗？`)) return
   try {
-    await api.post('/files/batch-delete', { paths: Array.from(selectedFiles.value) })
+    await api.post('/files/batch-delete', { paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
     selectedFiles.value.clear()
     isSelectMode.value = false
-    await filesStore.fetchFiles(currentPath.value)
+    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
   } catch (err: any) {
     alert(err.message)
   }
@@ -242,7 +270,7 @@ async function handleBatchDownload() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
-      body: JSON.stringify({ paths: Array.from(selectedFiles.value) })
+      body: JSON.stringify({ paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
     })
 
     if (!response.ok) throw new Error('下载失败')
@@ -280,7 +308,8 @@ async function toggleFavourite(file: any) {
 async function handleCreateFolder() {
   if (!newFolderName.value.trim()) return
   const path = currentPath.value ? `${currentPath.value}/${newFolderName.value}` : newFolderName.value
-  await filesStore.createFolder(path)
+  await api.post('/files/mkdir', { path, poolId: currentPoolId.value })
+  await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
   showCreateFolder.value = false
   newFolderName.value = ''
 }
@@ -293,7 +322,8 @@ function confirmDelete(file: FileItem) {
 
 async function handleDelete() {
   if (!fileToDelete.value) return
-  await filesStore.deleteFile(fileToDelete.value.path)
+  await api.delete(`/files/delete?path=${encodeURIComponent(fileToDelete.value.path)}${currentPoolId.value ? `&poolId=${currentPoolId.value}` : ''}`)
+  await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
   showDeleteConfirm.value = false
   fileToDelete.value = null
 }
@@ -309,7 +339,11 @@ async function handleSearch() {
   isSearching.value = true
   showSearch.value = true
   try {
-    const res = await api.get<{ files: FileItem[] }>(`/files/search?q=${encodeURIComponent(searchQuery.value)}&path=${encodeURIComponent(currentPath.value)}`)
+    const params = new URLSearchParams()
+    params.set('q', searchQuery.value)
+    if (currentPath.value) params.set('path', currentPath.value)
+    if (currentPoolId.value) params.set('poolId', String(currentPoolId.value))
+    const res = await api.get<{ files: FileItem[] }>(`/files/search?${params}`)
     searchResults.value = res.files
   } catch { searchResults.value = [] }
   finally { isSearching.value = false }
@@ -325,8 +359,8 @@ function startRename(file: FileItem) {
 async function handleRename() {
   if (!fileToRename.value || !newFileName.value.trim()) return
   try {
-    await api.post('/files/rename', { path: fileToRename.value.path, newName: newFileName.value.trim() })
-    await filesStore.fetchFiles(currentPath.value)
+    await api.post('/files/rename', { path: fileToRename.value.path, newName: newFileName.value.trim(), poolId: currentPoolId.value })
+    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
     showRename.value = false
   } catch (err: any) { alert(err.message) }
 }
@@ -364,19 +398,26 @@ function handleContextAction(action: string, item?: any) {
     case 'new-folder': showCreateFolder.value = true; break
     case 'upload': showUpload.value = true; break
     case 'remote-upload': showRemoteUpload.value = true; break
-    case 'refresh': filesStore.fetchFiles(currentPath.value); break
+    case 'refresh': filesStore.fetchFiles(currentPath.value, currentPoolId.value); break
   }
 }
 
 // Spotlight搜索导航
 function handleSpotlightNavigate(path: string, poolId?: number) {
-  navigateToPath(path)
+  navigateToPath(path, poolId || currentPoolId.value)
 }
 
 // 文件夹树导航
-function handleTreeNavigate(path: string) {
-  navigateToPath(path)
+function handleTreeNavigate(path: string, poolId?: number) {
+  navigateToPath(path, poolId || currentPoolId.value)
 }
+
+// 当前存储池名称
+const currentPoolName = computed(() => {
+  if (!currentPoolId.value) return ''
+  const pool = pools.value.find(p => p.id === currentPoolId.value)
+  return pool?.name || ''
+})
 
 // 格式化文件大小
 function formatSize(bytes: number) {
@@ -416,20 +457,30 @@ function formatSize(bytes: number) {
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <!-- 面包屑导航 -->
             <div class="flex items-center gap-1.5 text-sm flex-wrap">
-              <button @click="navigateToPath('')"
+              <button @click="goBackToPools"
                 class="px-2 py-1 rounded-md transition-colors"
-                :style="{ color: currentPath ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPath ? 'normal' : '500' }">
-                根目录
+                :style="{ color: currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId ? 'normal' : '500' }">
+                全部存储池
               </button>
-              <template v-for="(segment, index) in pathSegments" :key="index">
+              <template v-if="currentPoolId">
                 <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
-                <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'))"
+                <button @click="navigateToPath('', currentPoolId)"
                   class="px-2 py-1 rounded-md transition-colors"
-                  :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }">
-                  {{ segment }}
+                  :style="{ color: currentPath ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPath ? 'normal' : '500' }">
+                  {{ currentPoolName }}
                 </button>
+                <template v-for="(segment, index) in pathSegments" :key="index">
+                  <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                  </svg>
+                  <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'), currentPoolId)"
+                    class="px-2 py-1 rounded-md transition-colors"
+                    :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }">
+                    {{ segment }}
+                  </button>
+                </template>
               </template>
             </div>
 
@@ -444,7 +495,7 @@ function formatSize(bytes: number) {
                 搜索
               </button>
 
-              <button v-if="currentPath" @click="goUp" class="btn-secondary text-sm flex items-center gap-1">
+              <button v-if="currentPath || currentPoolId" @click="goUp" class="btn-secondary text-sm flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
                 </svg>
@@ -564,7 +615,7 @@ function formatSize(bytes: number) {
     <SpotlightSearch @navigate="handleSpotlightNavigate" />
 
     <!-- 上传对话框 -->
-    <UploadDialog :show="showUpload" :current-path="currentPath" @close="showUpload = false" @upload="handleUpload" />
+    <UploadDialog :show="showUpload" :current-path="currentPath" :pools="pools" :current-pool-id="currentPoolId" @close="showUpload = false" @upload="handleUpload" />
 
     <!-- 远程上传对话框 -->
     <Teleport to="body">

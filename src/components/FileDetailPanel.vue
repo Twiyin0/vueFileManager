@@ -51,7 +51,8 @@ const fileExt = computed(() => {
 <template>
   <Teleport to="body">
     <div v-if="visible && item"
-      class="fixed right-0 top-0 h-full w-80 bg-white dark:bg-dark-card shadow-2xl z-50 border-l dark:border-dark-border border-light-border flex flex-col">
+      class="fixed right-0 top-0 h-full w-80 shadow-2xl z-50 border-l dark:border-dark-border border-light-border flex flex-col"
+      style="background-color: var(--card-color)">
       <!-- 头部 -->
       <div class="flex items-center justify-between px-4 py-3 border-b dark:border-dark-border border-light-border">
         <h3 class="font-semibold text-sm dark:text-dark-text text-light-text">文件详情</h3>

@@ -6,6 +6,32 @@ import { getStorage } from '../services/factory'
 
 const router = Router()
 
+// 生成 signToken
+function generateSignToken(username: string, signKey: string): { sign: string; timestamp: number } {
+  const timestamp = Math.floor(Date.now() / 1000)
+  const raw = username + signKey
+  const hash = crypto.createHash('md5').update(raw).digest('hex')
+  const sign = hash.slice(4, 12) + timestamp
+  return { sign, timestamp }
+}
+
+// 验证 signToken
+function verifySignToken(username: string, signKey: string, sign: string, timestamp: number): boolean {
+  const expectedHash = crypto.createHash('md5').update(username + signKey).digest('hex')
+  const expectedSign = expectedHash.slice(4, 12) + timestamp
+  return sign === expectedSign
+}
+
+// 获取分享的用户名
+function getShareUsername(shareId: number): string | null {
+  const row = db.prepare(`
+    SELECT u.username FROM shares s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.id = ?
+  `).get(shareId) as any
+  return row?.username || null
+}
+
 // 生成分享链接
 router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
@@ -15,20 +41,30 @@ router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
     }
 
     const shareCode = crypto.randomBytes(8).toString('hex')
+    const signKey = crypto.randomBytes(8).toString('hex')
     let expiresAt = null
     if (expiresIn) {
       expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1000).toISOString()
     }
 
     db.prepare(`
-      INSERT INTO shares (user_id, file_path, file_type, share_code, password, expires_at, max_downloads)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(req.userId!, filePath, fileType || 'file', shareCode, password || null, expiresAt, maxDownloads || null)
+      INSERT INTO shares (user_id, file_path, file_type, share_code, password, expires_at, max_downloads, sign_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(req.userId!, filePath, fileType || 'file', shareCode, password || null, expiresAt, maxDownloads || null, signKey)
+
+    // 获取用户名用于生成签名
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
+    const { sign } = generateSignToken(user.username, signKey)
+
+    // 构建签名 URL
+    const signUrl = `/s/${shareCode}?sign=${sign}&t=${Math.floor(Date.now() / 1000)}`
 
     res.json({
       message: '分享链接创建成功',
       shareCode,
-      url: `/s/${shareCode}`
+      signKey, // 返回给前端，前端可以自行生成签名
+      url: `/s/${shareCode}`,
+      signUrl // 带签名的完整 URL
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -39,9 +75,22 @@ router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
 router.get('/list', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const shares = db.prepare(`
-      SELECT * FROM shares WHERE user_id = ? ORDER BY created_at DESC
+      SELECT s.*, u.username FROM shares s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.user_id = ?
+      ORDER BY s.created_at DESC
     `).all(req.userId!)
-    res.json({ shares })
+
+    // 为每个分享生成签名 URL
+    const sharesWithSign = shares.map((share: any) => {
+      const { sign } = generateSignToken(share.username, share.sign_key)
+      return {
+        ...share,
+        signUrl: `/s/${share.share_code}?sign=${sign}&t=${Math.floor(Date.now() / 1000)}`
+      }
+    })
+
+    res.json({ shares: sharesWithSign })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -60,7 +109,7 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-// 访问分享链接（公开）
+// 访问分享链接（公开，仅查看信息）
 router.get('/s/:code', (req: Request, res: Response) => {
   try {
     const share = db.prepare(`
@@ -110,7 +159,7 @@ router.get('/s/:code', (req: Request, res: Response) => {
   }
 })
 
-// 下载分享的文件
+// 下载分享的文件（需要 signToken 验证）
 router.get('/download/:code', async (req: Request, res: Response) => {
   try {
     const share = db.prepare(`
@@ -141,6 +190,19 @@ router.get('/download/:code', async (req: Request, res: Response) => {
       }
     }
 
+    // 验证 signToken
+    const sign = req.query.sign as string
+    const timestamp = parseInt(req.query.t as string)
+
+    if (!sign || !timestamp) {
+      return res.status(403).json({ error: '缺少签名参数' })
+    }
+
+    // 验证签名
+    if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) {
+      return res.status(403).json({ error: '签名验证失败' })
+    }
+
     // 下载文件
     const storage = getStorage(share.user_id)
     const data = await storage.download(share.file_path)
@@ -157,7 +219,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
   }
 })
 
-// 预览分享的文件
+// 预览分享的文件（需要 signToken 验证）
 router.get('/preview/:code', async (req: Request, res: Response) => {
   try {
     const share = db.prepare(`
@@ -179,6 +241,18 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
       if (!providedPassword || providedPassword !== share.password) {
         return res.status(403).json({ error: '密码错误' })
       }
+    }
+
+    // 验证 signToken
+    const sign = req.query.sign as string
+    const timestamp = parseInt(req.query.t as string)
+
+    if (!sign || !timestamp) {
+      return res.status(403).json({ error: '缺少签名参数' })
+    }
+
+    if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) {
+      return res.status(403).json({ error: '签名验证失败' })
     }
 
     const storage = getStorage(share.user_id)

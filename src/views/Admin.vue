@@ -11,6 +11,7 @@ interface AdminUser {
   banned: number
   register_ip: string
   last_login_ip: string
+  last_login_at: string
   created_at: string
   guest_enabled: number
 }
@@ -22,6 +23,7 @@ interface UserDetail {
   banned: boolean
   registerIp: string
   lastLoginIp: string
+  lastLoginAt: string
   createdAt: string
   settings: { guestEnabled: boolean; guestPath: string; theme: string }
   pools: { id: number; name: string; storageType: string; isDefault: boolean; config: any; createdAt: string }[]
@@ -88,7 +90,8 @@ onMounted(fetchUsers)
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
-  const d = new Date(dateStr)
+  // SQLite CURRENT_TIMESTAMP 返回 UTC 时间，需追加 Z 以正确解析为 UTC
+  const d = new Date(dateStr.replace(' ', 'T') + 'Z')
   return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -250,7 +253,7 @@ function handleConfirm() {
         <div class="relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           <input v-model="search" type="text" placeholder="搜索用户名、IP、角色..."
-            class="w-full pl-10 pr-4 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+            class="w-full pl-10 pr-4 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text dark:placeholder-dark-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
         </div>
       </div>
 
@@ -273,9 +276,10 @@ function handleConfirm() {
             <div class="col-span-2">用户名</div>
             <div class="col-span-1">角色</div>
             <div class="col-span-1 text-center">状态</div>
-            <div class="col-span-2 hidden sm:block">注册 IP</div>
-            <div class="col-span-2 hidden md:block">最后登录 IP</div>
+            <div class="col-span-1 hidden sm:block">注册 IP</div>
+            <div class="col-span-1 hidden md:block">最后登录 IP</div>
             <div class="col-span-2 hidden lg:block">注册时间</div>
+            <div class="col-span-2 hidden xl:block">上次登录时间</div>
             <div class="col-span-2 text-right">操作</div>
           </div>
 
@@ -307,14 +311,17 @@ function handleConfirm() {
               <span v-if="user.banned" class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">封禁</span>
               <span v-else class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
             </div>
-            <div class="col-span-2 hidden sm:block text-xs font-mono text-gray-500 dark:text-dark-text-secondary truncate">
+            <div class="col-span-1 hidden sm:block text-xs font-mono text-gray-500 dark:text-dark-text-secondary truncate">
               {{ user.register_ip || '-' }}
             </div>
-            <div class="col-span-2 hidden md:block text-xs font-mono text-gray-500 dark:text-dark-text-secondary truncate">
+            <div class="col-span-1 hidden md:block text-xs font-mono text-gray-500 dark:text-dark-text-secondary truncate">
               {{ user.last_login_ip || '-' }}
             </div>
             <div class="col-span-2 hidden lg:block text-xs text-gray-500 dark:text-dark-text-secondary">
               {{ formatDate(user.created_at) }}
+            </div>
+            <div class="col-span-2 hidden xl:block text-xs text-gray-500 dark:text-dark-text-secondary">
+              {{ formatDate(user.last_login_at) }}
             </div>
             <div class="col-span-2 flex items-center justify-end gap-0.5 flex-wrap">
               <button @click="viewDetail(user)" class="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="查看详情">
@@ -352,7 +359,7 @@ function handleConfirm() {
             <div>
               <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">用户名</label>
               <input v-model="createForm.username" type="text" placeholder="3-20 个字符"
-                class="w-full px-3 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+                class="w-full px-3 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text dark:placeholder-dark-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
             </div>
             <div>
               <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">密码</label>
@@ -430,6 +437,10 @@ function handleConfirm() {
               <div class="p-2 rounded bg-gray-50 dark:bg-dark-hover">
                 <p class="text-gray-500 dark:text-dark-text-secondary text-xs">注册时间</p>
                 <p class="mt-0.5" style="color: var(--text-color)">{{ formatDate(detailUser.createdAt) }}</p>
+              </div>
+              <div class="p-2 rounded bg-gray-50 dark:bg-dark-hover">
+                <p class="text-gray-500 dark:text-dark-text-secondary text-xs">上次登录时间</p>
+                <p class="mt-0.5" style="color: var(--text-color)">{{ formatDate(detailUser.lastLoginAt) }}</p>
               </div>
               <div class="p-2 rounded bg-gray-50 dark:bg-dark-hover">
                 <p class="text-gray-500 dark:text-dark-text-secondary text-xs">主题</p>

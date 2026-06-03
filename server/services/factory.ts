@@ -1,5 +1,6 @@
 import { LocalStorage } from './local'
 import { UpyunStorage } from './upyun'
+import { PrefixStorage } from './prefix'
 import { StorageProvider } from './storage'
 import db from '../db'
 
@@ -10,16 +11,24 @@ const storageCache = new Map<string, StorageProvider>()
 function createStorageInstance(pool: any): StorageProvider {
   const config = JSON.parse(pool.config)
 
+  let storage: StorageProvider
   if (pool.storage_type === 'upyun') {
-    return new UpyunStorage(
+    storage = new UpyunStorage(
       config.upyunOperator,
       config.upyunPassword,
       config.upyunBucket,
       config.upyunEndpoint || 'v0.api.upyun.com'
     )
   } else {
-    return new LocalStorage(config.localPath || './uploads')
+    storage = new LocalStorage(config.localPath || './uploads')
   }
+
+  // 如果配置了 rootPath，用 PrefixStorage 包装
+  if (config.rootPath && config.rootPath !== '/' && config.rootPath !== '') {
+    storage = new PrefixStorage(storage, config.rootPath)
+  }
+
+  return storage
 }
 
 // 根据存储池ID获取存储实例

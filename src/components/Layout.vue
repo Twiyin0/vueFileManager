@@ -12,9 +12,7 @@ const authStore = useAuthStore()
     <header class="h-14 flex items-center justify-between px-4 border-b" style="background-color: var(--surface-color); border-color: var(--border-color)">
       <div class="flex items-center gap-3">
         <router-link to="/" class="flex items-center gap-2 font-bold text-lg">
-          <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-          </svg>
+          <img src="/logo.png" alt="VueFileManager" class="rounded" style="width: 34px; height: 34px;" />
           <span style="color: var(--text-color)">VueFileManager</span>
         </router-link>
       </div>

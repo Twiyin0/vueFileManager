@@ -90,9 +90,9 @@ router.post('/login', (req: Request, res: Response) => {
       return res.status(401).json({ error: '用户名或密码错误' })
     }
 
-    // 更新最后登录 IP
+    // 更新最后登录 IP 和时间
     const ip = getClientIp(req)
-    db.prepare('UPDATE users SET last_login_ip = ? WHERE id = ?').run(ip, user.id)
+    db.prepare('UPDATE users SET last_login_ip = ?, last_login_at = CURRENT_TIMESTAMP WHERE id = ?').run(ip, user.id)
 
     const token = generateToken(user.id)
 

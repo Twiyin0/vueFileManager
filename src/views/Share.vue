@@ -15,6 +15,8 @@ const shareInfo = ref<any>(null)
 const showPreview = ref(false)
 
 const shareCode = route.params.code as string
+const sign = route.query.sign as string
+const timestamp = route.query.t as string
 
 async function fetchShare(providedPassword?: string) {
   loading.value = true
@@ -48,15 +50,23 @@ function submitPassword() {
 function handleDownload() {
   const params = new URLSearchParams()
   if (password.value) params.set('password', password.value)
-  const url = `/api/share/download/${shareCode}${params.toString() ? '?' + params.toString() : ''}`
+  if (sign) params.set('sign', sign)
+  if (timestamp) params.set('t', timestamp)
+  const url = `/api/share/download/${shareCode}?${params.toString()}`
   window.open(url, '_blank')
 }
+
+const previewUrl = `/api/share/preview/${shareCode}?${new URLSearchParams({
+  ...(password.value ? { password: password.value } : {}),
+  ...(sign ? { sign } : {}),
+  ...(timestamp ? { t: timestamp } : {})
+}).toString()}`
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col" style="background-color: var(--color-light-bg)">
+  <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
     <!-- 顶部导航 -->
-    <header class="h-14 flex items-center justify-between px-4 border-b dark:border-dark-border border-light-border" style="background-color: var(--color-light-surface)">
+    <header class="h-14 flex items-center justify-between px-4 border-b dark:border-dark-border border-light-border" style="background-color: var(--surface-color)">
       <router-link to="/" class="flex items-center gap-2 font-bold text-lg">
         <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
@@ -129,15 +139,20 @@ function handleDownload() {
           </p>
         </div>
 
+        <!-- 无签名参数警告 -->
+        <div v-if="!sign" class="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-600 dark:text-yellow-400 text-sm">
+          此分享链接需要签名参数才能下载，请使用带签名的完整链接访问。
+        </div>
+
         <div class="flex flex-col gap-3">
-          <button @click="handleDownload" class="btn-primary w-full flex items-center justify-center gap-2">
+          <button @click="handleDownload" class="btn-primary w-full flex items-center justify-center gap-2" :disabled="!sign">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
             </svg>
             下载文件
           </button>
           <button
-            v-if="['image', 'video', 'audio', 'pdf', 'text', 'markdown'].includes(shareInfo.fileType)"
+            v-if="sign && ['image', 'video', 'audio', 'pdf', 'text', 'markdown'].includes(shareInfo.fileType)"
             @click="showPreview = true"
             class="btn-secondary w-full flex items-center justify-center gap-2"
           >
@@ -153,9 +168,9 @@ function handleDownload() {
 
     <!-- 预览 -->
     <FilePreview
-      v-if="shareInfo"
+      v-if="shareInfo && sign"
       :show="showPreview"
-      :file-path="`/api/share/preview/${shareCode}`"
+      :file-path="previewUrl"
       :file-name="shareInfo.fileName"
       @close="showPreview = false"
     />

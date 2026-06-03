@@ -82,9 +82,9 @@ function formatSize(bytes: number): string {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col" style="background-color: var(--color-light-bg)">
+  <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
     <!-- 顶部导航 -->
-    <header class="h-14 flex items-center justify-between px-4 border-b dark:border-dark-border border-light-border" style="background-color: var(--color-light-surface)">
+    <header class="h-14 flex items-center justify-between px-4 border-b dark:border-dark-border border-light-border" style="background-color: var(--surface-color)">
       <router-link to="/guest" class="flex items-center gap-2 text-sm text-blue-500 dark:text-blue-400">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>

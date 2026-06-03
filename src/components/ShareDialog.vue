@@ -17,8 +17,9 @@ const usePassword = ref(false)
 const expiresIn = ref<number | ''>('')
 const maxDownloads = ref<number | ''>('')
 const loading = ref(false)
-const shareResult = ref<{ shareCode: string; url: string } | null>(null)
+const shareResult = ref<{ shareCode: string; url: string; signUrl: string; signKey: string } | null>(null)
 const copied = ref(false)
+const copyType = ref<'link' | 'sign'>('link')
 
 const origin = window.location.origin
 
@@ -34,7 +35,7 @@ const expirationOptions = [
 async function createShare() {
   loading.value = true
   try {
-    const res = await api.post<{ shareCode: string; url: string }>('/share/create', {
+    const res = await api.post<{ shareCode: string; url: string; signUrl: string; signKey: string }>('/share/create', {
       filePath: props.filePath,
       fileType: 'file',
       password: usePassword.value ? password.value : undefined,
@@ -49,9 +50,13 @@ async function createShare() {
   }
 }
 
-async function copyLink() {
+async function copyLink(type: 'link' | 'sign') {
   if (!shareResult.value) return
-  await navigator.clipboard.writeText(`${origin}${shareResult.value.url}`)
+  copyType.value = type
+  const url = type === 'sign'
+    ? `${origin}${shareResult.value.signUrl}`
+    : `${origin}${shareResult.value.url}`
+  await navigator.clipboard.writeText(url)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
@@ -78,22 +83,32 @@ function close() {
             文件：{{ fileName }}
           </p>
 
-          <div class="p-3 rounded-lg mb-4" style="background-color: var(--hover-color)">
-            <p class="text-xs mb-1" style="color: var(--text-secondary-color)">分享链接</p>
+          <!-- 分享链接（需要签名才能下载） -->
+          <div class="p-3 rounded-lg mb-3" style="background-color: var(--hover-color)">
+            <p class="text-xs mb-1" style="color: var(--text-secondary-color)">分享链接（需签名鉴权）</p>
             <p class="font-mono text-sm break-all" style="color: var(--text-color)">
-              {{ origin }}{{ shareResult.url }}
+              {{ origin }}{{ shareResult.signUrl }}
             </p>
           </div>
 
-          <div v-if="usePassword && password" class="p-3 rounded-lg mb-4" style="background-color: var(--hover-color)">
+          <!-- 签名密钥 -->
+          <div class="p-3 rounded-lg mb-3" style="background-color: var(--hover-color)">
+            <p class="text-xs mb-1" style="color: var(--text-secondary-color)">签名密钥（signKey）</p>
+            <p class="font-mono text-sm" style="color: var(--text-color)">{{ shareResult.signKey }}</p>
+            <p class="text-xs mt-1" style="color: var(--text-secondary-color)">
+              用于生成临时授权签名，公式：MD5(username + signKey).slice(4,12) + timestamp
+            </p>
+          </div>
+
+          <div v-if="usePassword && password" class="p-3 rounded-lg mb-3" style="background-color: var(--hover-color)">
             <p class="text-xs mb-1" style="color: var(--text-secondary-color)">访问密码</p>
             <p class="font-mono text-sm" style="color: var(--text-color)">{{ password }}</p>
           </div>
 
           <div class="flex justify-end gap-3">
             <button @click="close" class="btn-secondary text-sm">关闭</button>
-            <button @click="copyLink" class="btn-primary text-sm">
-              {{ copied ? '✓ 已复制' : '复制链接' }}
+            <button @click="copyLink('sign')" class="btn-primary text-sm">
+              {{ copied && copyType === 'sign' ? '✓ 已复制' : '复制签名链接' }}
             </button>
           </div>
         </template>

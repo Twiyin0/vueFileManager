@@ -14,6 +14,8 @@ interface Share {
   download_count: number
   max_downloads: number | null
   created_at: string
+  sign_key: string
+  signUrl: string
 }
 
 const shares = ref<Share[]>([])
@@ -21,6 +23,7 @@ const loading = ref(true)
 const showDeleteConfirm = ref(false)
 const shareToDelete = ref<Share | null>(null)
 const copiedId = ref<number | null>(null)
+const copyType = ref<'link' | 'sign'>('link')
 
 const origin = window.location.origin
 
@@ -55,8 +58,12 @@ async function handleDelete() {
   shareToDelete.value = null
 }
 
-async function copyLink(code: string, id: number) {
-  await navigator.clipboard.writeText(`${origin}/s/${code}`)
+async function copyLink(code: string, id: number, type: 'link' | 'sign', signUrl?: string) {
+  copyType.value = type
+  const url = type === 'sign' && signUrl
+    ? `${origin}${signUrl}`
+    : `${origin}/s/${code}`
+  await navigator.clipboard.writeText(url)
   copiedId.value = id
   setTimeout(() => { copiedId.value = null }, 2000)
 }
@@ -125,8 +132,14 @@ function isMaxedOut(share: Share): boolean {
                 </span>
               </div>
 
-              <p class="text-xs font-mono text-gray-500 dark:text-dark-text-secondary mb-2">
-                {{ origin }}/s/{{ share.share_code }}
+              <!-- 签名链接 -->
+              <p class="text-xs font-mono text-gray-500 dark:text-dark-text-secondary mb-1">
+                {{ origin }}{{ share.signUrl }}
+              </p>
+
+              <!-- 签名密钥 -->
+              <p class="text-xs text-gray-400 dark:text-dark-text-secondary mb-2">
+                signKey: {{ share.sign_key }}
               </p>
 
               <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-dark-text-secondary">
@@ -139,15 +152,15 @@ function isMaxedOut(share: Share): boolean {
 
             <div class="flex items-center gap-1">
               <button
-                @click="copyLink(share.share_code, share.id)"
+                @click="copyLink(share.share_code, share.id, 'sign', share.signUrl)"
                 class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                title="复制链接"
+                title="复制签名链接"
               >
-                <svg v-if="copiedId === share.id" class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-if="copiedId === share.id && copyType === 'sign'" class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
                 <svg v-else class="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 112 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
                 </svg>
               </button>
               <button

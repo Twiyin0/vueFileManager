@@ -114,6 +114,36 @@ function migrateBannedField() {
 }
 migrateBannedField()
 
+// 迁移：给 users 表加 last_login_at 列
+function migrateLastLoginAt() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all() as any[]
+    const hasCol = cols.some((c: any) => c.name === 'last_login_at')
+    if (!hasCol) {
+      db.exec('ALTER TABLE users ADD COLUMN last_login_at DATETIME')
+      console.log('✅ 已添加 users.last_login_at 字段')
+    }
+  } catch (err) {
+    console.error('⚠️ last_login_at 字段迁移失败:', err)
+  }
+}
+migrateLastLoginAt()
+
+// 迁移：给 shares 表加 sign_key 列
+function migrateShareSignKey() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(shares)").all() as any[]
+    const hasSignKey = cols.some((c: any) => c.name === 'sign_key')
+    if (!hasSignKey) {
+      db.exec('ALTER TABLE shares ADD COLUMN sign_key TEXT')
+      console.log('✅ 已添加 shares.sign_key 字段')
+    }
+  } catch (err) {
+    console.error('⚠️ sign_key 字段迁移失败:', err)
+  }
+}
+migrateShareSignKey()
+
 // 迁移现有用户设置到存储池表
 function migrateStorageSettings() {
   try {

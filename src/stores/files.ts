@@ -8,6 +8,8 @@ export interface FileItem {
   size: number
   modified: string
   path: string
+  poolId?: number
+  isPool?: boolean
 }
 
 export const useFilesStore = defineStore('files', () => {
@@ -16,11 +18,15 @@ export const useFilesStore = defineStore('files', () => {
   const loading = ref(false)
   const error = ref('')
 
-  async function fetchFiles(path: string = '') {
+  async function fetchFiles(path: string = '', poolId?: number) {
     loading.value = true
     error.value = ''
     try {
-      const res = await api.get<{ files: FileItem[] }>(`/files/list?path=${encodeURIComponent(path)}`)
+      const params = new URLSearchParams()
+      if (path) params.set('path', path)
+      if (poolId) params.set('poolId', String(poolId))
+      const query = params.toString() ? `?${params}` : ''
+      const res = await api.get<{ files: FileItem[] }>(`/files/list${query}`)
       files.value = res.files
       currentPath.value = path
     } catch (err: any) {
@@ -31,11 +37,15 @@ export const useFilesStore = defineStore('files', () => {
     }
   }
 
-  async function uploadFile(file: File, path: string = '') {
+  async function uploadFile(file: File, path: string = '', poolId?: number) {
     const formData = new FormData()
     formData.append('file', file)
-    await api.upload(`/files/upload?path=${encodeURIComponent(path)}`, formData)
-    await fetchFiles(currentPath.value)
+    const params = new URLSearchParams()
+    if (path) params.set('path', path)
+    if (poolId) params.set('poolId', String(poolId))
+    const query = params.toString() ? `?${params}` : ''
+    await api.upload(`/files/upload${query}`, formData)
+    await fetchFiles(currentPath.value, poolId)
   }
 
   async function deleteFile(path: string) {
