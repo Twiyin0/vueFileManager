@@ -189,7 +189,8 @@ vueFileManager/
 │   │   ├── share.ts          # 分享
 │   │   ├── storage-pools.ts  # 存储池管理
 │   │   ├── trash.ts          # 回收站
-│   │   └── favourites.ts     # 收藏
+│   │   ├── favourites.ts     # 收藏
+│   │   └── public.ts         # 公开文件访问
 │   └── services/             # 存储服务
 │       ├── storage.ts        # 接口定义
 │       ├── local.ts          # 本地存储
@@ -284,6 +285,11 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 认证 | `GET /api/auth/me` | 当前用户信息 |
 | 文件 | `GET /api/files/list` | 文件列表 |
 | 文件 | `POST /api/files/upload` | 上传 |
+| 文件 | `POST /api/files/upload-stream` | 流式上传 |
+| 文件 | `POST /api/files/upload/init` | 断点续传初始化 |
+| 文件 | `PATCH /api/files/upload/:id/chunk` | 断点续传分片 |
+| 文件 | `GET /api/files/upload/:id/status` | 断点续传状态 |
+| 文件 | `POST /api/files/upload/:id/complete` | 断点续传完成 |
 | 文件 | `GET /api/files/download` | 下载 |
 | 文件 | `GET /api/files/preview` | 预览 |
 | 文件 | `POST /api/files/rename` | 重命名 |
@@ -316,6 +322,10 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 分享 | `POST /api/share/create` | 创建分享 |
 | 分享 | `GET /api/share/list` | 我的分享列表 |
 | 分享 | `GET /api/share/s/:code` | 访问分享 |
+| 分享 | `GET /api/share/download/:code` | 下载分享文件（需签名） |
+| 分享 | `GET /api/share/preview/:code` | 预览分享文件（需签名） |
+| 公开 | `GET /f/:username/*` | 匿名访问文件 |
+| 用户 | `GET /api/user/info` | 用户完整信息（含存储池和统计） |
 | 用户 | `GET /api/user/settings` | 获取设置 |
 | 用户 | `PUT /api/user/settings` | 更新设置 |
 | 用户 | `GET /api/user/guest-shares` | 访客分享列表 |

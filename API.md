@@ -37,7 +37,21 @@ X-API-Key: <your-api-key>
 ### GET `/api/auth/me` — 当前用户信息（需认证）
 ```json
 // Response
-{ "user": { "id": 1, "username": "admin", "role": "admin", "registerIp": "127.0.0.1", "lastLoginIp": "127.0.0.1", "settings": { ... } } }
+{
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "role": "admin",
+    "registerIp": "127.0.0.1",
+    "lastLoginIp": "127.0.0.1",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "settings": {
+      "guestEnabled": false,
+      "guestPath": "",
+      "theme": "system"
+    }
+  }
+}
 ```
 
 ---
@@ -48,16 +62,28 @@ X-API-Key: <your-api-key>
 
 ### GET `/api/files/list?path=&poolId=` — 文件列表
 权限：`read`
+
+当不传 `poolId` 且不传 `path` 时，返回所有存储池作为虚拟文件夹（`isPool: true`）。
 ```json
-// Response
-{ "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt" }] }
+// Response（普通文件列表）
+{
+  "files": [
+    { "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt", "poolId": 1 }
+  ]
+}
+// Response（根目录无 poolId，返回存储池列表）
+{
+  "files": [
+    { "name": "本地存储", "type": "folder", "size": 0, "modified": "...", "path": "", "poolId": 1, "isPool": true }
+  ]
+}
 ```
 
 ### GET `/api/files/info?path=&poolId=` — 文件信息
 权限：`read`
 ```json
 // Response
-{ "info": { "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt" } }
+{ "info": { "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt", "poolId": 1 } }
 ```
 
 ### POST `/api/files/upload?path=&poolId=` — 上传文件
@@ -69,6 +95,58 @@ Form Field: file
 ```json
 // Response
 { "message": "上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local" }
+```
+
+### POST `/api/files/upload-stream` — 流式上传
+权限：`write`
+
+支持 chunked transfer encoding，适合大文件。
+```
+Headers:
+  X-File-Name: 文件名
+  X-Dir-Path: 目标目录（可选）
+  X-Pool-Id: 存储池ID（可选）
+Content-Type: application/octet-stream
+Body: 文件二进制流
+```
+```json
+// Response
+{ "message": "流式上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local" }
+```
+
+### POST `/api/files/upload/init` — 断点续传：初始化
+权限：`write`
+```json
+// Request Body
+{ "fileName": "large-file.zip", "fileSize": 104857600, "dirPath": "target-dir", "poolId": 1 }
+// Response
+{ "uploadId": "abc123...", "message": "分片上传已初始化" }
+```
+
+### PATCH `/api/files/upload/:uploadId/chunk` — 断点续传：上传分片
+权限：`write`
+```
+Headers:
+  Content-Range: bytes 0-10485759/104857600
+Body: 分片二进制数据
+```
+```json
+// Response
+{ "message": "分片上传成功", "partIndex": 0, "uploadedParts": [0] }
+```
+
+### GET `/api/files/upload/:uploadId/status` — 断点续传：查询状态
+权限：`read`
+```json
+// Response
+{ "fileName": "large-file.zip", "fileSize": 104857600, "uploadedParts": [0, 1, 2], "createdAt": 1704067200000 }
+```
+
+### POST `/api/files/upload/:uploadId/complete` — 断点续传：完成
+权限：`write`
+```json
+// Response
+{ "message": "分片上传完成", "path": "target-dir/large-file.zip", "poolId": 1, "storageType": "local" }
 ```
 
 ### GET `/api/files/download?path=&poolId=` — 下载文件
@@ -84,8 +162,10 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 支持：图片/视频/音频/PDF/文本/代码
 ```
 
-### DELETE `/api/files/delete?path=&poolId=` — 删除文件/文件夹
+### DELETE `/api/files/delete?path=&poolId=&permanent=` — 删除文件/文件夹
 权限：`delete`
+
+默认移到回收站。`permanent=true` 时永久删除。
 ```json
 // Response
 { "message": "删除成功" }
@@ -149,7 +229,7 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 权限：`delete`
 ```json
 // Request Body
-{ "paths": ["file1.txt", "file2.txt"], "poolId": 1 }
+{ "paths": ["file1.txt", "file2.txt"], "poolId": 1, "permanent": false }
 // Response
 { "message": "批量删除完成", "errors": [] }
 ```
@@ -187,6 +267,160 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 { "message": "远程上传成功", "path": "target-dir/file.zip", "poolId": 1, "storageType": "local" }
 ```
 
+### GET `/api/files/storage-stats?poolId=` — 存储统计（需认证）
+```json
+// Response
+{ "totalSize": 1048576, "fileCount": 42, "folderCount": 5 }
+```
+
+---
+
+## 存储池 API `/api/storage-pools`（需认证）
+
+### GET `/api/storage-pools` — 存储池列表
+```json
+// Response
+{
+  "pools": [
+    {
+      "id": 1,
+      "name": "本地存储",
+      "storageType": "local",
+      "isDefault": true,
+      "config": { "localPath": "./uploads" },
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+### POST `/api/storage-pools` — 创建存储池
+```json
+// Request Body（本地存储）
+{ "name": "本地存储", "storageType": "local", "config": { "localPath": "./uploads" } }
+// Request Body（又拍云）
+{ "name": "又拍云", "storageType": "upyun", "config": { "upyunOperator": "op", "upyunPassword": "pwd", "upyunBucket": "bucket", "upyunEndpoint": "v0.api.upyun.com" } }
+// Response
+{ "message": "存储池创建成功", "pool": { "id": 2, "name": "...", "storageType": "...", "isDefault": false, "config": { ... } } }
+```
+
+### PUT `/api/storage-pools/:id` — 更新存储池
+```json
+// Request Body
+{ "name": "新名称", "storageType": "local", "config": { "localPath": "./new-path" } }
+// Response
+{ "message": "存储池更新成功" }
+```
+
+### DELETE `/api/storage-pools/:id` — 删除存储池
+> 不能删除默认存储池，需先切换默认。
+```json
+// Response
+{ "message": "存储池删除成功" }
+```
+
+### POST `/api/storage-pools/:id/set-default` — 设为默认存储池
+```json
+// Response
+{ "message": "默认存储池设置成功" }
+```
+
+### POST `/api/storage-pools/:id/test` — 测试存储池连接
+```json
+// Response
+{ "success": true, "message": "本地路径可访问" }
+// 或
+{ "success": false, "message": "又拍云连接失败: ..." }
+```
+
+---
+
+## 回收站 API `/api/trash`（需认证）
+
+### GET `/api/trash` — 回收站列表
+```json
+// Response
+{
+  "items": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "original_path": "docs/file.txt",
+      "file_name": "file.txt",
+      "file_type": "file",
+      "storage_pool_id": 1,
+      "deleted_at": "2024-01-01T00:00:00Z",
+      "pool_name": "本地存储",
+      "storage_type": "local"
+    }
+  ]
+}
+```
+
+### POST `/api/trash/:id/restore` — 恢复文件
+```json
+// Response
+{ "message": "文件已恢复" }
+// 原路径已存在时
+{ "error": "原路径已存在同名文件，无法恢复" }
+```
+
+### DELETE `/api/trash/:id` — 永久删除单个
+```json
+// Response
+{ "message": "已永久删除" }
+```
+
+### DELETE `/api/trash` — 清空回收站
+```json
+// Response
+{ "message": "回收站已清空" }
+```
+
+---
+
+## 收藏 API `/api/favourites`（需认证）
+
+### GET `/api/favourites?poolId=` — 收藏列表
+```json
+// Response
+{
+  "items": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "file_path": "docs/file.txt",
+      "file_name": "file.txt",
+      "file_type": "file",
+      "storage_pool_id": 1,
+      "created_at": "2024-01-01T00:00:00Z",
+      "pool_name": "本地存储",
+      "storage_type": "local"
+    }
+  ]
+}
+```
+
+### POST `/api/favourites` — 添加收藏
+```json
+// Request Body
+{ "filePath": "docs/file.txt", "fileName": "file.txt", "fileType": "file", "storagePoolId": 1 }
+// Response
+{ "message": "已添加到收藏" }
+```
+
+### DELETE `/api/favourites?filePath=&storagePoolId=` — 取消收藏
+```json
+// Response
+{ "message": "已取消收藏" }
+```
+
+### GET `/api/favourites/check?filePath=&storagePoolId=` — 检查收藏状态
+```json
+// Response
+{ "isFavourited": true }
+```
+
 ---
 
 ## 分享 API `/api/share`（部分需认证）
@@ -199,17 +433,40 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
   "fileType": "file",
   "password": "optional-password",
   "expiresIn": 24,          // 小时，可选
-  "maxDownloads": 100,       // 可选
-  "storagePoolId": 1         // 存储池 ID
+  "maxDownloads": 100        // 可选
 }
 // Response
-{ "message": "分享链接创建成功", "shareCode": "abc123", "url": "/s/abc123" }
+{
+  "message": "分享链接创建成功",
+  "shareCode": "abc123",
+  "signKey": "def456...",        // 签名密钥，前端可自行生成签名
+  "url": "/s/abc123",
+  "signUrl": "/s/abc123?sign=...&t=..."  // 带签名的完整 URL
+}
 ```
 
 ### GET `/api/share/list` — 我的分享列表（需认证）
 ```json
 // Response
-{ "shares": [{ "id": 1, "file_path": "file.txt", "share_code": "abc123", "password": null, "expires_at": null, "download_count": 0, "max_downloads": null }] }
+{
+  "shares": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "file_path": "file.txt",
+      "file_type": "file",
+      "share_code": "abc123",
+      "password": null,
+      "expires_at": null,
+      "download_count": 0,
+      "max_downloads": null,
+      "sign_key": "...",
+      "created_at": "...",
+      "username": "admin",
+      "signUrl": "/s/abc123?sign=...&t=..."
+    }
+  ]
+}
 ```
 
 ### DELETE `/api/share/:id` — 删除分享（需认证）
@@ -226,33 +483,199 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 { "needPassword": false, "fileType": "file", "filePath": "file.txt", "fileName": "file.txt", "owner": "username", "shareCode": "abc123" }
 ```
 
-### GET `/api/share/download/:code?password=` — 下载分享文件（公开）
+### GET `/api/share/download/:code?password=&sign=&t=` — 下载分享文件（公开）
+
+需要 `sign` 和 `t` 签名参数（由创建接口返回的 signKey 生成）。
 ```
 Response: 文件流
 ```
 
-### GET `/api/share/preview/:code?password=` — 预览分享文件（公开）
+### GET `/api/share/preview/:code?password=&sign=&t=` — 预览分享文件（公开）
+
+需要 `sign` 和 `t` 签名参数。
 ```
 Response: 文件流（对应 MIME 类型）
 ```
 
+### 签名机制
+
+分享下载/预览需要签名验证。签名算法：
+```
+1. hash = MD5(username + signKey)
+2. sign = hash[4:12] + timestamp
+3. URL 参数：?sign={sign}&t={timestamp}
+```
+
 ---
 
-## 用户设置 API `/api/user`（需认证）
+## 用户 API `/api/user`（需认证）
+
+### GET `/api/user/info` — 当前用户完整信息
+```json
+// Response
+{
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "role": "admin",
+    "registerIp": "127.0.0.1",
+    "lastLoginIp": "127.0.0.1",
+    "lastLoginAt": "2024-01-01T00:00:00Z",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "settings": { "guestEnabled": true, "guestPath": "", "theme": "dark" },
+    "pools": [
+      { "id": 1, "name": "本地存储", "storageType": "local", "isDefault": true, "createdAt": "..." }
+    ],
+    "stats": { "trashCount": 3, "favCount": 5, "shareCount": 2, "apiKeyCount": 1, "guestShareCount": 1 }
+  }
+}
+```
 
 ### GET `/api/user/settings` — 获取设置
+```json
+// Response
+{ "settings": { "guestEnabled": false, "guestPath": "", "theme": "system" } }
+```
+
 ### PUT `/api/user/settings` — 更新设置
+```json
+// Request Body（所有字段可选）
+{ "guestEnabled": true, "guestPath": "photos", "theme": "dark" }
+// Response
+{ "message": "设置已更新" }
+```
+
 ### GET `/api/user/apikeys` — API Key 列表
+```json
+// Response
+{
+  "keys": [
+    { "id": 1, "name": "我的Key", "key": "vfm_abc123...", "permissions": "read,write", "created_at": "..." }
+  ]
+}
+```
+
 ### POST `/api/user/apikeys` — 创建 API Key
+```json
+// Request Body
+{ "name": "我的Key", "permissions": "read,write,delete" }
+// Response
+{ "message": "API Key 创建成功", "key": "vfm_abc123...", "name": "我的Key", "permissions": "read,write,delete" }
+```
+
 ### DELETE `/api/user/apikeys/:id` — 删除 API Key
+```json
+// Response
+{ "message": "API Key 已删除" }
+```
+
+### GET `/api/user/guest-shares` — 我的访客分享列表
+```json
+// Response
+{
+  "shares": [
+    { "id": 1, "user_id": 1, "folder_path": "photos", "storage_pool_id": 1, "label": "照片", "created_at": "...", "pool_name": "本地存储" }
+  ]
+}
+```
+
+### POST `/api/user/guest-shares` — 创建访客分享
+```json
+// Request Body
+{ "folderPath": "photos", "storagePoolId": 1, "label": "照片" }
+// Response
+{ "message": "已分享至访客模式", "share": { "id": 1, "folder_path": "photos", "storage_pool_id": 1, "label": "照片", "pool_name": "本地存储" } }
+```
+
+### DELETE `/api/user/guest-shares/:id` — 删除访客分享
+```json
+// Response
+{ "message": "已取消访客分享" }
+```
 
 ---
 
 ## 管理 API `/api/admin`（需 admin 角色）
 
 ### GET `/api/admin/users` — 用户列表
+```json
+// Response
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "role": "admin",
+      "banned": 0,
+      "register_ip": "127.0.0.1",
+      "last_login_ip": "127.0.0.1",
+      "last_login_at": "...",
+      "created_at": "...",
+      "guest_enabled": 1
+    }
+  ]
+}
+```
+
+### GET `/api/admin/users/:id` — 用户详情
+```json
+// Response
+{
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "role": "admin",
+    "banned": false,
+    "registerIp": "127.0.0.1",
+    "lastLoginIp": "127.0.0.1",
+    "lastLoginAt": "...",
+    "createdAt": "...",
+    "settings": { "guestEnabled": true, "guestPath": "", "theme": "dark" },
+    "pools": [
+      { "id": 1, "name": "本地存储", "storageType": "local", "isDefault": true, "config": { "localPath": "./uploads" }, "createdAt": "..." }
+    ],
+    "stats": { "trashCount": 3, "favCount": 5, "shareCount": 2, "apiKeyCount": 1 }
+  }
+}
+```
+
+### POST `/api/admin/users` — 创建用户
+```json
+// Request Body
+{ "username": "newuser", "password": "123456", "role": "user" }
+// Response
+{ "message": "用户创建成功", "user": { "id": 2, "username": "newuser", "role": "user" } }
+```
+
 ### PUT `/api/admin/users/:id/role` — 修改用户角色
+```json
+// Request Body
+{ "role": "admin" }  // 或 "user"
+// Response
+{ "message": "角色已更新" }
+```
+
+### PUT `/api/admin/users/:id/ban` — 封禁/解封用户
+```json
+// Response
+{ "message": "用户已封禁", "banned": true }
+// 或
+{ "message": "用户已解封", "banned": false }
+```
+
+### PUT `/api/admin/users/:id/password` — 重置用户密码
+```json
+// Request Body
+{ "password": "newpassword" }
+// Response
+{ "message": "密码已重置" }
+```
+
 ### DELETE `/api/admin/users/:id` — 删除用户
+```json
+// Response
+{ "message": "用户已删除" }
+```
 
 ---
 
@@ -267,13 +690,13 @@ Response: 文件流（对应 MIME 类型）
 ### GET `/api/guest/:username/list` — 用户的访客分享文件夹列表
 ```json
 // Response
-{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "pool_name": "本地存储", "created_at": "2024-01-01" }] }
+{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "pool_name": "本地存储", "created_at": "..." }], "owner": "admin" }
 ```
 
 ### GET `/api/guest/:username/:shareId/list?path=` — 访客文件列表
 ```json
 // Response
-{ "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt" }] }
+{ "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt" }], "owner": "admin", "shareLabel": "照片" }
 ```
 
 ### GET `/api/guest/:username/:shareId/download?path=` — 访客下载
@@ -281,26 +704,15 @@ Response: 文件流（对应 MIME 类型）
 Response: 文件流
 ```
 
-## 访客分享管理 API `/api/user`（需认证）
+---
 
-### GET `/api/user/guest-shares` — 我的访客分享列表
-```json
-// Response
-{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "pool_name": "本地存储", "created_at": "..." }] }
+## 公开访问 API `/f`（无需认证）
+
+### GET `/f/:username/*filePath` — 匿名访问文件
+
+通过访客模式的旧版公开链接访问文件（inline 显示）。路径格式：`/f/{username}/{file-path}`。
 ```
-
-### POST `/api/user/guest-shares` — 创建访客分享
-```json
-// Request Body
-{ "folderPath": "photos", "storagePoolId": 1, "label": "照片" }
-// Response
-{ "message": "访客分享创建成功" }
-```
-
-### DELETE `/api/user/guest-shares/:id` — 删除访客分享
-```json
-// Response
-{ "message": "访客分享已删除" }
+Response: 文件流（Content-Disposition: inline，带 Cache-Control: 86400s）
 ```
 
 ---
@@ -317,6 +729,27 @@ Response: 文件流
 
 ---
 
+## 错误响应
+
+所有接口在出错时返回：
+```json
+{ "error": "错误信息" }
+```
+
+常见 HTTP 状态码：
+| 状态码 | 说明 |
+|--------|------|
+| 200 | 成功 |
+| 400 | 参数错误 |
+| 401 | 未认证 / Token 无效 |
+| 403 | 无权限 / 账号被封禁 |
+| 404 | 资源不存在 |
+| 409 | 冲突（如用户名已存在） |
+| 410 | 已过期（分享链接过期或下载次数达上限） |
+| 500 | 服务器内部错误 |
+
+---
+
 ## curl 示例
 
 ```bash
@@ -324,6 +757,10 @@ Response: 文件流
 TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+
+# 获取当前用户完整信息
+curl -s http://localhost:3000/api/user/info \
+  -H "Authorization: Bearer $TOKEN"
 
 # 列出文件（默认存储池）
 curl -s http://localhost:3000/api/files/list \
@@ -352,13 +789,29 @@ curl -X POST http://localhost:3000/api/files/cross-copy \
 curl -X POST http://localhost:3000/api/share/create \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"filePath":"myfile.txt","expiresIn":24,"storagePoolId":1}'
+  -d '{"filePath":"myfile.txt","expiresIn":24}'
 
 # 创建访客分享
 curl -X POST http://localhost:3000/api/user/guest-shares \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"folderPath":"photos","storagePoolId":1,"label":"照片"}'
+
+# 存储池列表
+curl -s http://localhost:3000/api/storage-pools \
+  -H "Authorization: Bearer $TOKEN"
+
+# 回收站列表
+curl -s http://localhost:3000/api/trash \
+  -H "Authorization: Bearer $TOKEN"
+
+# 收藏列表
+curl -s http://localhost:3000/api/favourites \
+  -H "Authorization: Bearer $TOKEN"
+
+# 管理员：用户列表
+curl -s http://localhost:3000/api/admin/users \
+  -H "Authorization: Bearer $TOKEN"
 
 # 用 API Key 访问
 curl -s http://localhost:3000/api/files/list \

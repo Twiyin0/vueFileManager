@@ -52,7 +52,12 @@ router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
 
     const storage = getStorageForRequest(req)
     const files = await storage.list(prefix)
-    res.json({ files })
+
+    // 解析 poolId 并注入到每个文件
+    const resolvedPoolId = poolId ? parseInt(poolId) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const filesWithPool = files.map(f => ({ ...f, poolId: resolvedPoolId }))
+
+    res.json({ files: filesWithPool })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -67,7 +72,12 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
       return res.status(400).json({ error: '缺少文件路径' })
     }
     const info = await storage.info(filePath)
-    res.json({ info })
+
+    // 解析 poolId
+    const poolId = req.query.poolId as string
+    const resolvedPoolId = poolId ? parseInt(poolId) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+
+    res.json({ info: { ...info, poolId: resolvedPoolId } })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

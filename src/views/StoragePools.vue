@@ -214,6 +214,9 @@ function getStorageLabel(type: string) {
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="font-semibold dark:text-dark-text text-light-text">{{ pool.name }}</h3>
+                <span class="px-1.5 py-0.5 text-xs font-mono bg-gray-100 dark:bg-dark-hover text-gray-500 dark:text-dark-text-secondary rounded">
+                  #{{ pool.id }}
+                </span>
                 <span v-if="pool.isDefault" class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">
                   默认
                 </span>

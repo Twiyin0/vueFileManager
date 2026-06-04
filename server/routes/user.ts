@@ -6,6 +6,64 @@ import { clearStorageCache } from '../services/factory'
 
 const router = Router()
 
+// 获取当前用户完整信息（含存储池和统计）
+router.get('/info', authMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const user = db.prepare(`
+      SELECT u.id, u.username, u.role, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
+             s.guest_enabled, s.guest_path, s.theme
+      FROM users u
+      LEFT JOIN user_settings s ON u.id = s.user_id
+      WHERE u.id = ?
+    `).get(req.userId!) as any
+
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    // 获取用户的存储池
+    const pools = db.prepare(`
+      SELECT id, name, storage_type, is_default, created_at
+      FROM storage_pools WHERE user_id = ?
+      ORDER BY is_default DESC, created_at ASC
+    `).all(req.userId!) as any[]
+
+    // 统计
+    const trashCount = (db.prepare('SELECT COUNT(*) as c FROM trash WHERE user_id = ?').get(req.userId!) as any).c
+    const favCount = (db.prepare('SELECT COUNT(*) as c FROM favourites WHERE user_id = ?').get(req.userId!) as any).c
+    const shareCount = (db.prepare('SELECT COUNT(*) as c FROM shares WHERE user_id = ?').get(req.userId!) as any).c
+    const apiKeyCount = (db.prepare('SELECT COUNT(*) as c FROM api_keys WHERE user_id = ?').get(req.userId!) as any).c
+    const guestShareCount = (db.prepare('SELECT COUNT(*) as c FROM guest_shares WHERE user_id = ?').get(req.userId!) as any).c
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        registerIp: user.register_ip,
+        lastLoginIp: user.last_login_ip,
+        lastLoginAt: user.last_login_at,
+        createdAt: user.created_at,
+        settings: {
+          guestEnabled: !!user.guest_enabled,
+          guestPath: user.guest_path,
+          theme: user.theme
+        },
+        pools: pools.map(p => ({
+          id: p.id,
+          name: p.name,
+          storageType: p.storage_type,
+          isDefault: !!p.is_default,
+          createdAt: p.created_at
+        })),
+        stats: { trashCount, favCount, shareCount, apiKeyCount, guestShareCount }
+      }
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // 获取用户设置
 router.get('/settings', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
