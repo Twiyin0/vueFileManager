@@ -31,6 +31,11 @@ const router = createRouter({
       component: () => import('@/views/Guest.vue')
     },
     {
+      path: '/guest/:username/:shareId',
+      name: 'GuestFolder',
+      component: () => import('@/views/Guest.vue')
+    },
+    {
       path: '/storage-pools',
       name: 'StoragePools',
       component: () => import('@/views/StoragePools.vue'),

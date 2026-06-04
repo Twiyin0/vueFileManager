@@ -13,6 +13,9 @@ import ContextMenu from '@/components/ContextMenu.vue'
 import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import FolderTree from '@/components/FolderTree.vue'
 import SpotlightSearch from '@/components/SpotlightSearch.vue'
+import GuestShareDialog from '@/components/GuestShareDialog.vue'
+import Toast from '@/components/Toast.vue'
+import MoveDialog from '@/components/MoveDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +34,8 @@ const showPreview = ref(false)
 const fileToPreview = ref<FileItem | null>(null)
 const showShare = ref(false)
 const fileToShare = ref<FileItem | null>(null)
+const showGuestShare = ref(false)
+const fileToGuestShare = ref<FileItem | null>(null)
 
 // 搜索
 const searchQuery = ref('')
@@ -54,12 +59,24 @@ const showDetailPanel = ref(false)
 const detailItem = ref<any>(null)
 
 // 文件夹树
-const showFolderTree = ref(true)
+const folderTreeCollapsed = ref(localStorage.getItem('folderTreeCollapsed') === 'true')
+watch(folderTreeCollapsed, (v) => localStorage.setItem('folderTreeCollapsed', String(v)))
 
 // 远程上传
 const showRemoteUpload = ref(false)
 const remoteUrl = ref('')
 const remoteUploading = ref(false)
+
+// 剪贴板
+const clipboardFiles = ref<{ path: string; name: string; poolId?: number }[]>([])
+const clipboardMode = ref<'copy' | 'move'>('copy')
+
+// Toast 通知
+const toast = ref({ show: false, message: '', type: 'info' as 'success' | 'error' | 'info' })
+
+// 移动对话框
+const showMoveDialog = ref(false)
+const filesToMove = ref<{ path: string; name: string; poolId?: number }[]>([])
 
 // 拖拽上传
 const isDragging = ref(false)
@@ -308,6 +325,115 @@ async function toggleFavourite(file: any) {
   } catch {}
 }
 
+// Toast 提示
+function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  toast.value = { show: true, message, type }
+}
+
+// 复制到剪贴板
+function handleCopy(files: { path: string; name?: string; poolId?: number }[]) {
+  clipboardFiles.value = files.map(f => ({
+    path: f.path,
+    name: f.name || f.path.split('/').filter(Boolean).pop() || f.path,
+    poolId: f.poolId
+  }))
+  clipboardMode.value = 'copy'
+  showToast(`已复制 ${files.length} 个项目`, 'success')
+}
+
+// 移动：打开移动对话框
+function handleMove(files: { path: string; name?: string; poolId?: number }[]) {
+  filesToMove.value = files.map(f => ({
+    path: f.path,
+    name: f.name || f.path.split('/').filter(Boolean).pop() || f.path,
+    poolId: f.poolId
+  }))
+  showMoveDialog.value = true
+}
+
+// 粘贴
+async function handlePaste() {
+  if (clipboardFiles.value.length === 0) return
+  const srcPoolId = clipboardFiles.value[0].poolId || currentPoolId.value
+  const destPoolId = currentPoolId.value
+  const destPath = currentPath.value
+
+  try {
+    if (clipboardMode.value === 'copy') {
+      // 同池复制
+      if (!srcPoolId || srcPoolId === destPoolId) {
+        for (const file of clipboardFiles.value) {
+          const dest = destPath ? `${destPath}/${file.name}` : file.name
+          await api.post('/files/copy', { src: file.path, dest, poolId: currentPoolId.value })
+        }
+        showToast(`已粘贴 ${clipboardFiles.value.length} 个项目`, 'success')
+      } else {
+        // 跨池复制
+        await api.post('/files/cross-copy', {
+          srcPaths: clipboardFiles.value.map(f => f.path),
+          names: clipboardFiles.value.map(f => f.name),
+          srcPoolId,
+          destPoolId,
+          destPath
+        })
+        showToast(`已跨池复制 ${clipboardFiles.value.length} 个项目`, 'success')
+      }
+    } else {
+      // 移动模式
+      if (!srcPoolId || srcPoolId === destPoolId) {
+        for (const file of clipboardFiles.value) {
+          const dest = destPath ? `${destPath}/${file.name}` : file.name
+          await api.post('/files/move', { src: file.path, dest, poolId: currentPoolId.value })
+        }
+        showToast(`已移动 ${clipboardFiles.value.length} 个项目`, 'success')
+      } else {
+        await api.post('/files/cross-move', {
+          srcPaths: clipboardFiles.value.map(f => f.path),
+          names: clipboardFiles.value.map(f => f.name),
+          srcPoolId,
+          destPoolId,
+          destPath
+        })
+        showToast(`已跨池移动 ${clipboardFiles.value.length} 个项目`, 'success')
+      }
+      clipboardFiles.value = []
+      clipboardMode.value = 'copy'
+    }
+    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+  } catch (err: any) {
+    showToast(err.message || '操作失败', 'error')
+  }
+}
+
+// 移动对话框确认
+async function handleMoveConfirm(destPoolId: number, destPath: string) {
+  const srcPoolId = filesToMove.value[0].poolId || currentPoolId.value
+  showMoveDialog.value = false
+
+  try {
+    if (!srcPoolId || srcPoolId === destPoolId) {
+      for (const file of filesToMove.value) {
+        const dest = destPath ? `${destPath}/${file.name}` : file.name
+        await api.post('/files/move', { src: file.path, dest, poolId: destPoolId })
+      }
+      showToast(`已移动 ${filesToMove.value.length} 个项目`, 'success')
+    } else {
+      await api.post('/files/cross-move', {
+        srcPaths: filesToMove.value.map(f => f.path),
+        names: filesToMove.value.map(f => f.name),
+        srcPoolId,
+        destPoolId,
+        destPath
+      })
+      showToast(`已跨池移动 ${filesToMove.value.length} 个项目`, 'success')
+    }
+    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+  } catch (err: any) {
+    showToast(err.message || '移动失败', 'error')
+  }
+  filesToMove.value = []
+}
+
 // 创建文件夹
 async function handleCreateFolder() {
   if (!newFolderName.value.trim()) return
@@ -395,10 +521,30 @@ function handleContextAction(action: string, item?: any) {
     case 'rename': if (item) startRename(item); break
     case 'share': if (item) startShare(item); break
     case 'favourite': if (item) toggleFavourite(item); break
+    case 'guest-share': if (item) { fileToGuestShare.value = item; showGuestShare.value = true }; break
     case 'info': if (item) showDetail(item); break
     case 'delete': if (item) confirmDelete(item); break
+    case 'copy': if (item) handleCopy([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value }]); break
+    case 'move': if (item) handleMove([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value }]); break
+    case 'paste': handlePaste(); break
     case 'batch-delete': handleBatchDelete(); break
     case 'batch-download': handleBatchDownload(); break
+    case 'batch-copy': {
+        const allFiles = showSearch.value ? searchResults.value : filesStore.files
+        handleCopy(Array.from(selectedFiles.value).map(p => {
+          const f = allFiles.find((file: FileItem) => file.path === p)
+          return { path: p as string, name: f?.name, poolId: currentPoolId.value }
+        }))
+        break
+      }
+    case 'batch-move': {
+        const allFiles2 = showSearch.value ? searchResults.value : filesStore.files
+        handleMove(Array.from(selectedFiles.value).map(p => {
+          const f = allFiles2.find((file: FileItem) => file.path === p)
+          return { path: p as string, name: f?.name, poolId: currentPoolId.value }
+        }))
+        break
+      }
     case 'new-folder': showCreateFolder.value = true; break
     case 'upload': showUpload.value = true; break
     case 'remote-upload': showRemoteUpload.value = true; break
@@ -447,11 +593,42 @@ function formatSize(bytes: number) {
 
     <div class="flex h-full" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
       <!-- 左侧文件夹树 -->
-      <div v-if="showFolderTree" class="w-56 border-r dark:border-dark-border border-light-border overflow-y-auto py-2 flex-shrink-0 hidden lg:block">
-        <div class="px-2 mb-2">
-          <p class="text-xs font-semibold text-gray-500 dark:text-dark-text-secondary uppercase">目录</p>
+      <div
+        class="border-r flex-shrink-0 hidden lg:flex flex-col transition-all duration-300 overflow-hidden"
+        :class="folderTreeCollapsed ? 'w-12' : 'w-56'"
+        style="border-color: var(--border-color)"
+      >
+        <!-- 收缩按钮 -->
+        <div class="flex items-center justify-between px-2 py-2" :class="folderTreeCollapsed ? 'justify-center' : ''">
+          <p v-if="!folderTreeCollapsed" class="text-xs font-semibold uppercase" style="color: var(--text-secondary-color)">目录</p>
+          <button
+            @click="folderTreeCollapsed = !folderTreeCollapsed"
+            class="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+            style="color: var(--text-secondary-color)"
+            :title="folderTreeCollapsed ? '展开目录' : '收缩目录'"
+          >
+            <svg class="w-4 h-4 transition-transform duration-300" :class="folderTreeCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
         </div>
-        <FolderTree :current-path="currentPath" :pool-id="currentPoolId" @navigate="handleTreeNavigate" />
+        <!-- 收起态：只显示文件夹图标提示 -->
+        <div v-if="folderTreeCollapsed" class="flex-1 flex flex-col items-center pt-2">
+          <button
+            @click="folderTreeCollapsed = false"
+            class="p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+            style="color: var(--text-secondary-color)"
+            title="展开目录"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+          </button>
+        </div>
+        <!-- 展开态：完整目录树 -->
+        <div v-else class="flex-1 overflow-y-auto py-1">
+          <FolderTree :current-path="currentPath" :pool-id="currentPoolId" @navigate="handleTreeNavigate" />
+        </div>
       </div>
 
       <!-- 主内容区 -->
@@ -560,10 +737,26 @@ function formatSize(bytes: number) {
               <span class="text-sm text-gray-600 dark:text-gray-400">已选 {{ selectedFiles.size }} 项</span>
             </div>
             <div class="flex items-center gap-2">
+              <button v-if="selectedFiles.size > 0" @click="() => { const allFiles = showSearch ? searchResults : filesStore.files; handleCopy(Array.from(selectedFiles).map(p => { const f = allFiles.find((file: FileItem) => file.path === p); return { path: p, name: f?.name, poolId: currentPoolId } })) }"
+                class="btn-secondary text-sm px-3 py-1.5">📋 复制</button>
+              <button v-if="selectedFiles.size > 0" @click="() => { const allFiles = showSearch ? searchResults : filesStore.files; handleMove(Array.from(selectedFiles).map(p => { const f = allFiles.find((file: FileItem) => file.path === p); return { path: p, name: f?.name, poolId: currentPoolId } })) }"
+                class="btn-secondary text-sm px-3 py-1.5">📦 移动</button>
               <button v-if="selectedFiles.size > 0" @click="handleBatchDownload"
                 class="btn-secondary text-sm px-3 py-1.5">📦 打包下载</button>
               <button v-if="selectedFiles.size > 0" @click="handleBatchDelete"
                 class="btn-danger text-sm px-3 py-1.5">🗑️ 批量删除</button>
+            </div>
+          </div>
+
+          <!-- 剪贴板提示 -->
+          <div v-if="clipboardFiles.length > 0 && !isSelectMode" class="mb-3 p-2 rounded-lg border flex items-center justify-between text-sm"
+            style="background-color: var(--hover-color); border-color: var(--border-color)">
+            <span style="color: var(--text-secondary-color)">
+              剪贴板：{{ clipboardMode === 'copy' ? '复制' : '移动' }} {{ clipboardFiles.length }} 个项目
+            </span>
+            <div class="flex items-center gap-2">
+              <button @click="handlePaste" class="btn-primary text-xs px-3 py-1">粘贴到当前目录</button>
+              <button @click="clipboardFiles = []" class="btn-secondary text-xs px-3 py-1">清空</button>
             </div>
           </div>
 
@@ -597,6 +790,7 @@ function formatSize(bytes: number) {
             :select-mode="isSelectMode"
             :selected-files="selectedFiles"
             :view-mode="viewMode"
+            :current-pool-id="currentPoolId"
             @open="openFile"
             @download="handleDownload"
             @delete="confirmDelete"
@@ -620,6 +814,7 @@ function formatSize(bytes: number) {
       :y="contextMenu.y"
       :item="contextMenu.item"
       :selected-items="isSelectMode ? Array.from(selectedFiles) : []"
+      :clipboard-count="clipboardFiles.length"
       @close="contextMenu.visible = false"
       @action="handleContextAction"
     />
@@ -701,5 +896,34 @@ function formatSize(bytes: number) {
 
     <!-- 分享对话框 -->
     <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" @close="showShare = false" />
+
+    <!-- 访客分享对话框 -->
+    <GuestShareDialog
+      v-if="fileToGuestShare"
+      :show="showGuestShare"
+      :folder-path="fileToGuestShare.path"
+      :folder-name="fileToGuestShare.name"
+      :pool-id="currentPoolId"
+      @close="showGuestShare = false"
+      @done="filesStore.fetchFiles(currentPath, currentPoolId)"
+    />
+
+    <!-- 移动对话框 -->
+    <MoveDialog
+      :show="showMoveDialog"
+      :pools="pools"
+      :current-pool-id="currentPoolId"
+      :current-path="currentPath"
+      @close="showMoveDialog = false"
+      @confirm="handleMoveConfirm"
+    />
+
+    <!-- Toast 通知 -->
+    <Toast
+      :show="toast.show"
+      :message="toast.message"
+      :type="toast.type"
+      @close="toast.show = false"
+    />
   </Layout>
 </template>

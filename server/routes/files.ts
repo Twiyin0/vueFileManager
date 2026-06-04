@@ -515,6 +515,65 @@ router.post('/copy', flexibleAuth, requirePermission('write'), async (req: ApiKe
   }
 })
 
+// 跨存储池复制
+router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { srcPaths, names, srcPoolId, destPoolId, destPath } = req.body
+    if (!srcPaths || !Array.isArray(srcPaths) || !srcPoolId || !destPoolId) {
+      return res.status(400).json({ error: '缺少参数' })
+    }
+    const srcStorage = getStorageByPoolId(req.userId!, srcPoolId)
+    const destStorage = getStorageByPoolId(req.userId!, destPoolId)
+    const errors: string[] = []
+
+    for (let i = 0; i < srcPaths.length; i++) {
+      const srcPath = srcPaths[i]
+      try {
+        const fileName = (names && names[i]) || srcPath.split('/').filter(Boolean).pop() || ''
+        const targetPath = destPath ? `${destPath}/${fileName}` : fileName
+        const data = await srcStorage.download(srcPath)
+        await destStorage.upload(targetPath, data)
+      } catch (err: any) {
+        errors.push(`${srcPath}: ${err.message}`)
+      }
+    }
+
+    res.json({ message: '跨池复制完成', errors })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 跨存储池移动
+router.post('/cross-move', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { srcPaths, names, srcPoolId, destPoolId, destPath } = req.body
+    if (!srcPaths || !Array.isArray(srcPaths) || !srcPoolId || !destPoolId) {
+      return res.status(400).json({ error: '缺少参数' })
+    }
+    const srcStorage = getStorageByPoolId(req.userId!, srcPoolId)
+    const destStorage = getStorageByPoolId(req.userId!, destPoolId)
+    const errors: string[] = []
+
+    for (let i = 0; i < srcPaths.length; i++) {
+      const srcPath = srcPaths[i]
+      try {
+        const fileName = (names && names[i]) || srcPath.split('/').filter(Boolean).pop() || ''
+        const targetPath = destPath ? `${destPath}/${fileName}` : fileName
+        const data = await srcStorage.download(srcPath)
+        await destStorage.upload(targetPath, data)
+        await srcStorage.remove(srcPath)
+      } catch (err: any) {
+        errors.push(`${srcPath}: ${err.message}`)
+      }
+    }
+
+    res.json({ message: '跨池移动完成', errors })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // 搜索
 router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
   try {

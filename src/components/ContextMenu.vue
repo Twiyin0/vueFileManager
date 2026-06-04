@@ -7,6 +7,7 @@ const props = defineProps<{
   y: number
   item?: any
   selectedItems?: any[]
+  clipboardCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -29,12 +30,10 @@ function handleAction(action: string) {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-  document.addEventListener('contextmenu', handleClickOutside)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
-  document.removeEventListener('contextmenu', handleClickOutside)
 })
 </script>
 
@@ -78,6 +77,10 @@ onUnmounted(() => {
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           ⭐ 收藏
         </button>
+        <button @click="handleAction('guest-share')" v-if="item.type === 'folder'"
+          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+          🌐 分享至访客
+        </button>
         <div class="border-t dark:border-dark-border border-light-border my-1"></div>
         <button @click="handleAction('info')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
@@ -97,6 +100,10 @@ onUnmounted(() => {
         <button @click="handleAction('batch-download')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           ⬇️ 打包下载
+        </button>
+        <button @click="handleAction('batch-copy')"
+          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+          📋 批量复制
         </button>
         <button @click="handleAction('batch-move')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
@@ -122,6 +129,10 @@ onUnmounted(() => {
         <button @click="handleAction('remote-upload')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           🌐 远程上传
+        </button>
+        <button v-if="clipboardCount && clipboardCount > 0" @click="handleAction('paste')"
+          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+          📋 粘贴 ({{ clipboardCount }})
         </button>
         <button @click="handleAction('refresh')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">

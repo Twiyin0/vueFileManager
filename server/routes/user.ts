@@ -101,4 +101,74 @@ router.delete('/apikeys/:id', authMiddleware, (req: AuthRequest, res: Response) 
   }
 })
 
+// ---- 访客分享管理 ----
+
+// 获取当前用户的访客分享列表
+router.get('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const shares = db.prepare(`
+      SELECT gs.*, sp.name as pool_name
+      FROM guest_shares gs
+      JOIN storage_pools sp ON gs.storage_pool_id = sp.id
+      WHERE gs.user_id = ?
+      ORDER BY gs.created_at DESC
+    `).all(req.userId!)
+    res.json({ shares })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 创建访客分享
+router.post('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const { folderPath, storagePoolId, label } = req.body
+    if (!folderPath || !storagePoolId) {
+      return res.status(400).json({ error: '缺少文件夹路径或存储池ID' })
+    }
+
+    // 验证存储池属于当前用户
+    const pool = db.prepare('SELECT id, name FROM storage_pools WHERE id = ? AND user_id = ?').get(storagePoolId, req.userId!) as any
+    if (!pool) {
+      return res.status(404).json({ error: '存储池不存在' })
+    }
+
+    // 检查是否已分享过同一路径
+    const existing = db.prepare('SELECT id FROM guest_shares WHERE user_id = ? AND folder_path = ? AND storage_pool_id = ?')
+      .get(req.userId!, folderPath, storagePoolId) as any
+    if (existing) {
+      return res.status(409).json({ error: '该文件夹已分享至访客模式' })
+    }
+
+    const result = db.prepare('INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label) VALUES (?, ?, ?, ?)')
+      .run(req.userId!, folderPath, storagePoolId, label || folderPath.split('/').pop() || '根目录')
+
+    res.json({
+      message: '已分享至访客模式',
+      share: {
+        id: result.lastInsertRowid,
+        folder_path: folderPath,
+        storage_pool_id: storagePoolId,
+        label: label || folderPath.split('/').pop() || '根目录',
+        pool_name: pool.name
+      }
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 删除访客分享
+router.delete('/guest-shares/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const result = db.prepare('DELETE FROM guest_shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
+    if (result.changes === 0) {
+      return res.status(404).json({ error: '分享不存在' })
+    }
+    res.json({ message: '已取消访客分享' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 export default router

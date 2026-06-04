@@ -3,11 +3,13 @@
   "version": "1.0.0-beta.2",
   "private": true,
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "vue-tsc -b && vite build",
+    "start": "tsx server/index.ts",
     "preview": "vite preview"
   },
   "dependencies": {

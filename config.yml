@@ -14,6 +14,8 @@ admin:
 # ============================================================
 server:
   port: 3000
+  # 监听地址，留空则默认 localhost（仅本机访问），0.0.0.0 可从局域网访问
+  host: ''
   # JWT 密钥，用于 Token 签名，生产环境请修改
   jwt_secret: vue-file-manager-secret-key-2024
 

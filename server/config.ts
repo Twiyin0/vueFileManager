@@ -26,6 +26,7 @@ interface Config {
   }
   server: {
     port: number
+    host: string
     jwt_secret: string
   }
   storage_pools: StoragePoolConfig[]
@@ -38,6 +39,7 @@ const defaultConfig: Config = {
   },
   server: {
     port: 3000,
+    host: '',
     jwt_secret: 'vue-file-manager-secret-key-2024'
   },
   storage_pools: [

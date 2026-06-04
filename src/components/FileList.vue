@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { FileItem } from '@/stores/files'
 
 const props = withDefaults(defineProps<{
@@ -8,6 +9,7 @@ const props = withDefaults(defineProps<{
   selectMode?: boolean
   selectedFiles?: Set<string>
   viewMode?: 'list' | 'grid'
+  currentPoolId?: number
 }>(), {
   viewMode: 'list'
 })
@@ -16,10 +18,49 @@ const emit = defineEmits<{
   open: [file: FileItem]
   download: [file: FileItem]
   delete: [file: FileItem]
-  contextmenu: [e: MouseEvent, file: FileItem]
+  contextmenu: [e: MouseEvent, file?: FileItem]
   toggleSelect: [path: string]
   detail: [file: FileItem]
 }>()
+
+// 长按进入多选
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+const longPressThreshold = 500
+
+function handleTouchStart(e: TouchEvent, file: FileItem) {
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null
+    emit('toggleSelect', file.path)
+  }, longPressThreshold)
+}
+
+function handleTouchEnd() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function handleTouchMove() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+// 右键高亮
+const contextHighlighted = ref<string | null>(null)
+
+function handleItemContext(e: MouseEvent, file: FileItem) {
+  contextHighlighted.value = file.path
+  emit('contextmenu', e, file)
+}
+
+// 清除右键高亮（点击其他地方时）
+function handleContainerContext(e: MouseEvent) {
+  contextHighlighted.value = null
+  emit('contextmenu', e)
+}
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '-'
@@ -48,7 +89,8 @@ function getFileIcon(file: FileItem): string {
 
 function getPreviewUrl(file: FileItem): string {
   const params = new URLSearchParams({ path: file.path })
-  if (file.poolId) params.set('poolId', String(file.poolId))
+  const poolId = file.poolId || props.currentPoolId
+  if (poolId) params.set('poolId', String(poolId))
   const token = localStorage.getItem('token')
   if (token) params.set('token', token)
   return `/api/files/preview?${params.toString()}`
@@ -56,7 +98,7 @@ function getPreviewUrl(file: FileItem): string {
 </script>
 
 <template>
-  <div class="card overflow-hidden" style="padding: 0">
+  <div class="card overflow-hidden" style="padding: 0" @contextmenu.prevent="handleContainerContext">
     <!-- 加载状态 -->
     <div v-if="loading" class="flex items-center justify-center py-12">
       <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
@@ -80,10 +122,16 @@ function getPreviewUrl(file: FileItem): string {
           v-for="file in files"
           :key="file.path"
           class="group cursor-pointer rounded-lg overflow-hidden border transition-all"
-          :class="selectedFiles?.has(file.path) ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-600' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'"
+          :class="[
+            selectedFiles?.has(file.path) ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-600' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600',
+            contextHighlighted === file.path ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''
+          ]"
           style="background-color: var(--hover-color)"
           @click="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
-          @contextmenu="emit('contextmenu', $event, file)"
+          @contextmenu.prevent.stop="handleItemContext($event, file)"
+          @touchstart.passive="handleTouchStart($event, file)"
+          @touchend="handleTouchEnd"
+          @touchmove="handleTouchMove"
         >
           <!-- 缩略图区域 -->
           <div class="thumb-container relative">
@@ -155,10 +203,16 @@ function getPreviewUrl(file: FileItem): string {
         v-for="file in files"
         :key="file.path"
         class="file-row grid grid-cols-12 gap-2 px-4 py-2.5 items-center cursor-pointer border-b last:border-0"
-        :class="selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : ''"
+        :class="[
+          selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
+          contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : ''
+        ]"
         style="border-color: var(--border-color)"
         @click="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
-        @contextmenu="emit('contextmenu', $event, file)"
+        @contextmenu.prevent.stop="handleItemContext($event, file)"
+        @touchstart.passive="handleTouchStart($event, file)"
+        @touchend="handleTouchEnd"
+        @touchmove="handleTouchMove"
       >
         <!-- 选择框 -->
         <div v-if="selectMode" class="col-span-1 flex items-center" @click.stop>

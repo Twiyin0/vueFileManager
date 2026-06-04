@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -56,11 +56,13 @@ function handleDownload() {
   window.open(url, '_blank')
 }
 
-const previewUrl = `/api/share/preview/${shareCode}?${new URLSearchParams({
-  ...(password.value ? { password: password.value } : {}),
-  ...(sign ? { sign } : {}),
-  ...(timestamp ? { t: timestamp } : {})
-}).toString()}`
+const previewUrl = computed(() => {
+  const params = new URLSearchParams()
+  if (password.value) params.set('password', password.value)
+  if (sign) params.set('sign', sign)
+  if (timestamp) params.set('t', timestamp)
+  return `/api/share/preview/${shareCode}?${params.toString()}`
+})
 </script>
 
 <template>

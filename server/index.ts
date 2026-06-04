@@ -20,7 +20,8 @@ import publicRoutes from './routes/public'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
-const PORT = process.env.PORT || config.server.port
+const PORT = Number(process.env.PORT) || config.server.port
+const HOST = process.env.HOST || config.server.host || 'localhost'
 
 // 中间件
 app.use(cors({
@@ -54,10 +55,25 @@ app.get('*', (req, res) => {
   }
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, HOST, () => {
+  const displayHost = HOST === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : HOST
   console.log(`\n🚀 VueFileManager 服务器已启动`)
-  console.log(`📡 API: http://localhost:${PORT}/api`)
-  console.log(`🌐 前端: http://localhost:5173\n`)
+  console.log(`📡 生产环境: http://${displayHost}:${PORT}`)
+  console.log(`📡 API: http://${HOST}:${PORT}/api`)
+  console.log(`🌐 开发环境: http://localhost:5173\n`)
 })
+
+// 优雅关闭
+function shutdown() {
+  console.log('\n🛑 正在关闭服务器...')
+  server.close(() => {
+    console.log('✅ 服务器已关闭')
+    process.exit(0)
+  })
+  setTimeout(() => process.exit(1), 3000)
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
 export default app

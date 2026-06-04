@@ -4,6 +4,7 @@ import { api } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore, ThemeMode } from '@/stores/theme'
 import Layout from '@/components/Layout.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
@@ -17,9 +18,14 @@ const messageType = ref<'success' | 'error'>('success')
 // 设置表单
 const form = ref({
   guestEnabled: false,
-  guestPath: '',
   theme: 'system' as ThemeMode
 })
+
+// 访客分享列表
+const guestShares = ref<any[]>([])
+const loadingShares = ref(false)
+const showShares = ref(true)
+const deleteConfirm = ref({ show: false, share: null as any })
 
 onMounted(async () => {
   loading.value = true
@@ -27,7 +33,6 @@ onMounted(async () => {
     const res = await api.get<{ settings: any }>('/user/settings')
     form.value = {
       guestEnabled: res.settings.guestEnabled || false,
-      guestPath: res.settings.guestPath || '',
       theme: (res.settings.theme as ThemeMode) || 'system'
     }
   } catch (err: any) {
@@ -35,6 +40,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  loadGuestShares()
 })
 
 function showMsg(text: string, type: 'success' | 'error') {
@@ -46,14 +52,14 @@ function showMsg(text: string, type: 'success' | 'error') {
 async function saveSettings() {
   saving.value = true
   try {
-    await api.put('/user/settings', form.value)
-    // 应用主题
+    await api.put('/user/settings', {
+      guestEnabled: form.value.guestEnabled,
+      theme: form.value.theme
+    })
     themeStore.setTheme(form.value.theme)
-    // 应用到 auth store
     if (authStore.user?.settings) {
       authStore.user.settings.theme = form.value.theme
       authStore.user.settings.guestEnabled = form.value.guestEnabled
-      authStore.user.settings.guestPath = form.value.guestPath
     }
     showMsg('设置已保存', 'success')
   } catch (err: any) {
@@ -62,12 +68,43 @@ async function saveSettings() {
     saving.value = false
   }
 }
+
+async function loadGuestShares() {
+  loadingShares.value = true
+  try {
+    const res = await api.get<{ shares: any[] }>('/user/guest-shares')
+    guestShares.value = res.shares
+  } catch {} finally {
+    loadingShares.value = false
+  }
+}
+
+function confirmDeleteShare(share: any) {
+  deleteConfirm.value = { show: true, share }
+}
+
+async function handleDeleteShare() {
+  if (!deleteConfirm.value.share) return
+  try {
+    await api.delete(`/user/guest-shares/${deleteConfirm.value.share.id}`)
+    showMsg('已取消访客分享', 'success')
+    await loadGuestShares()
+  } catch (err: any) {
+    showMsg(err.message, 'error')
+  }
+  deleteConfirm.value = { show: false, share: null }
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('zh-CN') + ' ' + new Date(dateStr).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
 </script>
 
 <template>
   <Layout>
     <div class="max-w-3xl mx-auto">
-      <h1 class="text-2xl font-bold mb-6 dark:text-dark-text text-light-text">存储设置</h1>
+      <h1 class="text-2xl font-bold mb-6 dark:text-dark-text text-light-text">设置</h1>
 
       <!-- 提示消息 -->
       <div v-if="message" class="mb-4 p-3 rounded-lg text-sm"
@@ -130,6 +167,8 @@ async function saveSettings() {
         <!-- 访客模式 -->
         <div class="card">
           <h2 class="text-lg font-semibold mb-4 dark:text-dark-text text-light-text">访客模式</h2>
+
+          <!-- 全局开关 -->
           <div class="flex items-center gap-3 mb-4">
             <label class="relative inline-flex items-center cursor-pointer">
               <input v-model="form.guestEnabled" type="checkbox" class="sr-only peer" />
@@ -137,13 +176,73 @@ async function saveSettings() {
             </label>
             <span class="text-sm dark:text-dark-text text-light-text">启用访客模式</span>
           </div>
+
           <div v-if="form.guestEnabled">
-            <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">访客可访问路径</label>
-            <input v-model="form.guestPath" type="text" class="input-field" placeholder="public" />
-            <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">
-              访客将能访问此路径下的文件。留空则访问根目录。
-              <br/>访客链接：<span class="font-mono text-blue-500 dark:text-blue-400">{{ origin }}/guest/{{ authStore.user?.username }}</span>
-            </p>
+            <!-- 访客链接 -->
+            <div class="p-3 rounded-lg mb-4" style="background-color: var(--hover-color)">
+              <p class="text-xs mb-1" style="color: var(--text-secondary-color)">访客链接</p>
+              <p class="font-mono text-sm" style="color: var(--accent-color)">{{ origin }}/guest/{{ authStore.user?.username }}</p>
+            </div>
+
+            <!-- 分享文件夹列表 -->
+            <div class="border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
+              <button
+                type="button"
+                @click="showShares = !showShares"
+                class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-50 dark:hover:bg-dark-hover"
+                style="color: var(--text-color)"
+              >
+                <span>分享文件夹 ({{ guestShares.length }})</span>
+                <svg class="w-4 h-4 transition-transform duration-200" :class="showShares ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+
+              <div v-show="showShares">
+                <!-- 加载中 -->
+                <div v-if="loadingShares" class="flex items-center justify-center py-6">
+                  <svg class="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                </div>
+
+                <!-- 空状态 -->
+                <div v-else-if="guestShares.length === 0" class="px-4 py-6 text-center text-sm" style="color: var(--text-secondary-color)">
+                  暂无分享文件夹，在文件列表中右键文件夹即可分享
+                </div>
+
+                <!-- 列表 -->
+                <div v-else class="divide-y" style="border-color: var(--border-color)">
+                  <div
+                    v-for="share in guestShares"
+                    :key="share.id"
+                    class="flex items-center justify-between px-4 py-3"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-medium truncate" style="color: var(--text-color)">{{ share.label || share.folder_path }}</p>
+                      <p class="text-xs mt-0.5" style="color: var(--text-secondary-color)">
+                        <span class="font-mono">{{ share.folder_path }}</span>
+                        <span class="mx-1">·</span>
+                        {{ share.pool_name }}
+                        <span class="mx-1">·</span>
+                        {{ formatDate(share.created_at) }}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="confirmDeleteShare(share)"
+                      class="ml-3 p-1.5 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="取消分享"
+                    >
+                      <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -185,5 +284,16 @@ async function saveSettings() {
         </div>
       </form>
     </div>
+
+    <!-- 删除确认 -->
+    <ConfirmDialog
+      :show="deleteConfirm.show"
+      title="取消访客分享"
+      :message="`确定要取消「${deleteConfirm.share?.label || deleteConfirm.share?.folder_path}」的访客分享吗？`"
+      confirm-text="取消分享"
+      :danger="true"
+      @confirm="handleDeleteShare"
+      @cancel="deleteConfirm = { show: false, share: null }"
+    />
   </Layout>
 </template>

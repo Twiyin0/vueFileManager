@@ -6,18 +6,21 @@
 
 ### 文件管理
 - 📁 文件浏览、上传、下载、删除
-- 📝 重命名、移动、复制
+- 📝 重命名、移动、复制（支持跨存储池）
 - 🔍 文件搜索（递归）
 - 📦 创建文件夹
 - 👁️ 文件预览（图片/视频/音频/PDF/代码）
-- 📋 批量选择、批量删除、批量移动
-- 🖱️ 右键上下文菜单
+- 📋 批量选择、批量删除、批量移动、批量复制
+- 🖱️ 右键上下文菜单（含空白区域菜单）
 - 📊 文件详情面板
-- 🗂️ 文件夹导航树
+- 🗂️ 文件夹导航树（可收缩）
 - ⌘ Spotlight 全局搜索 (Ctrl+K)
 - 📦 ZIP 打包下载
 - 📡 远程 URL 上传
 - 📥 拖拽上传 + 上传进度条
+- 📋 剪贴板复制/粘贴 + Toast 通知
+- 📦 移动对话框（跨存储池文件夹选择器）
+- 👆 长按进入多选模式（移动端）
 
 ### 存储池系统
 - 💾 多存储池管理（创建/编辑/删除/切换）
@@ -61,13 +64,14 @@
 
 ### 权限系统
 - 🔑 API Key 权限管理（read/write/delete）
-- 🚪 访客模式（可配置可访问路径）
+- 🚪 访客模式（多文件夹分享，右键菜单一键分享）
 - 🛡️ 管理员面板
 
 ### 界面
 - 🌙 暗色/亮色/跟随系统主题
 - 📱 响应式设计
 - 🎨 柔和的暗色模式配色
+- 📂 侧边栏可收缩（主侧边栏 + 文件夹树）
 
 ## 🚀 快速开始
 
@@ -96,6 +100,8 @@ admin:
 
 server:
   port: 3000
+  # 监听地址，留空默认 localhost，0.0.0.0 可从局域网访问
+  host: ''
   jwt_secret: vue-file-manager-secret-key-2024
 
 # 存储池配置（新用户自动继承）
@@ -148,6 +154,9 @@ npm run dev:server
 
 # 构建生产版本
 npm run build
+
+# 启动生产服务
+npm start
 ```
 
 ### 访问
@@ -185,6 +194,7 @@ vueFileManager/
 │       ├── storage.ts        # 接口定义
 │       ├── local.ts          # 本地存储
 │       ├── upyun.ts          # Upyun 存储
+│       ├── prefix.ts         # 路径前缀包装器
 │       └── factory.ts        # 工厂模式（含存储池缓存）
 ├── src/                        # Vue 前端
 │   ├── main.ts               # 入口
@@ -193,13 +203,18 @@ vueFileManager/
 │   ├── api/                  # API 封装
 │   ├── components/           # 组件
 │   │   ├── Sidebar.vue       # 侧边栏
+│   │   ├── Layout.vue        # 布局
 │   │   ├── FileList.vue      # 文件列表
 │   │   ├── ContextMenu.vue   # 右键菜单
 │   │   ├── SpotlightSearch.vue # 全局搜索
 │   │   ├── FileDetailPanel.vue # 文件详情
 │   │   ├── FolderTree.vue    # 文件夹树
-│   │   ├── UploadProgress.vue # 上传进度
-│   │   └── ConfirmDialog.vue # 确认弹窗
+│   │   ├── UploadDialog.vue  # 上传对话框
+│   │   ├── MoveDialog.vue    # 移动对话框
+│   │   ├── GuestShareDialog.vue # 访客分享对话框
+│   │   ├── Toast.vue         # Toast 通知
+│   │   ├── ConfirmDialog.vue # 确认弹窗
+│   │   └── ThemeToggle.vue   # 主题切换
 │   └── views/                # 页面
 │       ├── Home.vue          # 文件管理主页
 │       ├── StoragePools.vue  # 存储池管理
@@ -210,6 +225,8 @@ vueFileManager/
 │       ├── ApiKeys.vue       # API Key
 │       ├── Admin.vue         # 管理面板
 │       ├── Share.vue         # 分享访问页
+│       ├── Guest.vue         # 访客文件浏览
+│       ├── GuestList.vue     # 访客用户列表
 │       └── Login.vue         # 登录注册
 ├── test/                       # 测试
 │   ├── workflows.ts          # API 全流程测试（76 项）
@@ -272,6 +289,8 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 文件 | `POST /api/files/rename` | 重命名 |
 | 文件 | `POST /api/files/move` | 移动 |
 | 文件 | `POST /api/files/copy` | 复制 |
+| 文件 | `POST /api/files/cross-copy` | 跨存储池复制 |
+| 文件 | `POST /api/files/cross-move` | 跨存储池移动 |
 | 文件 | `DELETE /api/files/delete` | 删除（回收站） |
 | 文件 | `POST /api/files/batch-delete` | 批量删除 |
 | 文件 | `POST /api/files/batch-move` | 批量移动 |
@@ -299,6 +318,9 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 分享 | `GET /api/share/s/:code` | 访问分享 |
 | 用户 | `GET /api/user/settings` | 获取设置 |
 | 用户 | `PUT /api/user/settings` | 更新设置 |
+| 用户 | `GET /api/user/guest-shares` | 访客分享列表 |
+| 用户 | `POST /api/user/guest-shares` | 创建访客分享 |
+| 用户 | `DELETE /api/user/guest-shares/:id` | 删除访客分享 |
 | 用户 | `GET /api/user/apikeys` | API Key 列表 |
 | 用户 | `POST /api/user/apikeys` | 创建 API Key |
 | 管理 | `GET /api/admin/users` | 用户列表 |

@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import Sidebar from './Sidebar.vue'
 import ThemeToggle from './ThemeToggle.vue'
 
 const authStore = useAuthStore()
+const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
+watch(sidebarCollapsed, (v) => localStorage.setItem('sidebarCollapsed', String(v)))
 </script>
 
 <template>
@@ -12,7 +15,7 @@ const authStore = useAuthStore()
     <header class="h-14 flex items-center justify-between px-4 border-b" style="background-color: var(--surface-color); border-color: var(--border-color)">
       <div class="flex items-center gap-3">
         <router-link to="/" class="flex items-center gap-2 font-bold text-lg">
-          <img src="/logo.png" alt="VueFileManager" class="rounded" style="width: 34px; height: 34px;" />
+          <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 34px; height: 34px;" />
           <span style="color: var(--text-color)">VueFileManager</span>
         </router-link>
       </div>
@@ -43,7 +46,7 @@ const authStore = useAuthStore()
 
     <div class="flex flex-1 overflow-hidden">
       <!-- 侧边栏 -->
-      <Sidebar v-if="authStore.isLoggedIn" />
+      <Sidebar v-if="authStore.isLoggedIn" :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
 
       <!-- 主内容区 -->
       <main class="flex-1 overflow-auto p-4">

@@ -5,6 +5,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue'
 
 interface GuestUser {
   username: string
+  share_count: number
 }
 
 const users = ref<GuestUser[]>([])
@@ -60,7 +61,7 @@ onMounted(async () => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
           </svg>
           <p class="text-lg">暂无公开分享的文件</p>
-          <p class="text-sm mt-1">用户可以在设置中开启访客模式</p>
+          <p class="text-sm mt-1">用户可以在设置中开启访客模式并分享文件夹</p>
         </div>
 
         <!-- 用户列表 -->
@@ -80,7 +81,9 @@ onMounted(async () => {
               <h3 class="font-medium dark:text-dark-text text-light-text group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
                 {{ user.username }}
               </h3>
-              <p class="text-xs text-gray-500 dark:text-dark-text-secondary">查看公开文件</p>
+              <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
+                {{ user.share_count }} 个共享文件夹
+              </p>
             </div>
             <svg class="w-5 h-5 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>

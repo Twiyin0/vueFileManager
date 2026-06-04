@@ -97,6 +97,17 @@ db.exec(`
     FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE,
     UNIQUE(user_id, file_path, storage_pool_id)
   );
+
+  CREATE TABLE IF NOT EXISTS guest_shares (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    storage_pool_id INTEGER NOT NULL,
+    label TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
+  );
 `)
 
 // 迁移：给 users 表加 banned 列
@@ -143,6 +154,37 @@ function migrateShareSignKey() {
   }
 }
 migrateShareSignKey()
+
+// 迁移：将现有 guest_path 迁移到 guest_shares 表
+function migrateGuestShares() {
+  try {
+    const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='guest_shares'").get() as any
+    if (!hasTable) return
+
+    const existing = db.prepare('SELECT COUNT(*) as count FROM guest_shares').get() as any
+    if (existing.count > 0) return
+
+    // 将 user_settings 中有 guest_enabled 且有 guest_path 的记录迁移
+    const rows = db.prepare(`
+      SELECT us.user_id, us.guest_path, sp.id as pool_id
+      FROM user_settings us
+      JOIN storage_pools sp ON sp.user_id = us.user_id AND sp.is_default = 1
+      WHERE us.guest_enabled = 1 AND us.guest_path != ''
+    `).all() as any[]
+
+    const insert = db.prepare('INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label) VALUES (?, ?, ?, ?)')
+    for (const row of rows) {
+      insert.run(row.user_id, row.guest_path, row.pool_id, row.guest_path.split('/').pop() || '根目录')
+    }
+
+    if (rows.length > 0) {
+      console.log(`✅ 已迁移 ${rows.length} 条访客分享记录`)
+    }
+  } catch (err) {
+    console.error('⚠️ guest_shares 迁移失败:', err)
+  }
+}
+migrateGuestShares()
 
 // 迁移现有用户设置到存储池表
 function migrateStorageSettings() {
