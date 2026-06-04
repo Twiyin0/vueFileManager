@@ -44,21 +44,23 @@ X-API-Key: <your-api-key>
 
 ## 文件 API `/api/files`（需认证或 API Key）
 
-### GET `/api/files/list?path=` — 文件列表
+> 所有文件操作均支持 `poolId` 参数（query 或 body），指定操作的存储池。不传则使用默认存储池。
+
+### GET `/api/files/list?path=&poolId=` — 文件列表
 权限：`read`
 ```json
 // Response
 { "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt" }] }
 ```
 
-### GET `/api/files/info?path=` — 文件信息
+### GET `/api/files/info?path=&poolId=` — 文件信息
 权限：`read`
 ```json
 // Response
 { "info": { "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt" } }
 ```
 
-### POST `/api/files/upload?path=` — 上传文件
+### POST `/api/files/upload?path=&poolId=` — 上传文件
 权限：`write`
 ```
 Content-Type: multipart/form-data
@@ -66,23 +68,23 @@ Form Field: file
 ```
 ```json
 // Response
-{ "message": "上传成功", "path": "dir/file.txt" }
+{ "message": "上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local" }
 ```
 
-### GET `/api/files/download?path=` — 下载文件
+### GET `/api/files/download?path=&poolId=` — 下载文件
 权限：`read`
 ```
 Response: 文件流（Content-Disposition: attachment）
 ```
 
-### GET `/api/files/preview?path=` — 预览文件
+### GET `/api/files/preview?path=&poolId=` — 预览文件
 权限：`read`
 ```
 Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 支持：图片/视频/音频/PDF/文本/代码
 ```
 
-### DELETE `/api/files/delete?path=` — 删除文件/文件夹
+### DELETE `/api/files/delete?path=&poolId=` — 删除文件/文件夹
 权限：`delete`
 ```json
 // Response
@@ -93,7 +95,7 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 权限：`write`
 ```json
 // Request Body
-{ "path": "new-folder" }
+{ "path": "new-folder", "poolId": 1 }
 // Response
 { "message": "文件夹创建成功" }
 ```
@@ -102,34 +104,87 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 权限：`write`
 ```json
 // Request Body
-{ "path": "old-name.txt", " newName": "new-name.txt" }
+{ "path": "old-name.txt", "newName": "new-name.txt", "poolId": 1 }
 // Response
 { "message": "重命名成功" }
 ```
 
-### POST `/api/files/move` — 移动文件/文件夹
+### POST `/api/files/move` — 移动文件/文件夹（同池）
 权限：`write`
 ```json
 // Request Body
-{ "src": "source-path", "dest": "dest-path" }
+{ "src": "source-path", "dest": "dest-path", "poolId": 1 }
 // Response
 { "message": "移动成功" }
 ```
 
-### POST `/api/files/copy` — 复制文件/文件夹
+### POST `/api/files/copy` — 复制文件/文件夹（同池）
 权限：`write`
 ```json
 // Request Body
-{ "src": "source-path", "dest": "dest-path" }
+{ "src": "source-path", "dest": "dest-path", "poolId": 1 }
 // Response
 { "message": "复制成功" }
 ```
 
-### GET `/api/files/search?q=&path=` — 搜索文件
+### POST `/api/files/cross-copy` — 跨存储池复制
+权限：`write`
+```json
+// Request Body
+{ "srcPaths": ["file1.txt", "file2.txt"], "names": ["file1.txt", "file2.txt"], "srcPoolId": 1, "destPoolId": 2, "destPath": "target-dir" }
+// Response
+{ "message": "跨池复制完成", "errors": [] }
+```
+
+### POST `/api/files/cross-move` — 跨存储池移动
+权限：`write`
+```json
+// Request Body
+{ "srcPaths": ["file1.txt"], "names": ["file1.txt"], "srcPoolId": 1, "destPoolId": 2, "destPath": "target-dir" }
+// Response
+{ "message": "跨池移动完成", "errors": [] }
+```
+
+### POST `/api/files/batch-delete` — 批量删除
+权限：`delete`
+```json
+// Request Body
+{ "paths": ["file1.txt", "file2.txt"], "poolId": 1 }
+// Response
+{ "message": "批量删除完成", "errors": [] }
+```
+
+### POST `/api/files/batch-move` — 批量移动（同池）
+权限：`write`
+```json
+// Request Body
+{ "paths": ["file1.txt", "file2.txt"], "dest": "target-dir", "poolId": 1 }
+// Response
+{ "message": "批量移动完成", "errors": [] }
+```
+
+### GET `/api/files/search?q=&path=&poolId=` — 搜索文件
 权限：`read`
 ```json
 // Response
 { "files": [{ "name": "match.txt", "type": "file", "size": 1024, "modified": "...", "path": "path/to/match.txt" }] }
+```
+
+### POST `/api/files/download-zip` — ZIP 打包下载
+权限：`read`
+```json
+// Request Body
+{ "paths": ["file1.txt", "dir/"], "poolId": 1 }
+// Response: ZIP 文件流
+```
+
+### POST `/api/files/remote-upload` — 远程 URL 上传
+权限：`write`
+```json
+// Request Body
+{ "url": "https://example.com/file.zip", "dirPath": "target-dir", "poolId": 1 }
+// Response
+{ "message": "远程上传成功", "path": "target-dir/file.zip", "poolId": 1, "storageType": "local" }
 ```
 
 ---
@@ -144,7 +199,8 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
   "fileType": "file",
   "password": "optional-password",
   "expiresIn": 24,          // 小时，可选
-  "maxDownloads": 100        // 可选
+  "maxDownloads": 100,       // 可选
+  "storagePoolId": 1         // 存储池 ID
 }
 // Response
 { "message": "分享链接创建成功", "shareCode": "abc123", "url": "/s/abc123" }
@@ -202,9 +258,50 @@ Response: 文件流（对应 MIME 类型）
 
 ## 访客 API `/api/guest`（公开）
 
-### GET `/api/guest` — 开启访客模式的用户列表
-### GET `/api/guest/:username/list?path=` — 访客文件列表
-### GET `/api/guest/:username/download?path=` — 访客下载
+### GET `/api/guest` — 有访客分享的用户列表
+```json
+// Response
+{ "users": [{ "username": "admin", "share_count": 3 }] }
+```
+
+### GET `/api/guest/:username/list` — 用户的访客分享文件夹列表
+```json
+// Response
+{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "pool_name": "本地存储", "created_at": "2024-01-01" }] }
+```
+
+### GET `/api/guest/:username/:shareId/list?path=` — 访客文件列表
+```json
+// Response
+{ "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt" }] }
+```
+
+### GET `/api/guest/:username/:shareId/download?path=` — 访客下载
+```
+Response: 文件流
+```
+
+## 访客分享管理 API `/api/user`（需认证）
+
+### GET `/api/user/guest-shares` — 我的访客分享列表
+```json
+// Response
+{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "pool_name": "本地存储", "created_at": "..." }] }
+```
+
+### POST `/api/user/guest-shares` — 创建访客分享
+```json
+// Request Body
+{ "folderPath": "photos", "storagePoolId": 1, "label": "照片" }
+// Response
+{ "message": "访客分享创建成功" }
+```
+
+### DELETE `/api/user/guest-shares/:id` — 删除访客分享
+```json
+// Response
+{ "message": "访客分享已删除" }
+```
 
 ---
 
@@ -228,24 +325,40 @@ TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
 
-# 列出文件
+# 列出文件（默认存储池）
 curl -s http://localhost:3000/api/files/list \
   -H "Authorization: Bearer $TOKEN"
 
-# 上传文件
-curl -X POST http://localhost:3000/api/files/upload?path=test \
+# 列出指定存储池的文件
+curl -s "http://localhost:3000/api/files/list?poolId=2" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 上传文件到指定存储池
+curl -X POST "http://localhost:3000/api/files/upload?path=test&poolId=1" \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@./myfile.txt"
 
 # 搜索文件
-curl -s "http://localhost:3000/api/files/search?q=readme" \
+curl -s "http://localhost:3000/api/files/search?q=readme&poolId=1" \
   -H "Authorization: Bearer $TOKEN"
+
+# 跨存储池复制
+curl -X POST http://localhost:3000/api/files/cross-copy \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"srcPaths":["file.txt"],"names":["file.txt"],"srcPoolId":1,"destPoolId":2,"destPath":""}'
 
 # 创建分享
 curl -X POST http://localhost:3000/api/share/create \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"filePath":"myfile.txt","expiresIn":24}'
+  -d '{"filePath":"myfile.txt","expiresIn":24,"storagePoolId":1}'
+
+# 创建访客分享
+curl -X POST http://localhost:3000/api/user/guest-shares \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"folderPath":"photos","storagePoolId":1,"label":"照片"}'
 
 # 用 API Key 访问
 curl -s http://localhost:3000/api/files/list \
