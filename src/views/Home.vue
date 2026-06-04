@@ -155,12 +155,16 @@ function goBackToPools() {
 
 // 上传（带进度）
 async function handleUpload(files: FileList, uploadPoolId?: number) {
+  // 过滤 macOS 系统文件（._*、.DS_Store 等）
+  const junkPatterns = [/^\._/, /^\.DS_Store$/, /^Thumbs\.db$/, /^__MACOSX\//]
+  const arr = Array.from(files).filter(f => !junkPatterns.some(p => p.test(f.name)))
+  if (arr.length === 0) return
   const targetPoolId = uploadPoolId || currentPoolId.value
   showUploadProgress.value = true
-  uploadProgress.value = Array.from(files).map(f => ({ file: f.name, percent: 0 }))
+  uploadProgress.value = arr.map(f => ({ file: f.name, percent: 0 }))
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]
+  for (let i = 0; i < arr.length; i++) {
+    const file = arr[i]
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -452,7 +456,7 @@ function confirmDelete(file: FileItem) {
 
 async function handleDelete() {
   if (!fileToDelete.value) return
-  await api.delete(`/files/delete?path=${encodeURIComponent(fileToDelete.value.path)}${currentPoolId.value ? `&poolId=${currentPoolId.value}` : ''}`)
+  await api.post('/files/delete', { path: fileToDelete.value.path, poolId: currentPoolId.value || undefined, permanent: false })
   await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
   showDeleteConfirm.value = false
   fileToDelete.value = null
@@ -837,7 +841,7 @@ function formatSize(bytes: number) {
     <Teleport to="body">
       <div v-if="showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="showRemoteUpload = false"/>
-        <div class="relative card w-full max-w-md" style="padding: 1.5rem">
+        <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">远程URL上传</h3>
           <input v-model="remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
           <div class="flex justify-end gap-3">
@@ -854,7 +858,7 @@ function formatSize(bytes: number) {
     <Teleport to="body">
       <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="showCreateFolder = false"/>
-        <div class="relative card w-full max-w-sm" style="padding: 1.5rem">
+        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">新建文件夹</h3>
           <input v-model="newFolderName" type="text" class="input-field mb-4" placeholder="文件夹名称" @keyup.enter="handleCreateFolder" />
           <div class="flex justify-end gap-3">
@@ -869,7 +873,7 @@ function formatSize(bytes: number) {
     <Teleport to="body">
       <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40" @click="showRename = false"/>
-        <div class="relative card w-full max-w-sm" style="padding: 1.5rem">
+        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">重命名</h3>
           <input v-model="newFileName" type="text" class="input-field mb-4" placeholder="新名称" @keyup.enter="handleRename" />
           <div class="flex justify-end gap-3">
@@ -892,7 +896,7 @@ function formatSize(bytes: number) {
     />
 
     <!-- 文件预览 -->
-    <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" :pool-id="fileToPreview.poolId || currentPoolId" @close="showPreview = false" />
+    <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" :pool-id="fileToPreview.poolId || currentPoolId" :file-list="filesStore.files" @close="showPreview = false; fileToPreview = null" />
 
     <!-- 分享对话框 -->
     <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" @close="showShare = false" />

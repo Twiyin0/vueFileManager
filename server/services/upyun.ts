@@ -1,6 +1,39 @@
 import upyun from 'upyun'
+import https from 'https'
 import { PassThrough } from 'stream'
 import { StorageProvider, FileInfo } from './storage'
+
+// Global HTTPS agent with keepalive for connection reuse
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 10,
+  maxFreeSockets: 5,
+  timeout: 60000,
+})
+
+/** Retry wrapper with exponential backoff for transient Upyun errors */
+async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn()
+    } catch (err: any) {
+      const isRetryable =
+        err.code === 'ECONNRESET' ||
+        err.code === 'ETIMEDOUT' ||
+        err.code === 'ECONNREFUSED' ||
+        err.statusCode === 429 ||
+        err.statusCode === 503 ||
+        err.statusCode === 504
+      if (i < retries && isRetryable) {
+        await new Promise(r => setTimeout(r, Math.pow(2, i) * 500))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('unreachable')
+}
 
 export class UpyunStorage implements StorageProvider {
   private client: upyun.Client
@@ -10,22 +43,26 @@ export class UpyunStorage implements StorageProvider {
     const service = new upyun.Service(bucket, operator, password, endpoint)
     this.client = new upyun.Client(service)
     this.bucket = bucket
+    // Inject keepalive agent into the underlying axios instance
+    try {
+      const req = (this.client as any).req
+      if (req?.defaults) {
+        req.defaults.httpsAgent = httpsAgent
+        req.defaults.timeout = 30000
+      }
+    } catch { /* ignore if internal API changes */ }
   }
 
   private normalizePath(filePath: string): string {
-    // 确保路径以 / 开头，不以 / 结尾（目录除外）
     let p = filePath.startsWith('/') ? filePath : '/' + filePath
-    // 移除尾部 / (但如果是根路径则保留)
-    if (p.length > 1 && p.endsWith('/')) {
-      p = p.slice(0, -1)
-    }
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
     return p
   }
 
   async list(prefix: string): Promise<FileInfo[]> {
     const dirPath = this.normalizePath(prefix || '/')
     try {
-      const result = await this.client.listDir(dirPath)
+      const result = await withRetry(() => this.client.listDir(dirPath))
       if (!result || !result.files) return []
 
       const files: FileInfo[] = result.files.map((file: any) => {
@@ -35,7 +72,7 @@ export class UpyunStorage implements StorageProvider {
           type: file.type === 'F' ? 'folder' : 'file',
           size: file.size || 0,
           modified: file.time ? new Date(file.time * 1000).toISOString() : new Date().toISOString(),
-          path: filePath
+          path: filePath,
         }
       })
 
@@ -44,7 +81,6 @@ export class UpyunStorage implements StorageProvider {
         return a.name.localeCompare(b.name)
       })
     } catch (err: any) {
-      // 如果目录不存在返回空数组
       if (err.statusCode === 404) return []
       throw err
     }
@@ -52,43 +88,35 @@ export class UpyunStorage implements StorageProvider {
 
   async upload(filePath: string, data: Buffer): Promise<void> {
     const remotePath = this.normalizePath(filePath)
-    await this.client.putFile(remotePath, data)
+    await withRetry(() => this.client.putFile(remotePath, data))
   }
 
   async download(filePath: string): Promise<Buffer> {
     const remotePath = this.normalizePath(filePath)
-    // 使用 stream 模式下载，避免 responseType:null 导致二进制数据被当文本解析
     const chunks: Buffer[] = []
     const passThrough = new PassThrough()
     passThrough.on('data', (chunk: Buffer) => chunks.push(chunk))
-    await this.client.getFile(remotePath, passThrough)
+    await withRetry(() => this.client.getFile(remotePath, passThrough))
     if (chunks.length === 0) throw new Error('文件不存在')
     return Buffer.concat(chunks)
   }
 
   async remove(filePath: string): Promise<void> {
     const remotePath = this.normalizePath(filePath)
-    // 先尝试作为文件删除
     try {
-      await this.client.deleteFile(remotePath)
+      await withRetry(() => this.client.deleteFile(remotePath))
       return
     } catch (err: any) {
-      // 如果是 404，文件不存在，继续尝试目录
-      if (err.statusCode !== 404) {
-        // 不是 404 错误，可能是其他问题，但继续尝试目录删除
-      }
+      if (err.statusCode !== 404) { /* continue to dir removal */ }
     }
-    // 作为目录删除：先递归删除内容，再删除空目录
     try {
       const files = await this.list(filePath)
       for (const file of files) {
         await this.remove(file.path)
-        // 添加小延迟避免限流
         await new Promise(r => setTimeout(r, 100))
       }
-      await this.client.deleteDir(remotePath)
+      await withRetry(() => this.client.deleteDir(remotePath))
     } catch (err: any) {
-      // 如果目录不存在（404），视为成功
       if (err.statusCode === 404) return
       throw err
     }
@@ -96,25 +124,24 @@ export class UpyunStorage implements StorageProvider {
 
   async mkdir(dirPath: string): Promise<void> {
     const remotePath = this.normalizePath(dirPath)
-    await this.client.makeDir(remotePath)
+    await withRetry(() => this.client.makeDir(remotePath))
   }
 
   async info(filePath: string): Promise<FileInfo> {
     const remotePath = this.normalizePath(filePath)
-    const stat = await this.client.headFile(remotePath)
+    const stat = await withRetry(() => this.client.headFile(remotePath))
     return {
       name: filePath.split('/').pop() || '',
-      type: 'file', // headFile 通常用于文件
+      type: 'file',
       size: (stat as any)?.size || 0,
       modified: (stat as any)?.lastModified || new Date().toISOString(),
-      path: filePath
+      path: filePath,
     }
   }
 
   async exists(filePath: string): Promise<boolean> {
     try {
-      const remotePath = this.normalizePath(filePath)
-      await this.client.headFile(remotePath)
+      await withRetry(() => this.client.headFile(this.normalizePath(filePath)))
       return true
     } catch {
       return false
@@ -146,15 +173,11 @@ export class UpyunStorage implements StorageProvider {
       try {
         const files = await this.list(dir)
         for (const file of files) {
-          if (file.name.toLowerCase().includes(lowerKeyword)) {
-            results.push(file)
-          }
-          if (file.type === 'folder' && results.length < 100) {
-            await walk.call(this, file.path)
-          }
+          if (file.name.toLowerCase().includes(lowerKeyword)) results.push(file)
+          if (file.type === 'folder' && results.length < 100) await walk.call(this, file.path)
           if (results.length >= 100) break
         }
-      } catch { /* 忽略错误 */ }
+      } catch { /* ignore */ }
     }
 
     await walk.call(this, prefix || '/')

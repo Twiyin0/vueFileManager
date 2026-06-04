@@ -86,7 +86,7 @@ watch([selectedPoolId, () => props.pools], () => {
   <Teleport to="body">
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')"/>
-      <div class="relative card w-full max-w-lg" style="padding: 1.5rem">
+      <div class="relative card w-full max-w-lg max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
         <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">移动到</h3>
 
         <!-- 存储池选择 -->

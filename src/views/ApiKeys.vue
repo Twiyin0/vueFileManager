@@ -183,7 +183,7 @@ function formatDate(dateStr: string): string {
     <Teleport to="body">
       <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="closeCreate"/>
-        <div class="relative card w-full max-w-md p-6">
+        <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
           <!-- 创建成功 -->
           <template v-if="createdKey">
             <h3 class="text-lg font-semibold mb-2 dark:text-dark-text text-light-text">API Key 已创建</h3>

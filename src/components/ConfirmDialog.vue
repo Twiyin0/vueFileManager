@@ -20,7 +20,7 @@ const emit = defineEmits<{
       <!-- 遮罩 -->
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('cancel')"/>
       <!-- 对话框 -->
-      <div class="relative card w-full max-w-sm" style="padding: 1.5rem">
+      <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
         <h3 class="text-lg font-semibold mb-2" style="color: var(--text-color)">{{ title }}</h3>
         <p class="text-sm mb-6" style="color: var(--text-secondary-color)">{{ message }}</p>
         <div class="flex justify-end gap-3">

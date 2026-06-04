@@ -9,7 +9,7 @@
 - 📝 重命名、移动、复制（支持跨存储池）
 - 🔍 文件搜索（递归）
 - 📦 创建文件夹
-- 👁️ 文件预览（图片/视频/音频/PDF/代码）
+- 👁️ 文件预览 v3：视频 (ArtPlayer, 16:9 容器 + playsInline) / 音频 (APlayer, 暗色主题 CSS 全覆盖) / 图片 (ViewerJS 全屏画廊, 透明毛玻璃左右箭头, blob URL 防 iOS 系统预览抢占, 文件夹内前后翻页) / PDF (PDF.js CDN canvas 渲染, 工具栏含页码跳转/缩放) / 代码 (Monaco Editor 可编辑 + Ctrl+S 保存, Toast 保存提示)
 - 📋 批量选择、批量删除、批量移动、批量复制
 - 🖱️ 右键上下文菜单（含空白区域菜单）
 - 📊 文件详情面板
@@ -18,6 +18,8 @@
 - 📦 ZIP 打包下载
 - 📡 远程 URL 上传
 - 📥 拖拽上传 + 上传进度条
+- ⚡ Express body 限制提升至 50MB，Upyun keepalive HTTPS Agent + 指数退避重试
+- 💾 文本保存端点 30s 超时保护
 - 📋 剪贴板复制/粘贴 + Toast 通知
 - 📦 移动对话框（跨存储池文件夹选择器）
 - 👆 长按进入多选模式（移动端）
@@ -67,11 +69,19 @@
 - 🚪 访客模式（多文件夹分享，右键菜单一键分享）
 - 🛡️ 管理员面板
 
+### 兼容性
+- 🍎 macOS 资源分支文件 (`._*`) 自动过滤（服务端/客户端/Multer 三重防护）
+- 🔧 外置硬盘乱码文件名修复（resolvePath 回退, DELETE 走 POST body）
+
 ### 界面
 - 🌙 暗色/亮色/跟随系统主题
 - 📱 响应式设计
 - 🎨 柔和的暗色模式配色
 - 📂 侧边栏可收缩（主侧边栏 + 文件夹树）
+- 📜 所有对话框自适应滚动 (max-h-[90vh])，适配各种屏幕分辨率
+- 📏 紧凑标题栏 (py-1.5, 小图标)
+- 🖼️ 画廊左右导航箭头 (透明毛玻璃样式)
+- 🔢 图片浮层编号计数器
 
 ## 🚀 快速开始
 
@@ -213,6 +223,8 @@ vueFileManager/
 │   │   ├── UploadDialog.vue  # 上传对话框
 │   │   ├── MoveDialog.vue    # 移动对话框
 │   │   ├── GuestShareDialog.vue # 访客分享对话框
+│   │   ├── ShareDialog.vue   # 分享链接对话框
+│   │   ├── FilePreview.vue   # 文件预览（ArtPlayer/APlayer/ViewerJS/Monaco）
 │   │   ├── Toast.vue         # Toast 通知
 │   │   ├── ConfirmDialog.vue # 确认弹窗
 │   │   └── ThemeToggle.vue   # 主题切换
@@ -305,6 +317,7 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 文件 | `GET /api/files/storage-stats` | 存储统计 |
 | 文件 | `POST /api/files/download-zip` | ZIP打包下载 |
 | 文件 | `POST /api/files/remote-upload` | 远程URL上传 |
+| 文件 | `PUT /api/files/save` | 保存文本/代码 (30s超时) |
 | 存储池 | `GET /api/storage-pools` | 存储池列表 |
 | 存储池 | `POST /api/storage-pools` | 创建存储池 |
 | 存储池 | `PUT /api/storage-pools/:id` | 更新存储池 |
@@ -347,6 +360,7 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 - Vue 3 (Composition API)
 - TypeScript
 - Tailwind CSS 4
+- ArtPlayer + APlayer + ViewerJS + Monaco Editor + PDF.js（文件预览 v3）
 - Vue Router 4
 - Pinia
 - Fetch API

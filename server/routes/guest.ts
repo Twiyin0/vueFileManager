@@ -90,10 +90,12 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
     const files = await storage.list(fullPath)
 
     // 过滤路径前缀，返回给访客的是相对于 basePath 的路径
-    const result = files.map(f => ({
-      ...f,
-      path: basePath ? f.path.replace(basePath + '/', '').replace(basePath, '') : f.path
-    }))
+    const result = files
+      .filter(f => !/^\._/.test(f.name) && f.name !== '.DS_Store')
+      .map(f => ({
+        ...f,
+        path: basePath ? f.path.replace(basePath + '/', '').replace(basePath, '') : f.path
+      }))
 
     res.json({ files: result, owner: user.username, shareLabel: share.label })
   } catch (err: any) {

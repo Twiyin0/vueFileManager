@@ -353,7 +353,7 @@ function handleConfirm() {
     <Teleport to="body">
       <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateDialog = false"/>
-        <div class="relative card w-full max-w-md" style="padding: 1.5rem">
+        <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">创建用户</h3>
           <div class="space-y-3">
             <div>

@@ -126,8 +126,8 @@ function getPreviewUrl(file: FileItem): string {
             selectedFiles?.has(file.path) ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-600' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600',
             contextHighlighted === file.path ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''
           ]"
-          style="background-color: var(--hover-color)"
-          @click="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
+          style="background-color: var(--hover-color); touch-action: manipulation"
+          @click.prevent="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
           @contextmenu.prevent.stop="handleItemContext($event, file)"
           @touchstart.passive="handleTouchStart($event, file)"
           @touchend="handleTouchEnd"
@@ -141,7 +141,7 @@ function getPreviewUrl(file: FileItem): string {
                 class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
             </div>
             <!-- 图片缩略图 -->
-            <img v-if="getFileIcon(file) === 'image'" :src="getPreviewUrl(file)" :alt="file.name" class="thumb-img" loading="lazy" />
+            <img v-if="getFileIcon(file) === 'image'" :src="getPreviewUrl(file)" :alt="file.name" class="thumb-img" loading="lazy" draggable="false" />
             <!-- 非图片：大图标 -->
             <div v-else class="thumb-icon">
               <!-- 文件夹 -->
@@ -207,8 +207,8 @@ function getPreviewUrl(file: FileItem): string {
           selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
           contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : ''
         ]"
-        style="border-color: var(--border-color)"
-        @click="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
+        style="border-color: var(--border-color); touch-action: manipulation"
+        @click.prevent="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
         @contextmenu.prevent.stop="handleItemContext($event, file)"
         @touchstart.passive="handleTouchStart($event, file)"
         @touchend="handleTouchEnd"

@@ -41,7 +41,7 @@ async function handleShare() {
   <Teleport to="body">
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')"/>
-      <div class="relative card w-full max-w-md" style="padding: 1.5rem">
+      <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
         <h3 class="text-lg font-semibold mb-2" style="color: var(--text-color)">分享至访客模式</h3>
         <p class="text-sm mb-4" style="color: var(--text-secondary-color)">
           将文件夹 <span class="font-mono" style="color: var(--accent-color)">{{ folderName }}</span> 分享至访客模式，访客可浏览和下载其中的文件。

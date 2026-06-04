@@ -57,12 +57,31 @@ export class LocalStorage implements StorageProvider {
   }
 
   async download(filePath: string): Promise<Buffer> {
-    const fullPath = this.fullPath(filePath)
+    const fullPath = await this.resolvePath(filePath)
     return await fs.readFile(fullPath)
   }
 
+  /** Resolve a possibly-mangled path by matching against actual filesystem entries */
+  private async resolvePath(filePath: string): Promise<string> {
+    const direct = this.fullPath(filePath)
+    try { await fs.access(direct); return direct } catch {}
+    // ENOENT — try matching against sibling files (fixes encoding mismatches on external drives)
+    const dir = path.dirname(direct)
+    const targetName = path.basename(direct)
+    try {
+      const entries = await fs.readdir(dir)
+      // Try exact match first, then case-insensitive, then NFC/NFD normalization
+      let match = entries.find(e => e === targetName)
+      if (!match) match = entries.find(e => e.toLowerCase() === targetName.toLowerCase())
+      if (!match) match = entries.find(e => e.normalize('NFC') === targetName.normalize('NFC'))
+      if (!match) match = entries.find(e => e.normalize('NFD') === targetName.normalize('NFD'))
+      if (match) return path.join(dir, match)
+    } catch {}
+    return direct // fall through — let the original error surface
+  }
+
   async remove(filePath: string): Promise<void> {
-    const fullPath = this.fullPath(filePath)
+    const fullPath = await this.resolvePath(filePath)
     const stat = await fs.stat(fullPath)
     if (stat.isDirectory()) {
       await fs.rm(fullPath, { recursive: true })
@@ -77,7 +96,7 @@ export class LocalStorage implements StorageProvider {
   }
 
   async info(filePath: string): Promise<FileInfo> {
-    const fullPath = this.fullPath(filePath)
+    const fullPath = await this.resolvePath(filePath)
     const stat = await fs.stat(fullPath)
     return {
       name: path.basename(filePath),
@@ -98,7 +117,7 @@ export class LocalStorage implements StorageProvider {
   }
 
   async rename(oldPath: string, newName: string): Promise<void> {
-    const fullOld = this.fullPath(oldPath)
+    const fullOld = await this.resolvePath(oldPath)
     const parentDir = path.dirname(fullOld)
     const fullNew = path.join(parentDir, newName)
     if (!fullNew.startsWith(this.basePath)) throw new Error('路径越界')

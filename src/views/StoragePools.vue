@@ -279,7 +279,7 @@ function getStorageLabel(type: string) {
 
       <!-- 添加/编辑对话框 -->
       <div v-if="showAddDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4" style="background-color: var(--card-color)">
+        <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" style="background-color: var(--card-color)">
           <div class="p-6">
             <h2 class="text-xl font-bold mb-4 dark:text-dark-text text-light-text">
               {{ editingPool ? '编辑存储池' : '添加存储池' }}

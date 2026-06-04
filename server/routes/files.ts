@@ -13,7 +13,40 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const UPLOAD_TEMP_DIR = path.join(__dirname, '..', '..', 'data', 'uploads')
 
 const router = Router()
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } })
+
+// macOS 资源叉文件 / 系统垃圾文件
+const JUNK_PATTERNS = [/^\._/, /^\.DS_Store$/, /^Thumbs\.db$/, /^__MACOSX\//]
+function isJunkFile(filename: string): boolean {
+  const name = filename.split('/').pop() || filename
+  return JUNK_PATTERNS.some(p => p.test(name))
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isJunkFile(file.originalname)) {
+      cb(new Error(`JUNK:${file.originalname}`))
+    } else {
+      cb(null, true)
+    }
+  },
+})
+
+/** multer wrapper: catches fileFilter errors and returns proper 400 response */
+function uploadSingle(field: string) {
+  return (req: ApiKeyRequest, res: Response, next: any) => {
+    upload.single(field)(req, res, (err: any) => {
+      if (err) {
+        if (err.message?.startsWith('JUNK:')) {
+          return res.status(400).json({ error: `已拦截系统文件: ${err.message.slice(5)}` })
+        }
+        return res.status(400).json({ error: err.message })
+      }
+      next()
+    })
+  }
+}
 
 // 获取存储实例（支持指定存储池ID）
 function getStorageForRequest(req: ApiKeyRequest) {
@@ -55,7 +88,9 @@ router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
 
     // 解析 poolId 并注入到每个文件
     const resolvedPoolId = poolId ? parseInt(poolId) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
-    const filesWithPool = files.map(f => ({ ...f, poolId: resolvedPoolId }))
+    const filesWithPool = files
+      .filter(f => !isJunkFile(f.name))
+      .map(f => ({ ...f, poolId: resolvedPoolId }))
 
     res.json({ files: filesWithPool })
   } catch (err: any) {
@@ -84,11 +119,9 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
 })
 
 // 上传文件（传统方式）
-router.post('/upload', flexibleAuth, requirePermission('write'), upload.single('file'), async (req: ApiKeyRequest, res: Response) => {
+router.post('/upload', flexibleAuth, requirePermission('write'), uploadSingle('file'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: '没有文件' })
-    }
+    if (!req.file) return res.status(400).json({ error: '没有文件' })
     const storage = getStorageForRequest(req)
     const dirPath = (req.query.path as string) || ''
     const filePath = dirPath ? `${dirPath}/${req.file.originalname}` : req.file.originalname
@@ -105,6 +138,34 @@ router.post('/upload', flexibleAuth, requirePermission('write'), upload.single('
   }
 })
 
+// 保存文本文件内容（Monaco Editor 编辑后保存）
+router.post('/write', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { path: filePath, content } = req.body
+    if (!filePath || content === undefined) {
+      return res.status(400).json({ error: '缺少 filePath 或 content' })
+    }
+    if (typeof content !== 'string') {
+      return res.status(400).json({ error: 'content 必须是字符串' })
+    }
+    // 10MB 上限（文本文件不应超过此值）
+    if (content.length > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: '文件过大，请使用上传功能' })
+    }
+    const storage = getStorageForRequest(req)
+    const buffer = Buffer.from(content, 'utf-8')
+    // 30s 超时保护
+    await Promise.race([
+      storage.upload(filePath, buffer),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('保存超时')), 30000)),
+    ])
+    res.json({ success: true, path: filePath })
+  } catch (err: any) {
+    console.error('Write error:', err.message)
+    res.status(500).json({ error: err.message || '保存失败' })
+  }
+})
+
 // 流式上传（支持 chunked transfer encoding）
 router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
@@ -114,6 +175,9 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
 
     if (!fileName) {
       return res.status(400).json({ error: '缺少 X-File-Name 头' })
+    }
+    if (isJunkFile(fileName)) {
+      return res.status(400).json({ error: `已拦截系统文件: ${fileName}` })
     }
 
     // 写入临时文件
@@ -164,6 +228,9 @@ router.post('/upload/init', flexibleAuth, requirePermission('write'), async (req
     const { fileName, fileSize, dirPath, poolId } = req.body
     if (!fileName || !fileSize) {
       return res.status(400).json({ error: '缺少文件名或文件大小' })
+    }
+    if (isJunkFile(fileName)) {
+      return res.status(400).json({ error: `已拦截系统文件: ${fileName}` })
     }
 
     const uploadId = crypto.randomBytes(16).toString('hex')
@@ -352,11 +419,13 @@ router.get('/download', flexibleAuth, requirePermission('read'), async (req: Api
 })
 
 // 删除文件/文件夹（移到回收站）
-router.delete('/delete', flexibleAuth, requirePermission('delete'), async (req: ApiKeyRequest, res: Response) => {
+// POST body（unicode 文件名推荐）或 DELETE query param
+const handleDelete = async (req: ApiKeyRequest, res: Response) => {
   try {
     const storage = getStorageForRequest(req)
-    const filePath = req.query.path as string
-    const permanent = req.query.permanent === 'true'
+    // Support both query param (legacy) and body (unicode-safe)
+    const filePath = (req.body?.path as string) || (req.query.path as string)
+    const permanent = req.query.permanent === 'true' || req.body?.permanent === true
     if (!filePath) {
       return res.status(400).json({ error: '缺少路径' })
     }
@@ -394,7 +463,9 @@ router.delete('/delete', flexibleAuth, requirePermission('delete'), async (req: 
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
-})
+}
+router.delete('/delete', flexibleAuth, requirePermission('delete'), handleDelete)
+router.post('/delete', flexibleAuth, requirePermission('delete'), handleDelete)
 
 // 批量删除
 router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (req: ApiKeyRequest, res: Response) => {
@@ -594,7 +665,7 @@ router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKe
       return res.status(400).json({ error: '缺少搜索关键词' })
     }
     const files = await storage.search(prefix, keyword)
-    res.json({ files })
+    res.json({ files: files.filter(f => !isJunkFile(f.name)) })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

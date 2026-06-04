@@ -182,12 +182,215 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .thumb-icon {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
   width: 100%;
   height: 100%;
 }
+
+/* =============================================
+   第三方组件暗色模式适配
+   ============================================= */
+
+/* ---- APlayer 暗色模式 ---- */
+.dark .aplayer {
+  background: var(--card-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 歌曲信息区 */
+.dark .aplayer .aplayer-info .aplayer-music .aplayer-title {
+  color: var(--text-color);
+}
+.dark .aplayer .aplayer-info .aplayer-music .aplayer-author {
+  color: var(--text-secondary-color);
+}
+
+/* 进度条轨道 */
+.dark .aplayer .aplayer-info .aplayer-controller .aplayer-bar-wrap .aplayer-bar {
+  background: var(--border-color);
+}
+.dark .aplayer .aplayer-info .aplayer-controller .aplayer-bar-wrap .aplayer-bar .aplayer-loaded {
+  background: #666;
+}
+
+/* 时间显示 */
+.dark .aplayer .aplayer-info .aplayer-controller .aplayer-time {
+  color: var(--text-secondary-color);
+}
+.dark .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon path {
+  fill: var(--text-secondary-color);
+}
+.dark .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon:hover path {
+  fill: var(--text-color);
+}
+
+/* 音量条 */
+.dark .aplayer .aplayer-info .aplayer-controller .aplayer-volume-wrap .aplayer-volume-bar-wrap .aplayer-volume-bar {
+  background: #555;
+}
+
+/* 播放列表 */
+.dark .aplayer.aplayer-withlist .aplayer-info {
+  border-bottom-color: var(--border-color);
+}
+.dark .aplayer .aplayer-list ol li {
+  border-top-color: var(--border-color);
+  color: var(--text-color);
+}
+.dark .aplayer .aplayer-list ol li:hover {
+  background: var(--hover-color);
+}
+.dark .aplayer .aplayer-list ol li.aplayer-list-light {
+  background: var(--hover-color);
+}
+.dark .aplayer .aplayer-list ol li .aplayer-list-index,
+.dark .aplayer .aplayer-list ol li .aplayer-list-author {
+  color: var(--text-secondary-color);
+}
+.dark .aplayer .aplayer-list ol::-webkit-scrollbar-thumb {
+  background-color: #555;
+}
+.dark .aplayer .aplayer-list ol::-webkit-scrollbar-thumb:hover {
+  background-color: #777;
+}
+
+/* 歌词 */
+.dark .aplayer .aplayer-lrc p {
+  color: var(--text-secondary-color);
+}
+.dark .aplayer .aplayer-lrc:before {
+  background: linear-gradient(180deg, var(--card-color) 0%, transparent 100%);
+}
+.dark .aplayer .aplayer-lrc:after {
+  background: linear-gradient(180deg, transparent 0%, var(--card-color) 80%);
+}
+
+/* 收缩按钮 */
+.dark .aplayer .aplayer-miniswitcher {
+  background: var(--hover-color);
+}
+.dark .aplayer .aplayer-miniswitcher .aplayer-icon path {
+  fill: var(--text-secondary-color);
+}
+.dark .aplayer .aplayer-miniswitcher .aplayer-icon:hover path {
+  fill: var(--text-color);
+}
+
+/* ---- ViewerJS 暗色模式 ---- */
+.dark .viewer-toolbar {
+  background-color: rgba(20, 20, 22, 0.9);
+}
+.dark .viewer-navbar {
+  background-color: rgba(20, 20, 22, 0.9);
+}
+.dark .viewer-title {
+  color: var(--text-color);
+}
+.dark .viewer-button {
+  background-color: rgba(40, 40, 45, 0.8);
+  color: var(--text-color);
+}
+
+/* ---- 阻止浏览器系统预览（iOS 长按/右键等） ---- */
+/* ViewerJS 图片 */
+.viewer-canvas img,
+.viewer-canvas > img {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+.viewer-container {
+  -webkit-touch-callout: none;
+}
+/* ArtPlayer 视频容器 */
+.artplayer-app,
+.artplayer-app video {
+  -webkit-touch-callout: none;
+}
+/* APlayer 音频容器 */
+.aplayer {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 禁止所有预览容器的系统交互 */
+.preview-content-area {
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* ---- 文件预览容器暗色背景 ---- */
+.dark .preview-content-area {
+  background-color: var(--surface-color);
+}
+
+/* ---- 预览工具栏按钮 ---- */
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  color: var(--text-color);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.toolbar-btn:hover {
+  background-color: var(--border-color);
+}
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+.dark .toolbar-btn:hover {
+  background-color: var(--border-color);
+}
+.dark .toolbar-btn:disabled {
+  opacity: 0.3;
+}
+
+/* ---- 图片画廊翻页按钮 ---- */
+.gallery-nav-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.2s ease;
+}
+.gallery-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+.gallery-nav-btn:active {
+  background: rgba(0, 0, 0, 0.6);
+  transform: translateY(-50%) scale(0.95);
+}
+
+/* ---- 保存提示动画 ---- */
+.toast-enter-active { transition: all 0.25s ease-out; }
+.toast-leave-active { transition: all 0.2s ease-in; }
+.toast-enter-from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+.toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-10px); }

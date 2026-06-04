@@ -13,9 +13,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@guolao/vue-monaco-editor": "^1.6.0",
     "@types/archiver": "^7.0.0",
     "@types/js-yaml": "^4.0.9",
+    "aplayer": "^1.10.1",
     "archiver": "^8.0.0",
+    "artplayer": "^5.4.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.8.1",
     "concurrently": "^9.1.2",
@@ -23,9 +26,11 @@
     "express": "^4.21.2",
     "js-yaml": "^4.1.1",
     "jsonwebtoken": "^9.0.2",
+    "monaco-editor": "^0.55.1",
     "multer": "^1.4.5-lts.1",
     "pinia": "^2.3.1",
     "upyun": "^3.4.5",
+    "viewerjs": "^1.11.7",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
     "yaml": "^2.9.0"

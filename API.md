@@ -63,6 +63,8 @@ X-API-Key: <your-api-key>
 ### GET `/api/files/list?path=&poolId=` — 文件列表
 权限：`read`
 
+> 注意：`._` 开头的 macOS 系统文件、`.DS_Store` 等会在服务端自动过滤，不会出现在列表中。
+
 当不传 `poolId` 且不传 `path` 时，返回所有存储池作为虚拟文件夹（`isPool: true`）。
 ```json
 // Response（普通文件列表）
@@ -162,11 +164,38 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 支持：图片/视频/音频/PDF/文本/代码
 ```
 
-### DELETE `/api/files/delete?path=&poolId=&permanent=` — 删除文件/文件夹
+### DELETE or POST `/api/files/delete` — 删除文件/文件夹
 权限：`delete`
 
+> 推荐使用 POST + JSON body 传 path，避免 unicode 文件名 URL 编码问题。
+
 默认移到回收站。`permanent=true` 时永久删除。
+
+**方式 1：POST JSON body（推荐）**
 ```json
+// Request Body
+{ "path": "file.txt", "poolId": 1, "permanent": false }
+// Response
+{ "message": "删除成功" }
+```
+
+**方式 2：DELETE query 参数（旧版兼容）**
+```
+DELETE /api/files/delete?path=file.txt&poolId=1&permanent=false
+```
+```json
+// Response
+{ "message": "删除成功" }
+```
+
+### POST `/api/files/delete` — 删除文件/文件夹（POST 别名）
+权限：`delete`
+
+> 专为 unicode 文件名设计。使用 POST JSON body 传 path，避免 URL 编码问题。行为与上述 DELETE 接口完全相同。
+
+```json
+// Request Body
+{ "path": "string", "poolId": 1, "permanent": false }
 // Response
 { "message": "删除成功" }
 ```
@@ -179,6 +208,16 @@ Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 // Response
 { "message": "文件夹创建成功" }
 ```
+
+### POST `/api/files/write` — 保存文本文件内容
+权限：`write`
+```json
+// Request Body
+{ "path": "string", "content": "string", "poolId": 1 }
+// Response
+{ "success": true, "path": "string" }
+```
+> 注意：content 上限 10MB，30秒超时保护。
 
 ### POST `/api/files/rename` — 重命名
 权限：`write`
