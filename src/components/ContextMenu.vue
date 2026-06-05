@@ -9,6 +9,8 @@ const props = defineProps<{
   item?: any
   selectedItems?: any[]
   clipboardCount?: number
+  readOnly?: boolean
+  allowedActions?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +29,11 @@ function handleClickOutside(e: MouseEvent) {
 function handleAction(action: string) {
   emit('action', action, props.item)
   emit('close')
+}
+
+function isAllowed(action: string): boolean {
+  if (!props.allowedActions) return true
+  return props.allowedActions.includes(action)
 }
 
 onMounted(() => {
@@ -49,45 +56,47 @@ onUnmounted(() => {
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="folder" class="w-4 h-4 text-blue-500" /> 打开
         </button>
-        <button @click="handleAction('preview')" v-if="item.type === 'file'"
+        <button @click="handleAction('preview')" v-if="item.type === 'file' && isAllowed('preview')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="eye" class="w-4 h-4" /> 预览
         </button>
-        <button @click="handleAction('download')"
+        <button @click="handleAction('download')" v-if="isAllowed('download')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="download" class="w-4 h-4" /> 下载
         </button>
-        <div class="border-t dark:border-dark-border border-light-border my-1"></div>
-        <button @click="handleAction('rename')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="pen" class="w-4 h-4" /> 重命名
-        </button>
-        <button @click="handleAction('move')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 移动到
-        </button>
-        <button @click="handleAction('copy')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="clipboard" class="w-4 h-4" /> 复制
-        </button>
-        <button @click="handleAction('share')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="link-alt" class="w-4 h-4" /> 分享
-        </button>
-        <button @click="handleAction('favourite')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="star-sharp" class="w-4 h-4 text-yellow-500" /> 收藏
-        </button>
-        <button @click="handleAction('guest-share')" v-if="item.type === 'folder'"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="globe" class="w-4 h-4" /> 分享至访客
-        </button>
+        <template v-if="!readOnly">
+          <div class="border-t dark:border-dark-border border-light-border my-1"></div>
+          <button @click="handleAction('rename')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="pen" class="w-4 h-4" /> 重命名
+          </button>
+          <button @click="handleAction('move')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 移动到
+          </button>
+          <button @click="handleAction('copy')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="clipboard" class="w-4 h-4" /> 复制
+          </button>
+          <button @click="handleAction('share')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="link-alt" class="w-4 h-4" /> 分享
+          </button>
+          <button @click="handleAction('favourite')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="star-sharp" class="w-4 h-4 text-yellow-500" /> 收藏
+          </button>
+          <button @click="handleAction('guest-share')" v-if="item.type === 'folder'"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="globe" class="w-4 h-4" /> 分享至访客
+          </button>
+        </template>
         <div class="border-t dark:border-dark-border border-light-border my-1"></div>
         <button @click="handleAction('info')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="circle-information" class="w-4 h-4" /> 详情
         </button>
-        <button @click="handleAction('delete')"
+        <button @click="handleAction('delete')" v-if="!readOnly && isAllowed('delete')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
           <Icon name="trash" class="w-4 h-4" /> 删除
         </button>
@@ -117,8 +126,8 @@ onUnmounted(() => {
         </button>
       </template>
 
-      <!-- 空白区域 -->
-      <template v-else>
+      <!-- 空白区域（readOnly 模式下隐藏） -->
+      <template v-else-if="!readOnly">
         <button @click="handleAction('new-folder')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="folder" class="w-4 h-4 text-blue-500" /> 新建文件夹

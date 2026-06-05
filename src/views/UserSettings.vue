@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore, ThemeMode } from '@/stores/theme'
 import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import GuestShareDialog from '@/components/GuestShareDialog.vue'
 import Icon from '@/components/Icon.vue'
 
 const authStore = useAuthStore()
@@ -27,6 +28,15 @@ const guestShares = ref<any[]>([])
 const loadingShares = ref(false)
 const showShares = ref(true)
 const deleteConfirm = ref({ show: false, share: null as any })
+const editShare = ref<any>(null)
+const showEditDialog = ref(false)
+
+const permLabels: Record<string, string> = {
+  preview: '预览',
+  download: '下载',
+  upload: '上传',
+  delete: '删除'
+}
 
 onMounted(async () => {
   loading.value = true
@@ -82,6 +92,11 @@ async function loadGuestShares() {
 
 function confirmDeleteShare(share: any) {
   deleteConfirm.value = { show: true, share }
+}
+
+function openEditShare(share: any) {
+  editShare.value = { id: share.id, label: share.label, permissions: share.permissions || 'preview,download' }
+  showEditDialog.value = true
 }
 
 async function handleDeleteShare() {
@@ -225,15 +240,33 @@ function formatDate(dateStr: string): string {
                         <span class="mx-1">·</span>
                         {{ formatDate(share.created_at) }}
                       </p>
+                      <!-- 权限标签 -->
+                      <div v-if="share.permissions" class="flex gap-1 mt-1.5 flex-wrap">
+                        <span v-for="p in share.permissions.split(',')" :key="p"
+                          class="px-1.5 py-0.5 text-xs rounded"
+                          style="background-color: var(--accent-soft-color); color: var(--accent-color)">
+                          {{ permLabels[p.trim()] || p.trim() }}
+                        </span>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      @click="confirmDeleteShare(share)"
-                      class="ml-3 p-1.5 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-                      title="取消分享"
-                    >
-                      <Icon name="trash" class="w-4 h-4 text-red-500" />
-                    </button>
+                    <div class="flex items-center gap-1 ml-3">
+                      <button
+                        type="button"
+                        @click="openEditShare(share)"
+                        class="p-1.5 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                        title="编辑权限"
+                      >
+                        <Icon name="pen" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+                      </button>
+                      <button
+                        type="button"
+                        @click="confirmDeleteShare(share)"
+                        class="p-1.5 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="取消分享"
+                      >
+                        <Icon name="trash" class="w-4 h-4 text-red-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -289,6 +322,16 @@ function formatDate(dateStr: string): string {
       :danger="true"
       @confirm="handleDeleteShare"
       @cancel="deleteConfirm = { show: false, share: null }"
+    />
+
+    <!-- 编辑访客分享 -->
+    <GuestShareDialog
+      :show="showEditDialog"
+      :folder-path="editShare?.folder_path || ''"
+      :folder-name="editShare?.label || ''"
+      :edit-share="editShare"
+      @close="showEditDialog = false; editShare = null"
+      @done="loadGuestShares()"
     />
   </Layout>
 </template>

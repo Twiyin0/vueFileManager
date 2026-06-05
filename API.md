@@ -623,9 +623,18 @@ Response: 文件流（对应 MIME 类型）
 ### POST `/api/user/guest-shares` — 创建访客分享
 ```json
 // Request Body
-{ "folderPath": "photos", "storagePoolId": 1, "label": "照片" }
+{ "folderPath": "photos", "storagePoolId": 1, "label": "照片", "permissions": "preview,download,upload" }
+// permissions 可选，默认 "preview,download"
 // Response
-{ "message": "已分享至访客模式", "share": { "id": 1, "folder_path": "photos", "storage_pool_id": 1, "label": "照片", "pool_name": "本地存储" } }
+{ "message": "已分享至访客模式", "share": { "id": 1, "folder_path": "photos", "storage_pool_id": 1, "label": "照片", "permissions": "preview,download,upload", "pool_name": "本地存储" } }
+```
+
+### PUT `/api/user/guest-shares/:id` — 更新访客分享（权限/标签）
+```json
+// Request Body（均为可选）
+{ "label": "新名称", "permissions": "preview,download" }
+// Response
+{ "message": "已更新", "share": { "id": 1, "permissions": "preview,download", "label": "新名称" } }
 ```
 
 ### DELETE `/api/user/guest-shares/:id` — 删除访客分享
@@ -771,19 +780,50 @@ Response: 文件流（对应 MIME 类型）
 ### GET `/api/guest/:username/list` — 用户的访客分享文件夹列表
 ```json
 // Response
-{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "pool_name": "本地存储", "created_at": "..." }], "owner": "admin" }
+{ "shares": [{ "id": 1, "folder_path": "photos", "label": "照片", "permissions": "preview,download", "pool_name": "本地存储", "created_at": "..." }], "owner": "admin" }
 ```
 
 ### GET `/api/guest/:username/:shareId/list?path=` — 访客文件列表
 ```json
 // Response
-{ "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt" }], "owner": "admin", "shareLabel": "照片" }
+{ "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt" }], "owner": "admin", "shareLabel": "照片", "permissions": "preview,download" }
+```
+
+### GET `/api/guest/:username/:shareId/preview?path=` — 访客预览
+需 `preview` 权限。
+```
+Response: 文件流（对应 MIME 类型，Content-Disposition: inline）
 ```
 
 ### GET `/api/guest/:username/:shareId/download?path=` — 访客下载
+需 `download` 权限。
 ```
-Response: 文件流
+Response: 文件流（Content-Disposition: attachment）
 ```
+
+### POST `/api/guest/:username/:shareId/upload` — 访客上传
+需 `upload` 权限。
+```
+Content-Type: multipart/form-data
+Form Fields: file（文件）、dirPath（目标子目录，可选）
+```
+```json
+// Response
+{ "message": "上传成功", "path": "file.txt" }
+```
+
+### 访客权限
+
+创建访客分享时可指定 `permissions` 字段（逗号分隔），控制访客可执行的操作：
+
+| 权限 | 说明 |
+|------|------|
+| `preview` | 预览文件（图片/视频/音频/PDF/代码） |
+| `download` | 下载文件 |
+| `upload` | 上传文件到分享文件夹 |
+| `delete` | 删除文件夹内的文件 |
+
+默认权限：`preview,download`（只读）。
 
 ---
 

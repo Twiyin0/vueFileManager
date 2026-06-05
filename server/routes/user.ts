@@ -180,7 +180,7 @@ router.get('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) =>
 // 创建访客分享
 router.post('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
-    const { folderPath, storagePoolId, label } = req.body
+    const { folderPath, storagePoolId, label, permissions } = req.body
     if (!folderPath || !storagePoolId) {
       return res.status(400).json({ error: '缺少文件夹路径或存储池ID' })
     }
@@ -198,8 +198,10 @@ router.post('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) =
       return res.status(409).json({ error: '该文件夹已分享至访客模式' })
     }
 
-    const result = db.prepare('INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label) VALUES (?, ?, ?, ?)')
-      .run(req.userId!, folderPath, storagePoolId, label || folderPath.split('/').pop() || '根目录')
+    const perms = permissions || 'preview,download'
+
+    const result = db.prepare('INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions) VALUES (?, ?, ?, ?, ?)')
+      .run(req.userId!, folderPath, storagePoolId, label || folderPath.split('/').pop() || '根目录', perms)
 
     res.json({
       message: '已分享至访客模式',
@@ -208,9 +210,35 @@ router.post('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) =
         folder_path: folderPath,
         storage_pool_id: storagePoolId,
         label: label || folderPath.split('/').pop() || '根目录',
+        permissions: perms,
         pool_name: pool.name
       }
     })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 更新访客分享（权限/标签）
+router.put('/guest-shares/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const { permissions, label } = req.body
+    const id = parseInt(req.params.id as string)
+
+    // 验证分享存在且属于当前用户
+    const share = db.prepare('SELECT id, label, permissions FROM guest_shares WHERE id = ? AND user_id = ?')
+      .get(id, req.userId!) as any
+    if (!share) {
+      return res.status(404).json({ error: '分享不存在' })
+    }
+
+    const newPermissions = permissions || share.permissions
+    const newLabel = label !== undefined ? label : share.label
+
+    db.prepare('UPDATE guest_shares SET permissions = ?, label = ? WHERE id = ? AND user_id = ?')
+      .run(newPermissions, newLabel, id, req.userId!)
+
+    res.json({ message: '已更新', share: { id, permissions: newPermissions, label: newLabel } })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

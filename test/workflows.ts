@@ -808,14 +808,18 @@ async function testGuest() {
   // 开启访客模式
   await api('PUT', '/user/settings', { guestEnabled: true }, auth(userToken))
 
-  // 创建访客分享
-  await test('POST /user/guest-shares - 创建访客分享', async () => {
+  // 创建访客分享（带权限）
+  let guestShareId: number
+  await test('POST /user/guest-shares - 创建访客分享（带权限）', async () => {
     const { status, data } = await api('POST', '/user/guest-shares', {
       folderPath: '/',
       storagePoolId: defaultPool.id,
-      label: '根目录'
+      label: '根目录',
+      permissions: 'preview,download'
     }, auth(userToken))
     assert(status === 200, `状态码 ${status}`)
+    assert(data.share.permissions === 'preview,download', `权限不匹配: ${data.share.permissions}`)
+    guestShareId = data.share.id
   })
 
   await test('GET /guest - 访客用户列表', async () => {
@@ -825,13 +829,39 @@ async function testGuest() {
     assert(data.users.some((u: any) => u.username === 'testuser'), '未找到 testuser')
   })
 
-  await test('GET /guest/testuser/list - 访客分享列表', async () => {
+  await test('GET /guest/testuser/list - 访客分享列表（含权限）', async () => {
     const { status, data } = await api('GET', '/guest/testuser/list')
     assert(status === 200, `状态码 ${status}`)
     assert(data.shares && Array.isArray(data.shares), '返回非数组')
     assert(data.shares.length > 0, '分享列表为空')
-    console.log(yellow(`  访客分享: ${data.shares.length} 个`))
+    assert(data.shares[0].permissions, '缺少 permissions 字段')
+    console.log(yellow(`  访客分享: ${data.shares.length} 个, 权限: ${data.shares[0].permissions}`))
   })
+
+  await test('PUT /user/guest-shares/:id - 更新访客分享权限', async () => {
+    const { status, data } = await api('PUT', `/user/guest-shares/${guestShareId}`, {
+      permissions: 'preview'
+    }, auth(userToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.share.permissions === 'preview', `权限未更新: ${data.share.permissions}`)
+  })
+
+  await test('GET /guest/testuser/list - 验证权限已更新', async () => {
+    const { status, data } = await api('GET', '/guest/testuser/list')
+    assert(status === 200, `状态码 ${status}`)
+    const share = data.shares.find((s: any) => s.id === guestShareId)
+    assert(share, '未找到分享')
+    assert(share.permissions === 'preview', `权限不匹配: ${share.permissions}`)
+  })
+
+  // 测试无 download 权限时下载应 403
+  await test('GET /guest/:username/:shareId/download - 无下载权限应 403', async () => {
+    const { status } = await rawApi('GET', `${BASE}/guest/testuser/${guestShareId}/download?path=test.txt`)
+    assert(status === 403, `状态码 ${status}`)
+  })
+
+  // 恢复 download 权限用于后续测试
+  await api('PUT', `/user/guest-shares/${guestShareId}`, { permissions: 'preview,download' }, auth(userToken))
 
   // 清理访客分享
   await test('DELETE /user/guest-shares - 清理访客分享', async () => {

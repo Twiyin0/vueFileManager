@@ -177,6 +177,25 @@
 - 路由：`/guest`（用户列表）、`/guest/:username`（文件夹列表）、`/guest/:username/:shareId`（文件浏览）
 - 访客页左上角使用 `logo.svg`（34×34px），与用户界面一致
 
+### 访客权限系统
+
+`guest_shares` 表有 `permissions` 字段（TEXT，逗号分隔），控制访客可执行的操作：
+
+| 权限 | 说明 | API 路由 |
+|------|------|----------|
+| `preview` | 预览文件 | `GET /api/guest/:username/:shareId/preview` |
+| `download` | 下载文件 | `GET /api/guest/:username/:shareId/download` |
+| `upload` | 上传文件 | `POST /api/guest/:username/:shareId/upload` |
+| `delete` | 删除文件 | （预留，暂未实现路由） |
+
+默认权限：`preview,download`（只读）。创建/编辑分享时可自定义。
+
+前端实现：
+- `Guest.vue`：根据权限显示/隐藏预览、下载、上传功能
+- `ContextMenu.vue`：`readOnly` 模式 + `allowedActions` prop 控制菜单项
+- `GuestShareDialog.vue`：创建/编辑分享时的权限复选框
+- `FilePreview.vue`：`guestBaseUrl` prop 支持访客预览 URL
+
 ## 用户封禁系统
 
 用户封禁字段 `users.banned`（INTEGER, 0/1），需在 **3 个认证入口** 同时检查：

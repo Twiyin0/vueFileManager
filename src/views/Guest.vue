@@ -5,6 +5,8 @@ import { api } from '@/api'
 import { FileItem } from '@/stores/files'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import FileList from '@/components/FileList.vue'
+import FilePreview from '@/components/FilePreview.vue'
+import ContextMenu from '@/components/ContextMenu.vue'
 import Icon from '@/components/Icon.vue'
 
 const route = useRoute()
@@ -18,6 +20,26 @@ const shares = ref<any[]>([])
 const shareLabel = ref('')
 const loadingShares = ref(false)
 
+// 预览
+const showPreview = ref(false)
+const fileToPreview = ref<FileItem | null>(null)
+
+// 视图模式
+const viewMode = ref<'list' | 'grid'>((localStorage.getItem('guestViewMode') as 'list' | 'grid') || 'list')
+watch(viewMode, (v) => localStorage.setItem('guestViewMode', v))
+
+// 右键菜单
+const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
+
+// 权限
+const sharePermissions = ref<string>('')
+
+// 上传
+const showUpload = ref(false)
+const uploadFile = ref<File | null>(null)
+const uploading = ref(false)
+const uploadError = ref('')
+
 const username = computed(() => route.params.username as string)
 const shareId = computed(() => route.params.shareId as string)
 const currentPath = computed(() => (route.query.path as string) || '')
@@ -28,6 +50,22 @@ const pathSegments = computed(() => {
 })
 
 const isFolderView = computed(() => !!shareId.value)
+
+const hasPermission = (action: string) => sharePermissions.value.split(',').map(s => s.trim()).includes(action)
+
+const guestBaseUrl = computed(() => {
+  if (!shareId.value) return undefined
+  return `/api/guest/${username.value}/${shareId.value}/preview`
+})
+
+const allowedContextMenuActions = computed(() => {
+  const actions: string[] = []
+  if (hasPermission('preview')) actions.push('preview')
+  if (hasPermission('download')) actions.push('download')
+  if (hasPermission('delete')) actions.push('delete')
+  actions.push('info')
+  return actions
+})
 
 async function fetchShares() {
   loadingShares.value = true
@@ -54,12 +92,13 @@ async function fetchFiles() {
     const params = new URLSearchParams()
     if (currentPath.value) params.set('path', currentPath.value)
     const query = params.toString() ? `?${params}` : ''
-    const res = await api.get<{ files: FileItem[]; owner: string; shareLabel: string }>(
+    const res = await api.get<{ files: FileItem[]; owner: string; shareLabel: string; permissions: string }>(
       `/guest/${username.value}/${shareId.value}/list${query}`
     )
     files.value = res.files
     owner.value = res.owner
     shareLabel.value = res.shareLabel
+    sharePermissions.value = res.permissions || ''
   } catch (err: any) {
     error.value = err.message
     files.value = []
@@ -105,6 +144,9 @@ function goBackToShares() {
 function openFile(file: FileItem) {
   if (file.type === 'folder') {
     navigateToPath(file.path)
+  } else if (hasPermission('preview')) {
+    fileToPreview.value = file
+    showPreview.value = true
   }
 }
 
@@ -115,11 +157,9 @@ function goUp() {
 }
 
 async function handleDownload(file: FileItem) {
-  const token = localStorage.getItem('token')
+  if (!hasPermission('download')) return
   const url = `/api/guest/${username.value}/${shareId.value}/download?path=${encodeURIComponent(file.path)}`
-  const response = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  })
+  const response = await fetch(url)
   if (!response.ok) throw new Error('下载失败')
   const blob = await response.blob()
   const a = document.createElement('a')
@@ -129,8 +169,75 @@ async function handleDownload(file: FileItem) {
   URL.revokeObjectURL(a.href)
 }
 
+// 右键菜单
+function handleContextMenu(e: MouseEvent, file?: FileItem) {
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, item: file || null }
+}
+
+function handleContextAction(action: string, item?: any) {
+  switch (action) {
+    case 'preview':
+      if (item) { fileToPreview.value = item; showPreview.value = true }
+      break
+    case 'download':
+      if (item) handleDownload(item)
+      break
+    case 'open':
+      if (item) navigateToPath(item.path)
+      break
+    case 'info':
+      // 详情面板可后续扩展
+      break
+    case 'delete':
+      // 删除功能可后续扩展
+      break
+  }
+}
+
+// 上传
+function triggerUpload() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.onchange = (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    if (file) handleUpload(file)
+  }
+  input.click()
+}
+
+async function handleUpload(file: File) {
+  uploading.value = true
+  uploadError.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (currentPath.value) formData.append('dirPath', currentPath.value)
+
+    const res = await fetch(`/api/guest/${username.value}/${shareId.value}/upload`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || '上传失败')
+    }
+    await fetchFiles()
+  } catch (err: any) {
+    uploadError.value = err.message
+  } finally {
+    uploading.value = false
+  }
+}
+
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('zh-CN') + ' ' + new Date(dateStr).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+const permLabels: Record<string, string> = {
+  preview: '预览',
+  download: '下载',
+  upload: '上传',
+  delete: '删除'
 }
 </script>
 
@@ -157,7 +264,7 @@ function formatDate(dateStr: string): string {
             {{ owner }} 的公开文件
           </h1>
           <p class="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
-            访客模式 · 只读访问
+            访客模式
           </p>
         </div>
 
@@ -199,6 +306,14 @@ function formatDate(dateStr: string): string {
                 <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
                   {{ share.pool_name }} · {{ formatDate(share.created_at) }}
                 </p>
+                <!-- 权限标签 -->
+                <div v-if="share.permissions" class="flex gap-1 mt-1.5 flex-wrap">
+                  <span v-for="p in share.permissions.split(',')" :key="p"
+                    class="px-1.5 py-0.5 text-xs rounded"
+                    style="background-color: var(--accent-soft-color); color: var(--accent-color)">
+                    {{ permLabels[p.trim()] || p.trim() }}
+                  </span>
+                </div>
               </div>
               <Icon name="chevron-right" class="w-5 h-5 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors flex-shrink-0" />
             </div>
@@ -207,32 +322,78 @@ function formatDate(dateStr: string): string {
 
         <!-- 文件浏览视图（有 shareId） -->
         <template v-else>
-          <!-- 返回文件夹列表 + 路径导航 -->
-          <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
-            <button
-              @click="goBackToShares()"
-              class="px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-              style="color: var(--accent-color)"
-            >
-              {{ shareLabel || '返回文件夹列表' }}
-            </button>
-            <template v-for="(segment, index) in pathSegments" :key="index">
-              <Icon name="chevron-right" class="w-4 h-4 text-gray-400 dark:text-dark-text-secondary" />
+          <!-- 返回文件夹列表 + 路径导航 + 视图切换 -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-1.5 text-sm flex-wrap">
               <button
-                @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'))"
+                @click="goBackToShares()"
                 class="px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                :class="index === pathSegments.length - 1 ? 'dark:text-dark-text text-light-text font-medium' : 'text-blue-500 dark:text-blue-400'"
+                style="color: var(--accent-color)"
               >
-                {{ segment }}
+                {{ shareLabel || '返回文件夹列表' }}
               </button>
-            </template>
+              <template v-for="(segment, index) in pathSegments" :key="index">
+                <Icon name="chevron-right" class="w-4 h-4 text-gray-400 dark:text-dark-text-secondary" />
+                <button
+                  @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'))"
+                  class="px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                  :class="index === pathSegments.length - 1 ? 'dark:text-dark-text text-light-text font-medium' : 'text-blue-500 dark:text-blue-400'"
+                >
+                  {{ segment }}
+                </button>
+              </template>
+            </div>
+
+            <!-- 工具栏 -->
+            <div class="flex items-center gap-1.5">
+              <!-- 上传按钮 -->
+              <button
+                v-if="hasPermission('upload')"
+                @click="triggerUpload"
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                title="上传文件"
+                :disabled="uploading"
+              >
+                <Icon v-if="uploading" name="loader" class="w-4 h-4 animate-spin" style="color: var(--text-secondary-color)" />
+                <Icon v-else name="upload" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              </button>
+
+              <!-- 返回上级 -->
+              <button
+                v-if="currentPath"
+                @click="goUp"
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                title="上级目录"
+              >
+                <Icon name="arrow-up" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              </button>
+
+              <!-- 刷新 -->
+              <button
+                @click="fetchFiles"
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                title="刷新"
+              >
+                <Icon name="refresh-cw" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              </button>
+
+              <!-- 视图切换 -->
+              <div class="flex border rounded-md overflow-hidden" style="border-color: var(--border-color)">
+                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :style="viewMode === 'list' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'">
+                  <Icon name="list" class="w-4 h-4" />
+                </button>
+                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :style="viewMode === 'grid' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'">
+                  <Icon name="grid" class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <!-- 返回上级 -->
-          <div v-if="currentPath" class="mb-3">
-            <button @click="goUp" class="btn-secondary text-sm flex items-center gap-1">
-              <Icon name="arrow-up" class="w-4 h-4" />
-              上级
+          <!-- 上传错误提示 -->
+          <div v-if="uploadError" class="mb-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
+            <span>{{ uploadError }}</span>
+            <button @click="uploadError = ''" class="text-red-400 hover:text-red-600">
+              <Icon name="x" class="w-4 h-4" />
             </button>
           </div>
 
@@ -241,11 +402,36 @@ function formatDate(dateStr: string): string {
             :files="files"
             :loading="loading"
             :show-actions="false"
+            :view-mode="viewMode"
             @open="openFile"
             @download="handleDownload"
+            @contextmenu="handleContextMenu"
           />
         </template>
       </div>
     </main>
+
+    <!-- 右键菜单 -->
+    <ContextMenu
+      :visible="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :item="contextMenu.item"
+      :read-only="true"
+      :allowed-actions="allowedContextMenuActions"
+      @close="contextMenu.visible = false"
+      @action="handleContextAction"
+    />
+
+    <!-- 文件预览 -->
+    <FilePreview
+      v-if="fileToPreview"
+      :show="showPreview"
+      :file-path="fileToPreview.path"
+      :file-name="fileToPreview.name"
+      :guest-base-url="guestBaseUrl"
+      :file-list="files"
+      @close="showPreview = false; fileToPreview = null"
+    />
   </div>
 </template>

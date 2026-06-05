@@ -247,7 +247,7 @@ vueFileManager/
 ├── public/
 │   └── icon/iconlib/          # 图标库（1702 个 stroke 风格 SVG）
 ├── test/                       # 测试
-│   ├── workflows.ts          # API 全流程测试（118 项）
+│   ├── workflows.ts          # API 全流程测试（121 项）
 │   └── upyun.ts              # Upyun 存储测试
 └── API.md                      # API 文档
 ```
@@ -265,7 +265,7 @@ npx tsx test/workflows.ts
 npx tsx test/upyun.ts
 ```
 
-测试覆盖（118 项）：
+测试覆盖（121 项）：
 - ✅ 认证 API（注册/登录/用户信息/Token校验）
 - ✅ 存储池 API（CRUD/切换默认/连接测试）
 - ✅ 文件 API（列表/创建/重命名/移动/复制/搜索/批量删除/回收站删除/永久删除）
@@ -277,7 +277,7 @@ npx tsx test/upyun.ts
 - ✅ 匿名公网访问 API（路径越权防护）
 - ✅ API Key API（创建/列表/认证/删除）
 - ✅ 用户设置 API（获取/更新/恢复默认）
-- ✅ 访客 API（用户列表/分享列表/文件列表）
+- ✅ 访客 API（用户列表/分享列表/权限配置/权限更新/下载权限检查）
 - ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制/管理员保护）
 - ✅ 封禁用户 API Key 验证（403 拒绝）
 - ✅ IP 黑名单/白名单（CRUD/模式切换/白名单默认IP/127.0.0.1保护）
@@ -348,11 +348,14 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 分享 | `GET /api/share/download/:code` | 下载分享文件（需签名） |
 | 分享 | `GET /api/share/preview/:code` | 预览分享文件（需签名） |
 | 公开 | `GET /f/:username/*` | 匿名访问文件 |
+| 访客 | `GET /api/guest/:username/:shareId/preview` | 访客预览文件 |
+| 访客 | `POST /api/guest/:username/:shareId/upload` | 访客上传文件 |
 | 用户 | `GET /api/user/info` | 用户完整信息（含存储池和统计） |
 | 用户 | `GET /api/user/settings` | 获取设置 |
 | 用户 | `PUT /api/user/settings` | 更新设置 |
 | 用户 | `GET /api/user/guest-shares` | 访客分享列表 |
 | 用户 | `POST /api/user/guest-shares` | 创建访客分享 |
+| 用户 | `PUT /api/user/guest-shares/:id` | 更新访客分享（权限/标签） |
 | 用户 | `DELETE /api/user/guest-shares/:id` | 删除访客分享 |
 | 用户 | `GET /api/user/apikeys` | API Key 列表 |
 | 用户 | `POST /api/user/apikeys` | 创建 API Key |

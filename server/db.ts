@@ -383,6 +383,20 @@ function migrateIpListConfig() {
 }
 migrateIpListConfig()
 
+// 迁移：给 guest_shares 表加 permissions 列
+function migrateGuestSharePermissions() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(guest_shares)").all() as any[]
+    if (!cols.some((c: any) => c.name === 'permissions')) {
+      db.exec("ALTER TABLE guest_shares ADD COLUMN permissions TEXT DEFAULT 'preview,download'")
+      console.log('✅ 已添加 guest_shares.permissions 字段')
+    }
+  } catch (err) {
+    console.error('⚠️ guest_shares.permissions 迁移失败:', err)
+  }
+}
+migrateGuestSharePermissions()
+
 // 如果没有管理员用户，创建默认管理员
 const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin')
 if (!adminExists) {

@@ -18,6 +18,8 @@ const props = defineProps<{
   token?: string
   /** All files in the current directory (for image gallery prev/next navigation) */
   fileList?: { path: string; name: string; poolId?: number }[]
+  /** Guest preview base URL (e.g. /api/guest/:username/:shareId/preview) */
+  guestBaseUrl?: string
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +30,9 @@ const emit = defineEmits<{
 const previewUrl = computed(() => {
   if (!props.filePath) return ''
   if (props.filePath.startsWith('/api/')) return props.filePath
+  if (props.guestBaseUrl) {
+    return `${props.guestBaseUrl}?path=${encodeURIComponent(props.filePath)}`
+  }
   const base = '/api/files/preview'
   const params = new URLSearchParams({ path: props.filePath })
   if (props.poolId) params.set('poolId', String(props.poolId))
@@ -39,6 +44,9 @@ const previewUrl = computed(() => {
 /** Generate preview URL for any file path (used for gallery images) */
 function getImagePreviewUrl(file: { path: string; poolId?: number }): string {
   if (file.path.startsWith('/api/')) return file.path
+  if (props.guestBaseUrl) {
+    return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
+  }
   const base = '/api/files/preview'
   const params = new URLSearchParams({ path: file.path })
   const pid = file.poolId || props.poolId
