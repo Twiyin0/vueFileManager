@@ -711,31 +711,25 @@ router.post('/download-zip', flexibleAuth, requirePermission('read'), async (req
 
     const storage = getStorageForRequest(req)
 
-    // 动态导入archiver
-    let archiver: any
-    try {
-      archiver = (await import('archiver')).default
-    } catch {
-      return res.status(500).json({ error: '服务器未安装archiver模块，请运行: npm install archiver' })
-    }
-
-    res.setHeader('Content-Type', 'application/zip')
-    res.setHeader('Content-Disposition', 'attachment; filename="download.zip"')
-
-    const archive = archiver('zip', { zlib: { level: 9 } })
-    archive.pipe(res)
+    const JSZip = (await import('jszip')).default
+    const zip = new JSZip()
 
     for (const filePath of paths) {
       try {
         const data = await storage.download(filePath)
         const fileName = filePath.split('/').pop() || 'file'
-        archive.append(data, { name: fileName })
+        zip.file(fileName, data)
       } catch {
         // 跳过无法下载的文件
       }
     }
 
-    await archive.finalize()
+    const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } })
+
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', 'attachment; filename="download.zip"')
+    res.setHeader('Content-Length', buffer.length)
+    res.send(buffer)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
