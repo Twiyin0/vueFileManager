@@ -809,7 +809,7 @@ async function testGuest() {
   await api('PUT', '/user/settings', { guestEnabled: true }, auth(userToken))
 
   // 创建访客分享（带权限）
-  let guestShareId: number
+  let guestShareId = 0
   await test('POST /user/guest-shares - 创建访客分享（带权限）', async () => {
     const { status, data } = await api('POST', '/user/guest-shares', {
       folderPath: '/',

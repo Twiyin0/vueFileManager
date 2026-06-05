@@ -234,7 +234,8 @@ const monacoLanguage = computed(() => {
 
 async function loadTextContent() {
   try {
-    const resp = await fetch(previewUrl.value)
+    const url = previewUrl.value + (previewUrl.value.includes('?') ? '&' : '?') + '_t=' + Date.now()
+    const resp = await fetch(url, { cache: 'no-store' })
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     textContent.value = await resp.text()
   } catch { textContent.value = '// Failed to load file content' }
@@ -420,7 +421,8 @@ onMounted(() => {
 
 watch([() => props.show, () => props.filePath], async ([show, filePath], [oldShow, oldFilePath]) => {
   if (show) {
-    if (oldShow && filePath !== oldFilePath) { destroyPlayers(); showVideo.value = false; await nextTick() }
+    // Always destroy previous state when opening to ensure fresh content
+    if (oldShow) { destroyPlayers(); showVideo.value = false; await nextTick() }
     if (fileType.value === 'video') { showVideo.value = true; await nextTick(); await nextTick() }
     else showVideo.value = false
     await nextTick()

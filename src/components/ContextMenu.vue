@@ -100,6 +100,11 @@ onUnmounted(() => {
           class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
           <Icon name="trash" class="w-4 h-4" /> 删除
         </button>
+        <div class="border-t dark:border-dark-border border-light-border my-1"></div>
+        <button @click="handleAction('refresh')"
+          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+          <Icon name="refresh-cw" class="w-4 h-4" /> 刷新
+        </button>
       </template>
 
       <!-- 批量操作 -->
@@ -126,8 +131,14 @@ onUnmounted(() => {
         </button>
       </template>
 
-      <!-- 空白区域（readOnly 模式下隐藏） -->
-      <template v-else-if="!readOnly">
+      <!-- 空白区域（readOnly 模式下只显示刷新） -->
+      <template v-else-if="readOnly">
+        <button @click="handleAction('refresh')"
+          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+          <Icon name="refresh-cw" class="w-4 h-4" /> 刷新
+        </button>
+      </template>
+      <template v-else>
         <button @click="handleAction('new-folder')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="folder" class="w-4 h-4 text-blue-500" /> 新建文件夹

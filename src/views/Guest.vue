@@ -7,6 +7,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue'
 import FileList from '@/components/FileList.vue'
 import FilePreview from '@/components/FilePreview.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
+import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import Icon from '@/components/Icon.vue'
 
 const route = useRoute()
@@ -30,6 +31,10 @@ watch(viewMode, (v) => localStorage.setItem('guestViewMode', v))
 
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
+
+// 文件详情面板
+const showDetailPanel = ref(false)
+const detailItem = ref<any>(null)
 
 // 权限
 const sharePermissions = ref<string>('')
@@ -191,7 +196,7 @@ function handleContextAction(action: string, item?: any) {
       if (item) navigateToPath(item.path)
       break
     case 'info':
-      // 详情面板可后续扩展
+      if (item) { detailItem.value = item; showDetailPanel.value = true }
       break
     case 'delete':
       // 删除功能可后续扩展
@@ -339,11 +344,11 @@ const permLabels: Record<string, string> = {
                 {{ shareLabel || '返回文件夹列表' }}
               </button>
               <template v-for="(segment, index) in pathSegments" :key="index">
-                <Icon name="chevron-right" class="w-4 h-4 text-gray-400 dark:text-dark-text-secondary" />
+                <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
                 <button
                   @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'))"
                   class="px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                  :class="index === pathSegments.length - 1 ? 'dark:text-dark-text text-light-text font-medium' : 'text-blue-500 dark:text-blue-400'"
+                  :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }"
                 >
                   {{ segment }}
                 </button>
@@ -441,6 +446,13 @@ const permLabels: Record<string, string> = {
       :editable="hasPermission('edit')"
       :file-list="files"
       @close="showPreview = false; fileToPreview = null"
+    />
+
+    <!-- 文件详情面板 -->
+    <FileDetailPanel
+      :visible="showDetailPanel"
+      :item="detailItem"
+      @close="showDetailPanel = false"
     />
   </div>
 </template>

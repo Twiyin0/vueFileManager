@@ -644,21 +644,21 @@ function formatSize(bytes: number) {
             <!-- 面包屑导航 -->
             <div class="flex items-center gap-1.5 text-sm flex-wrap">
               <button @click="goBackToPools"
-                class="px-2 py-1 rounded-md transition-colors"
+                class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
                 :style="{ color: currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId ? 'normal' : '500' }">
                 全部存储池
               </button>
               <template v-if="currentPoolId">
                 <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
                 <button @click="navigateToPath('', currentPoolId)"
-                  class="px-2 py-1 rounded-md transition-colors"
+                  class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
                   :style="{ color: currentPath ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPath ? 'normal' : '500' }">
                   {{ currentPoolName }}
                 </button>
                 <template v-for="(segment, index) in pathSegments" :key="index">
                   <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
                   <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'), currentPoolId)"
-                    class="px-2 py-1 rounded-md transition-colors"
+                    class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
                     :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }">
                     {{ segment }}
                   </button>
@@ -668,6 +668,12 @@ function formatSize(bytes: number) {
 
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2 flex-wrap">
+              <!-- 刷新 -->
+              <button @click="filesStore.fetchFiles(currentPath, currentPoolId)"
+                class="btn-secondary text-sm flex items-center gap-1" title="刷新">
+                <Icon name="refresh-cw" class="w-4 h-4" />
+              </button>
+
               <!-- Spotlight搜索触发 -->
               <button @click="triggerSpotlight"
                 class="btn-secondary text-sm flex items-center gap-1" title="Ctrl+K 搜索">

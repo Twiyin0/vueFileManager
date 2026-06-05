@@ -44,7 +44,7 @@ watch(() => props.editShare, (share) => {
 watch(() => props.show, (val) => {
   if (val && !props.editShare) {
     label.value = props.folderName || ''
-    perms.value = { preview: true, download: true, upload: false, delete: false }
+    perms.value = { preview: true, download: true, upload: false, delete: false, edit: false }
   }
   if (val) error.value = ''
 })

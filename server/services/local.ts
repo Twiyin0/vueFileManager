@@ -35,7 +35,7 @@ export class LocalStorage implements StorageProvider {
           type: entry.isDirectory() ? 'folder' : 'file',
           size: stat.size,
           modified: stat.mtime.toISOString(),
-          path: path.join(prefix || '', entry.name)
+          path: path.join(prefix || '', entry.name).replace(/\\/g, '/')
         })
       }
 
