@@ -16,6 +16,7 @@ import SpotlightSearch from '@/components/SpotlightSearch.vue'
 import GuestShareDialog from '@/components/GuestShareDialog.vue'
 import Toast from '@/components/Toast.vue'
 import MoveDialog from '@/components/MoveDialog.vue'
+import Icon from '@/components/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -557,6 +558,10 @@ function handleContextAction(action: string, item?: any) {
 }
 
 // Spotlight搜索导航
+function triggerSpotlight() {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
+}
+
 function handleSpotlightNavigate(path: string, poolId?: number) {
   navigateToPath(path, poolId || currentPoolId.value)
 }
@@ -611,9 +616,7 @@ function formatSize(bytes: number) {
             style="color: var(--text-secondary-color)"
             :title="folderTreeCollapsed ? '展开目录' : '收缩目录'"
           >
-            <svg class="w-4 h-4 transition-transform duration-300" :class="folderTreeCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-            </svg>
+            <Icon name="chevron-left" class="w-4 h-4 transition-transform duration-300" :class="folderTreeCollapsed ? 'rotate-180' : ''" />
           </button>
         </div>
         <!-- 收起态：只显示文件夹图标提示 -->
@@ -624,9 +627,7 @@ function formatSize(bytes: number) {
             style="color: var(--text-secondary-color)"
             title="展开目录"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-            </svg>
+            <Icon name="folder" class="w-5 h-5" />
           </button>
         </div>
         <!-- 展开态：完整目录树 -->
@@ -648,18 +649,14 @@ function formatSize(bytes: number) {
                 全部存储池
               </button>
               <template v-if="currentPoolId">
-                <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
+                <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
                 <button @click="navigateToPath('', currentPoolId)"
                   class="px-2 py-1 rounded-md transition-colors"
                   :style="{ color: currentPath ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPath ? 'normal' : '500' }">
                   {{ currentPoolName }}
                 </button>
                 <template v-for="(segment, index) in pathSegments" :key="index">
-                  <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                  </svg>
+                  <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
                   <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'), currentPoolId)"
                     class="px-2 py-1 rounded-md transition-colors"
                     :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }">
@@ -672,18 +669,14 @@ function formatSize(bytes: number) {
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2 flex-wrap">
               <!-- Spotlight搜索触发 -->
-              <button @click="$el.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))"
+              <button @click="triggerSpotlight"
                 class="btn-secondary text-sm flex items-center gap-1" title="Ctrl+K 搜索">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
+                <Icon name="search" class="w-4 h-4" />
                 搜索
               </button>
 
               <button v-if="currentPath || currentPoolId" @click="goUp" class="btn-secondary text-sm flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-                </svg>
+                <Icon name="arrow-up" class="w-4 h-4" />
                 上级
               </button>
 
@@ -691,42 +684,33 @@ function formatSize(bytes: number) {
               <div class="flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
                 <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :style="viewMode === 'list' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'"
                   title="列表模式">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                  </svg>
+                  <Icon name="list" class="w-4 h-4" />
                 </button>
                 <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :style="viewMode === 'grid' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'"
                   title="图片模式">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
-                  </svg>
+                  <Icon name="grid" class="w-4 h-4" />
                 </button>
               </div>
 
               <!-- 批量选择模式 -->
               <button @click="toggleSelectMode"
                 :class="isSelectMode ? 'btn-primary' : 'btn-secondary'" class="text-sm flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                </svg>
+                <Icon name="check" class="w-4 h-4" />
                 {{ isSelectMode ? '退出选择' : '多选' }}
               </button>
 
               <button @click="showCreateFolder = true" class="btn-secondary text-sm flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                </svg>
+                <Icon name="folder-plus" class="w-4 h-4" />
                 新建
               </button>
 
               <button @click="showRemoteUpload = true" class="btn-secondary text-sm flex items-center gap-1" title="远程URL上传">
-                🌐 远程上传
+                <Icon name="network-wired" class="w-4 h-4" />
+                远程上传
               </button>
 
               <button @click="showUpload = true" class="btn-primary text-sm flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                </svg>
+                <Icon name="upload" class="w-4 h-4" />
                 上传
               </button>
             </div>
@@ -742,13 +726,13 @@ function formatSize(bytes: number) {
             </div>
             <div class="flex items-center gap-2">
               <button v-if="selectedFiles.size > 0" @click="() => { const allFiles = showSearch ? searchResults : filesStore.files; handleCopy(Array.from(selectedFiles).map(p => { const f = allFiles.find((file: FileItem) => file.path === p); return { path: p, name: f?.name, poolId: currentPoolId } })) }"
-                class="btn-secondary text-sm px-3 py-1.5">📋 复制</button>
+                class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="clipboard" class="w-4 h-4" /> 复制</button>
               <button v-if="selectedFiles.size > 0" @click="() => { const allFiles = showSearch ? searchResults : filesStore.files; handleMove(Array.from(selectedFiles).map(p => { const f = allFiles.find((file: FileItem) => file.path === p); return { path: p, name: f?.name, poolId: currentPoolId } })) }"
-                class="btn-secondary text-sm px-3 py-1.5">📦 移动</button>
+                class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 移动</button>
               <button v-if="selectedFiles.size > 0" @click="handleBatchDownload"
-                class="btn-secondary text-sm px-3 py-1.5">📦 打包下载</button>
+                class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="download" class="w-4 h-4" /> 打包下载</button>
               <button v-if="selectedFiles.size > 0" @click="handleBatchDelete"
-                class="btn-danger text-sm px-3 py-1.5">🗑️ 批量删除</button>
+                class="btn-danger text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="trash" class="w-4 h-4" /> 批量删除</button>
             </div>
           </div>
 
@@ -840,7 +824,7 @@ function formatSize(bytes: number) {
     <!-- 远程上传对话框 -->
     <Teleport to="body">
       <div v-if="showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/40" @click="showRemoteUpload = false"/>
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRemoteUpload = false"/>
         <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">远程URL上传</h3>
           <input v-model="remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
@@ -857,7 +841,7 @@ function formatSize(bytes: number) {
     <!-- 新建文件夹对话框 -->
     <Teleport to="body">
       <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/40" @click="showCreateFolder = false"/>
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">新建文件夹</h3>
           <input v-model="newFolderName" type="text" class="input-field mb-4" placeholder="文件夹名称" @keyup.enter="handleCreateFolder" />
@@ -872,7 +856,7 @@ function formatSize(bytes: number) {
     <!-- 重命名对话框 -->
     <Teleport to="body">
       <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/40" @click="showRename = false"/>
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">重命名</h3>
           <input v-model="newFileName" type="text" class="input-field mb-4" placeholder="新名称" @keyup.enter="handleRename" />
@@ -899,7 +883,7 @@ function formatSize(bytes: number) {
     <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" :pool-id="fileToPreview.poolId || currentPoolId" :file-list="filesStore.files" @close="showPreview = false; fileToPreview = null" />
 
     <!-- 分享对话框 -->
-    <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" @close="showShare = false" />
+    <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" :pool-id="fileToShare.poolId || currentPoolId" @close="showShare = false" />
 
     <!-- 访客分享对话框 -->
     <GuestShareDialog

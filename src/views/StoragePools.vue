@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import Layout from '@/components/Layout.vue'
+import Icon from '@/components/Icon.vue'
 
 interface StoragePool {
   id: number
@@ -164,8 +165,8 @@ async function testConnection(pool: StoragePool) {
   }
 }
 
-function getStorageIcon(type: string) {
-  return type === 'local' ? '💾' : '☁️'
+function getStorageIconName(type: string) {
+  return type === 'local' ? 'hard-drive' : 'cloud'
 }
 
 function getStorageLabel(type: string) {
@@ -179,9 +180,7 @@ function getStorageLabel(type: string) {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">存储池管理</h1>
         <button @click="openAddDialog" class="btn-primary flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
+          <Icon name="plus" class="w-5 h-5" />
           添加存储池
         </button>
       </div>
@@ -210,7 +209,7 @@ function getStorageLabel(type: string) {
           :class="pool.isDefault ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''"
         >
           <div class="flex items-center gap-4">
-            <div class="text-3xl">{{ getStorageIcon(pool.storageType) }}</div>
+            <Icon :name="getStorageIconName(pool.storageType)" class="w-8 h-8 text-blue-500" />
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="font-semibold dark:text-dark-text text-light-text">{{ pool.name }}</h3>
@@ -271,7 +270,7 @@ function getStorageLabel(type: string) {
 
       <!-- 空状态 -->
       <div v-else class="text-center py-20">
-        <div class="text-6xl mb-4">📦</div>
+        <Icon name="container-storage" class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
         <h3 class="text-lg font-semibold dark:text-dark-text text-light-text mb-2">还没有存储池</h3>
         <p class="text-gray-500 dark:text-dark-text-secondary mb-4">添加存储池来管理您的文件存储</p>
         <button @click="openAddDialog" class="btn-primary">添加第一个存储池</button>
@@ -279,7 +278,7 @@ function getStorageLabel(type: string) {
 
       <!-- 添加/编辑对话框 -->
       <div v-if="showAddDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" style="background-color: var(--card-color)">
+        <div class="card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto shadow-xl">
           <div class="p-6">
             <h2 class="text-xl font-bold mb-4 dark:text-dark-text text-light-text">
               {{ editingPool ? '编辑存储池' : '添加存储池' }}
@@ -307,7 +306,7 @@ function getStorageLabel(type: string) {
                     <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
                       :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
                     >
-                      <span class="text-2xl">💾</span>
+                      <Icon name="hard-drive" class="w-7 h-7 mx-auto text-blue-500" />
                       <p class="text-sm mt-1 dark:text-dark-text text-light-text">本地存储</p>
                     </div>
                   </label>
@@ -322,7 +321,7 @@ function getStorageLabel(type: string) {
                     <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
                       :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
                     >
-                      <span class="text-2xl">☁️</span>
+                      <Icon name="cloud" class="w-7 h-7 mx-auto text-blue-500" />
                       <p class="text-sm mt-1 dark:text-dark-text text-light-text">又拍云</p>
                     </div>
                   </label>

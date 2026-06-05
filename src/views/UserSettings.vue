@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore, ThemeMode } from '@/stores/theme'
 import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import Icon from '@/components/Icon.vue'
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
@@ -129,9 +130,9 @@ function formatDate(dateStr: string): string {
           <div class="flex gap-3">
             <label
               v-for="option in [
-                { value: 'light', label: '亮色', icon: '☀️' },
-                { value: 'dark', label: '暗色', icon: '🌙' },
-                { value: 'system', label: '跟随系统', icon: '💻' }
+                { value: 'light', label: '亮色', icon: 'sun' },
+                { value: 'dark', label: '暗色', icon: 'moon' },
+                { value: 'system', label: '跟随系统', icon: 'monitor' }
               ]"
               :key="option.value"
               class="flex-1 cursor-pointer"
@@ -143,7 +144,7 @@ function formatDate(dateStr: string): string {
                 class="hidden peer"
               />
               <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border hover:border-blue-300 dark:hover:border-blue-600">
-                <span class="text-2xl">{{ option.icon }}</span>
+                <Icon :name="option.icon" class="w-7 h-7 mx-auto" />
                 <p class="text-sm mt-1 dark:text-dark-text text-light-text">{{ option.label }}</p>
               </div>
             </label>
@@ -157,9 +158,7 @@ function formatDate(dateStr: string): string {
             在存储池管理页面中，您可以添加、编辑和删除多个存储池，支持本地存储和又拍云。
           </p>
           <router-link to="/storage-pools" class="btn-primary inline-flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-            </svg>
+            <Icon name="server" class="w-5 h-5" />
             管理存储池
           </router-link>
         </div>
@@ -193,9 +192,7 @@ function formatDate(dateStr: string): string {
                 style="color: var(--text-color)"
               >
                 <span>分享文件夹 ({{ guestShares.length }})</span>
-                <svg class="w-4 h-4 transition-transform duration-200" :class="showShares ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                </svg>
+                <Icon name="chevron-down" class="w-4 h-4 transition-transform duration-200" :class="showShares ? 'rotate-180' : ''" />
               </button>
 
               <div v-show="showShares">
@@ -235,9 +232,7 @@ function formatDate(dateStr: string): string {
                       class="ml-3 p-1.5 rounded-md transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
                       title="取消分享"
                     >
-                      <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                      </svg>
+                      <Icon name="trash" class="w-4 h-4 text-red-500" />
                     </button>
                   </div>
                 </div>
@@ -273,7 +268,7 @@ function formatDate(dateStr: string): string {
         <div class="flex justify-end">
           <button type="submit" class="btn-primary px-8" :disabled="saving">
             <span v-if="saving" class="flex items-center gap-2">
-              <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <svg class="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
               </svg>

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import { useRouter } from 'vue-router'
 import Layout from '@/components/Layout.vue'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -58,7 +59,7 @@ function formatSize(size: number) {
           class="card flex items-center justify-between p-4 cursor-pointer hover:shadow-md transition-shadow"
           @click="navigateTo(item)">
           <div class="flex items-center gap-3">
-            <span class="text-2xl">{{ item.file_type === 'folder' ? '📁' : '📄' }}</span>
+            <Icon :name="item.file_type === 'folder' ? 'folder' : 'file-alt'" :class="['w-6 h-6', item.file_type === 'folder' ? 'text-blue-500' : 'text-gray-400']" />
             <div>
               <p class="font-medium dark:text-dark-text text-light-text">{{ item.file_name }}</p>
               <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
@@ -66,12 +67,14 @@ function formatSize(size: number) {
               </p>
             </div>
           </div>
-          <button @click.stop="removeFav(item)" class="text-yellow-500 hover:text-yellow-600 text-xl" title="取消收藏">★</button>
+          <button @click.stop="removeFav(item)" class="p-1.5 rounded-md hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="取消收藏">
+            <Icon name="star-sharp" class="w-5 h-5 text-yellow-500" />
+          </button>
         </div>
       </div>
 
       <div v-else class="text-center py-20">
-        <div class="text-6xl mb-4">⭐</div>
+        <Icon name="star-sharp" class="w-16 h-16 mx-auto mb-4 text-yellow-400" />
         <h3 class="text-lg font-semibold dark:text-dark-text text-light-text mb-2">还没有收藏</h3>
         <p class="text-gray-500 dark:text-dark-text-secondary">在文件列表中点击星标添加收藏</p>
       </div>

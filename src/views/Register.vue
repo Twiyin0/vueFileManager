@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -38,9 +39,7 @@ async function handleRegister() {
       <!-- Logo -->
       <div class="flex flex-col items-center mb-8">
         <div class="w-16 h-16 rounded-2xl bg-blue-500 flex items-center justify-center mb-4">
-          <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-          </svg>
+          <Icon name="folder" class="w-10 h-10 text-white" />
         </div>
         <h1 class="text-2xl font-bold" style="color: var(--text-color)">创建账户</h1>
         <p class="text-sm mt-1" style="color: var(--text-secondary-color)">注册 VueFileManager 账户</p>
@@ -92,7 +91,7 @@ async function handleRegister() {
           :disabled="loading"
         >
           <span v-if="loading" class="flex items-center justify-center gap-2">
-            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
             </svg>

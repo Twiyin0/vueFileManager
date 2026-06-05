@@ -74,9 +74,10 @@
 - 🔧 外置硬盘乱码文件名修复（resolvePath 回退, DELETE 走 POST body）
 
 ### 界面
-- 🌙 暗色/亮色/跟随系统主题
+- 🌙 暗色/亮色/跟随系统主题，全局 CSS 变量统一管理
 - 📱 响应式设计
 - 🎨 柔和的暗色模式配色
+- 🎯 统一图标库（1702 个 stroke 风格 SVG），通过 `<Icon>` 组件引入，自动适配暗色模式
 - 📂 侧边栏可收缩（主侧边栏 + 文件夹树）
 - 📜 所有对话框自适应滚动 (max-h-[90vh])，适配各种屏幕分辨率
 - 📏 紧凑标题栏 (py-1.5, 小图标)
@@ -213,6 +214,7 @@ vueFileManager/
 │   ├── stores/               # 状态管理
 │   ├── api/                  # API 封装
 │   ├── components/           # 组件
+│   │   ├── Icon.vue          # 统一图标组件（加载 iconlib SVG）
 │   │   ├── Sidebar.vue       # 侧边栏
 │   │   ├── Layout.vue        # 布局
 │   │   ├── FileList.vue      # 文件列表
@@ -241,6 +243,8 @@ vueFileManager/
 │       ├── Guest.vue         # 访客文件浏览
 │       ├── GuestList.vue     # 访客用户列表
 │       └── Login.vue         # 登录注册
+├── public/
+│   └── icon/iconlib/          # 图标库（1702 个 stroke 风格 SVG）
 ├── test/                       # 测试
 │   ├── workflows.ts          # API 全流程测试（76 项）
 │   └── upyun.ts              # Upyun 存储测试

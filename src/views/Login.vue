@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -68,7 +69,7 @@ async function handleLogin() {
           :disabled="loading"
         >
           <span v-if="loading" class="flex items-center justify-center gap-2">
-            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
             </svg>
@@ -87,9 +88,7 @@ async function handleLogin() {
       <!-- 访客入口 -->
       <div class="mt-4 pt-4 border-t" style="border-color: var(--border-color)">
         <router-link to="/guest" class="flex items-center justify-center gap-2 text-sm hover:text-blue-500" style="color: var(--text-secondary-color)">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
-          </svg>
+          <Icon name="globe" class="w-4 h-4" />
           以访客身份浏览
         </router-link>
       </div>

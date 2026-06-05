@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { api } from '@/api'
 import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import Icon from '@/components/Icon.vue'
 
 interface AdminUser {
   id: number
@@ -223,7 +224,7 @@ function handleConfirm() {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">管理面板</h1>
         <button @click="openCreateDialog" class="btn-primary text-sm flex items-center gap-1.5">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          <Icon name="plus" class="w-4 h-4" />
           创建用户
         </button>
       </div>
@@ -251,9 +252,9 @@ function handleConfirm() {
       <!-- 搜索 -->
       <div class="mb-4">
         <div class="relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <Icon name="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input v-model="search" type="text" placeholder="搜索用户名、IP、角色..."
-            class="w-full pl-10 pr-4 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text dark:placeholder-dark-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+            class="input-field pl-10 text-sm" />
         </div>
       </div>
 
@@ -325,23 +326,23 @@ function handleConfirm() {
             </div>
             <div class="col-span-2 flex items-center justify-end gap-0.5 flex-wrap">
               <button @click="viewDetail(user)" class="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="查看详情">
-                <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                <Icon name="eye" class="w-4 h-4 text-blue-500" />
               </button>
               <button @click="toggleRole(user)" class="p-1.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
                 :title="user.role === 'admin' ? '降级为用户' : '升级为管理员'">
-                <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
+                <Icon name="arrow-up" class="w-4 h-4 text-purple-500" />
               </button>
               <button @click="openResetPwd(user)" class="p-1.5 rounded hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="重置密码">
-                <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                <Icon name="key" class="w-4 h-4 text-yellow-500" />
               </button>
               <button @click="toggleBan(user)" class="p-1.5 rounded transition-colors"
                 :class="user.banned ? 'hover:bg-green-50 dark:hover:bg-green-900/20' : 'hover:bg-orange-50 dark:hover:bg-orange-900/20'"
                 :title="user.banned ? '解封' : '封禁'">
-                <svg v-if="user.banned" class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <svg v-else class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                <Icon v-if="user.banned" name="check" class="w-4 h-4 text-green-500" />
+                <Icon v-else name="ban" class="w-4 h-4 text-orange-500" />
               </button>
               <button @click="confirmDelete(user)" class="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="删除用户">
-                <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                <Icon name="trash" class="w-4 h-4 text-red-500" />
               </button>
             </div>
           </div>
@@ -359,17 +360,17 @@ function handleConfirm() {
             <div>
               <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">用户名</label>
               <input v-model="createForm.username" type="text" placeholder="3-20 个字符"
-                class="w-full px-3 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text dark:placeholder-dark-placeholder focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+                class="input-field" />
             </div>
             <div>
               <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">密码</label>
               <input v-model="createForm.password" type="password" placeholder="至少 6 位"
-                class="w-full px-3 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+                class="input-field" />
             </div>
             <div>
               <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">角色</label>
               <select v-model="createForm.role"
-                class="w-full px-3 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                class="input-field">
                 <option value="user">普通用户</option>
                 <option value="admin">管理员</option>
               </select>
@@ -394,7 +395,7 @@ function handleConfirm() {
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold" style="color: var(--text-color)">用户详情</h3>
             <button @click="showDetailDialog = false" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-hover">
-              <svg class="w-5 h-5" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <Icon name="xmark" class="w-5 h-5" style="color: var(--text-secondary-color)" />
             </button>
           </div>
 
@@ -486,7 +487,7 @@ function handleConfirm() {
               <div v-else class="space-y-2">
                 <div v-for="pool in detailUser.pools" :key="pool.id"
                   class="flex items-center gap-3 p-2 rounded bg-gray-50 dark:bg-dark-hover">
-                  <span class="text-xl">{{ pool.storageType === 'local' ? '💾' : '☁️' }}</span>
+                  <Icon :name="pool.storageType === 'local' ? 'hard-drive' : 'cloud'" class="w-5 h-5 text-blue-500" />
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium truncate" style="color: var(--text-color)">{{ pool.name }}</p>
                     <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
@@ -511,7 +512,7 @@ function handleConfirm() {
           <p class="text-sm mb-4" style="color: var(--text-secondary-color)">为「{{ resetPwdUser?.username }}」设置新密码</p>
           <div>
             <input v-model="resetPwdForm.password" type="password" placeholder="新密码（至少 6 位）"
-              class="w-full px-3 py-2 rounded-lg border dark:border-dark-border border-light-border bg-white dark:bg-dark-surface text-sm dark:text-dark-text text-light-text focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+              class="input-field" />
             <p v-if="resetPwdError" class="text-sm text-red-500 mt-1">{{ resetPwdError }}</p>
           </div>
           <div class="flex justify-end gap-3 mt-5">

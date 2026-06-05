@@ -32,12 +32,53 @@
 
 ### 规则
 
-1. **输入框**：统一使用 `.input-field` 类，已内置暗色 placeholder 样式
-2. **对话框/面板背景**：用 `style="background-color: var(--card-color)"` 或 `.card` 类，不要裸用 `bg-white`
-3. **文本/代码预览**：用 `var(--surface-color)` 而非 `white`
-4. **hover 状态**：必须带 `dark:hover:bg-dark-hover`，不可遗漏
-5. **新增暗色颜色**：必须先在 `main.css` 的 `@theme` 块中定义，再使用
-6. **CSS 变量**：只用上述已定义的变量名，不要自造（如 `--color-light-bg` 不存在）
+1. **输入框**：统一使用 `.input-field` 类，已内置暗色 placeholder、focus 样式。**禁止**手写 `bg-white dark:bg-dark-surface ...` 替代 `.input-field`
+2. **对话框/面板背景**：用 `.card` 类或 `style="background-color: var(--card-color)"`，**禁止**裸用 `bg-white`
+3. **对话框遮罩**：必须带 `dark:bg-black/60`，如 `bg-black/40 dark:bg-black/60`
+4. **文本/代码预览**：用 `var(--surface-color)` 而非 `white`
+5. **hover 状态**：必须带 `dark:hover:bg-dark-hover`，不可遗漏
+6. **加载 spinner**：统一使用 `text-blue-500`（`<svg class="animate-spin h-N w-N text-blue-500" ...>`），不可省略颜色
+7. **新增暗色颜色**：必须先在 `main.css` 的 `@theme` 块中定义，再使用
+8. **CSS 变量**：只用上述已定义的变量名，不要自造（如 `--color-light-bg` 不存在）
+9. **Tailwind 暗色类 vs CSS 变量**：优先用 CSS 变量（`var(--xxx)`），因其同时适配亮/暗。Tailwind `dark:` 类仅用于无法用变量的场景（如 `dark:hover:bg-dark-hover`）
+
+## 图标系统
+
+项目使用统一的图标组件 `src/components/Icon.vue`，图标库位于 `public/icon/iconlib/`（1702 个 stroke 风格 SVG）。
+
+### 使用方式
+
+```vue
+<Icon name="folder" class="w-5 h-5 text-blue-500" />
+```
+
+- `name`：图标文件名（不含 `.svg`），如 `folder`、`trash`、`download`
+- `class`：控制大小和颜色，SVG 内部 `#000000` 会被替换为 `currentColor`
+- 通过 `fetch` 加载 SVG，内存缓存，暗色模式自动适配
+
+### 常用图标映射
+
+| 用途 | 图标名 | 颜色 |
+|------|--------|------|
+| 文件夹 | `folder` | `text-blue-500` |
+| 默认文件 | `file-alt` | `text-gray-400` |
+| 图片 | `image` | `text-green-500` |
+| 视频 | `video` | `text-purple-500` |
+| 音频 | `music` | `text-pink-500` |
+| PDF | `file-alt` | `text-red-500` |
+| 压缩包 | `box-archive` | `text-yellow-500` |
+| 代码 | `code` | `text-cyan-500` |
+| 收藏/星 | `star-sharp` | `text-yellow-500` |
+| 存储池 | `container-storage` | — |
+| 删除 | `trash` | `text-red-500` |
+| 搜索 | `search` | 继承 |
+| 上传 | `upload` | 继承 |
+| 下载 | `download` | 继承 |
+
+### 注意
+
+- 加载 spinner（`animate-spin`）**不使用** Icon 组件，保留内联 SVG
+- 图标名必须与 `public/icon/iconlib/` 下的文件名一致，使用前确认文件存在
 
 ## 对话框规范
 
@@ -171,6 +212,19 @@ const agent = new https.Agent({ keepAlive: true, maxSockets: 10, timeout: 60000 
 ### 重试包装器
 
 又拍云操作偶发网络抖动，需用 `withRetry()` 包装器自动重试（默认 3 次，指数退避）。
+
+## 亮/暗模式风格统一检查清单
+
+修改前端代码时，逐项检查：
+
+- [ ] 输入框、select 是否使用 `.input-field`（而非手写 Tailwind 类）
+- [ ] 对话框遮罩是否带 `dark:bg-black/60`
+- [ ] 对话框/卡片背景是否用 `.card` 或 `var(--card-color)`（而非 `bg-white`）
+- [ ] hover 状态是否带 `dark:hover:bg-dark-hover`
+- [ ] 加载 spinner 是否带 `text-blue-500`
+- [ ] 图标是否通过 `<Icon>` 组件引入（而非内联 SVG）
+- [ ] 文本颜色是否用 `var(--text-color)` / `var(--text-secondary-color)` 或对应的 Tailwind 暗色类
+- [ ] 新增颜色是否已在 `main.css` 的 `@theme` 和 `:root`/`.dark` 中定义
 
 ## 颜色对照速查
 
