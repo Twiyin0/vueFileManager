@@ -20,13 +20,17 @@ export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFu
   }
 
   const keyRecord = db.prepare(`
-    SELECT ak.*, u.role FROM api_keys ak
+    SELECT ak.*, u.role, u.banned FROM api_keys ak
     JOIN users u ON ak.user_id = u.id
     WHERE ak.key = ?
   `).get(apiKey) as any
 
   if (!keyRecord) {
     return res.status(401).json({ error: 'API Key 无效' })
+  }
+
+  if (keyRecord.banned) {
+    return res.status(403).json({ error: '账号已被封禁' })
   }
 
   req.userId = keyRecord.user_id
@@ -58,9 +62,12 @@ export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFuncti
   if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
-      const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(decoded.userId) as any
+      const user = db.prepare('SELECT id, role, banned FROM users WHERE id = ?').get(decoded.userId) as any
       if (!user) {
         return res.status(401).json({ error: '用户不存在' })
+      }
+      if (user.banned) {
+        return res.status(403).json({ error: '账号已被封禁' })
       }
       req.userId = user.id
       req.userRole = user.role

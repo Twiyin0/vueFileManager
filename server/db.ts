@@ -155,6 +155,26 @@ function migrateShareSignKey() {
 }
 migrateShareSignKey()
 
+// 迁移：给 shares 表加 storage_pool_id 列
+function migrateSharePoolId() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(shares)").all() as any[]
+    const hasPoolId = cols.some((c: any) => c.name === 'storage_pool_id')
+    if (!hasPoolId) {
+      db.exec('ALTER TABLE shares ADD COLUMN storage_pool_id INTEGER')
+      db.exec(`
+        UPDATE shares SET storage_pool_id = (
+          SELECT id FROM storage_pools WHERE user_id = shares.user_id AND is_default = 1 LIMIT 1
+        ) WHERE storage_pool_id IS NULL
+      `)
+      console.log('✅ 已添加 shares.storage_pool_id 字段')
+    }
+  } catch (err) {
+    console.error('⚠️ storage_pool_id 字段迁移失败:', err)
+  }
+}
+migrateSharePoolId()
+
 // 迁移：将现有 guest_path 迁移到 guest_shares 表
 function migrateGuestShares() {
   try {
@@ -261,6 +281,107 @@ function migrateStorageSettings() {
 
 // 执行迁移
 migrateStorageSettings()
+
+// 迁移：创建 IP 黑名单表
+function migrateIpBlacklist() {
+  try {
+    const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ip_blacklist'").get() as any
+    if (!hasTable) {
+      db.exec(`
+        CREATE TABLE ip_blacklist (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip_pattern TEXT NOT NULL,
+          reason TEXT DEFAULT '',
+          created_by INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+      `)
+      console.log('✅ 已创建 ip_blacklist 表')
+
+      // 创建 IP 白名单表
+      db.exec(`
+        CREATE TABLE ip_whitelist (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip_pattern TEXT NOT NULL,
+          reason TEXT DEFAULT '',
+          created_by INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+      `)
+      console.log('✅ 已创建 ip_whitelist 表')
+
+      // 创建 IP 列表配置表（单行，存储模式）
+      db.exec(`
+        CREATE TABLE ip_list_config (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+          mode TEXT NOT NULL DEFAULT 'blacklist' CHECK(mode IN ('blacklist', 'whitelist'))
+        )
+      `)
+      db.prepare('INSERT OR IGNORE INTO ip_list_config (id, mode) VALUES (1, ?)').run(config.ip_list_mode || 'blacklist')
+      console.log('✅ 已创建 ip_list_config 表')
+    }
+  } catch (err) {
+    console.error('⚠️ ip_blacklist 表迁移失败:', err)
+  }
+}
+migrateIpBlacklist()
+
+// 迁移：创建 IP 白名单表（已有安装）
+function migrateIpWhitelist() {
+  try {
+    const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ip_whitelist'").get() as any
+    if (!hasTable) {
+      db.exec(`
+        CREATE TABLE ip_whitelist (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip_pattern TEXT NOT NULL,
+          reason TEXT DEFAULT '',
+          created_by INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+      `)
+      console.log('✅ 已创建 ip_whitelist 表')
+
+      // 清理旧数据：将黑名单中残留的本地回环条目迁移到白名单
+      const stale = db.prepare("SELECT * FROM ip_blacklist WHERE ip_pattern IN ('127.0.0.1', '::1', 'localhost')").all() as any[]
+      if (stale.length > 0) {
+        const insert = db.prepare('INSERT INTO ip_whitelist (ip_pattern, reason, created_by) VALUES (?, ?, ?)')
+        const del = db.prepare("DELETE FROM ip_blacklist WHERE ip_pattern IN ('127.0.0.1', '::1', 'localhost')")
+        for (const row of stale) {
+          insert.run(row.ip_pattern, row.reason, row.created_by)
+        }
+        del.run()
+        console.log(`✅ 已将 ${stale.length} 条本地回环记录从黑名单迁移到白名单`)
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ ip_whitelist 表迁移失败:', err)
+  }
+}
+migrateIpWhitelist()
+
+// 迁移：创建 IP 列表配置表
+function migrateIpListConfig() {
+  try {
+    const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ip_list_config'").get() as any
+    if (!hasTable) {
+      db.exec(`
+        CREATE TABLE ip_list_config (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+          mode TEXT NOT NULL DEFAULT 'blacklist' CHECK(mode IN ('blacklist', 'whitelist'))
+        )
+      `)
+      db.prepare('INSERT INTO ip_list_config (id, mode) VALUES (1, ?)').run(config.ip_list_mode || 'blacklist')
+      console.log('✅ 已创建 ip_list_config 表')
+    }
+  } catch (err) {
+    console.error('⚠️ ip_list_config 表迁移失败:', err)
+  }
+}
+migrateIpListConfig()
 
 // 如果没有管理员用户，创建默认管理员
 const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin')

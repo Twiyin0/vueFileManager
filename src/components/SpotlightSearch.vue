@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { api } from '@/api'
 import { useRouter } from 'vue-router'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const visible = ref(false)
@@ -90,9 +91,7 @@ onUnmounted(() => {
       @click.self="visible = false">
       <div class="w-full max-w-lg bg-white dark:bg-dark-card rounded-xl shadow-2xl overflow-hidden">
         <div class="flex items-center px-4 border-b dark:border-dark-border border-light-border">
-          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-          </svg>
+          <Icon name="search" class="w-5 h-5 text-gray-400" />
           <input v-model="query" @keydown="handleKeydown"
             class="flex-1 px-3 py-4 bg-transparent outline-none dark:text-dark-text text-light-text"
             placeholder="搜索文件和文件夹... (Ctrl+K)" autofocus />
@@ -109,7 +108,7 @@ onUnmounted(() => {
             @mouseenter="selectedIndex = index"
             class="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors"
             :class="selectedIndex === index ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-dark-hover'">
-            <span class="text-xl">{{ item.type === 'folder' ? '📁' : '📄' }}</span>
+            <Icon :name="item.type === 'folder' ? 'folder' : 'file-alt'" :class="['w-5 h-5', item.type === 'folder' ? 'text-blue-500' : 'text-gray-400']" />
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium dark:text-dark-text text-light-text truncate">{{ item.name }}</p>
               <p class="text-xs text-gray-500 dark:text-dark-text-secondary truncate">{{ item.path }}</p>

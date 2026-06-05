@@ -29,6 +29,7 @@ interface Config {
     host: string
     jwt_secret: string
   }
+  ip_list_mode: 'blacklist' | 'whitelist'
   storage_pools: StoragePoolConfig[]
 }
 
@@ -42,6 +43,7 @@ const defaultConfig: Config = {
     host: '',
     jwt_secret: 'vue-file-manager-secret-key-2024'
   },
+  ip_list_mode: 'blacklist',
   storage_pools: [
     {
       name: '本地存储',
@@ -62,6 +64,7 @@ try {
     config = {
       admin: { ...defaultConfig.admin, ...loaded.admin },
       server: { ...defaultConfig.server, ...loaded.server },
+      ip_list_mode: loaded.ip_list_mode || defaultConfig.ip_list_mode,
       storage_pools: loaded.storage_pools || defaultConfig.storage_pools
     }
     console.log('✅ 已加载配置文件 config.yml')

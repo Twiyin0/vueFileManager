@@ -30,7 +30,7 @@ router.get('/', (req: Request, res: Response) => {
 // 获取用户的访客文件夹列表
 router.get('/:username/list', async (req: Request, res: Response) => {
   try {
-    const user = getUserByUsername(req.params.username)
+    const user = getUserByUsername(req.params.username as string)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }
@@ -59,7 +59,7 @@ router.get('/:username/list', async (req: Request, res: Response) => {
 // 列出某个分享文件夹内的文件
 router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
   try {
-    const user = getUserByUsername(req.params.username)
+    const user = getUserByUsername(req.params.username as string)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }
@@ -106,7 +106,7 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
 // 访客下载文件
 router.get('/:username/:shareId/download', async (req: Request, res: Response) => {
   try {
-    const user = getUserByUsername(req.params.username)
+    const user = getUserByUsername(req.params.username as string)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }

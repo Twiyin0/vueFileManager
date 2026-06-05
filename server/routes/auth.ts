@@ -3,18 +3,11 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import db, { syncStoragePoolsFromConfig } from '../db'
 import config from '../config'
-import { generateToken, AuthRequest } from '../middleware/auth'
+import { generateToken, AuthRequest, getClientIp } from '../middleware/auth'
 
 const JWT_SECRET = config.server.jwt_secret
 
 const router = Router()
-
-// 获取客户端 IP
-function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for']
-  if (forwarded) return (forwarded as string).split(',')[0].trim()
-  return req.socket.remoteAddress || 'unknown'
-}
 
 // 注册
 router.post('/register', (req: Request, res: Response) => {
@@ -88,6 +81,11 @@ router.post('/login', (req: Request, res: Response) => {
     const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
     if (hashedPassword !== user.password) {
       return res.status(401).json({ error: '用户名或密码错误' })
+    }
+
+    // 检查账号是否被封禁
+    if (user.banned) {
+      return res.status(403).json({ error: '账号已被封禁' })
     }
 
     // 更新最后登录 IP 和时间

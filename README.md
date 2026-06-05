@@ -41,11 +41,12 @@
 ### 管理面板
 - 👥 用户列表（搜索/筛选）
 - ➕ 创建用户
-- 🔒 封禁/解封用户
+- 🔒 封禁/解封用户（管理员不可被封禁）
 - 🔑 重置用户密码
 - ⬆️⬇️ 升级/降级用户角色
 - 🗑️ 删除用户
 - 📋 用户详情（存储池、统计数据）
+- 🛡️ IP 黑名单/白名单（支持精确 IP 和 CIDR 网段，config.yml 可配置默认模式）
 
 ### 回收站
 - 🗑️ 文件删除自动移入回收站
@@ -246,7 +247,7 @@ vueFileManager/
 ├── public/
 │   └── icon/iconlib/          # 图标库（1702 个 stroke 风格 SVG）
 ├── test/                       # 测试
-│   ├── workflows.ts          # API 全流程测试（76 项）
+│   ├── workflows.ts          # API 全流程测试（118 项）
 │   └── upyun.ts              # Upyun 存储测试
 └── API.md                      # API 文档
 ```
@@ -264,17 +265,22 @@ npx tsx test/workflows.ts
 npx tsx test/upyun.ts
 ```
 
-测试覆盖（76 项）：
+测试覆盖（118 项）：
 - ✅ 认证 API（注册/登录/用户信息/Token校验）
 - ✅ 存储池 API（CRUD/切换默认/连接测试）
 - ✅ 文件 API（列表/创建/重命名/移动/复制/搜索/批量删除/回收站删除/永久删除）
 - ✅ 回收站 API（列表/恢复/永久删除/清空）
 - ✅ 收藏 API（添加/检查/列表/取消收藏）
-- ✅ 分享 API（创建/密码分享/列表/访问/删除）
+- ✅ 分享 API（创建/密码分享/列表/访问/签名验证）
+- ✅ 流式上传 API（chunked transfer）
+- ✅ 断点续传 API（初始化/分片/状态/合并）
+- ✅ 匿名公网访问 API（路径越权防护）
 - ✅ API Key API（创建/列表/认证/删除）
 - ✅ 用户设置 API（获取/更新/恢复默认）
-- ✅ 访客 API（用户列表/文件列表）
-- ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制）
+- ✅ 访客 API（用户列表/分享列表/文件列表）
+- ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制/管理员保护）
+- ✅ 封禁用户 API Key 验证（403 拒绝）
+- ✅ IP 黑名单/白名单（CRUD/模式切换/白名单默认IP/127.0.0.1保护）
 
 ## 📖 API 文档
 
@@ -357,6 +363,11 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 管理 | `PUT /api/admin/users/:id/ban` | 封禁/解封 |
 | 管理 | `PUT /api/admin/users/:id/password` | 重置密码 |
 | 管理 | `DELETE /api/admin/users/:id` | 删除用户 |
+| 管理 | `GET /api/admin/ip-blacklist` | IP 黑名单/白名单列表 |
+| 管理 | `POST /api/admin/ip-blacklist` | 添加 IP 条目 |
+| 管理 | `DELETE /api/admin/ip-blacklist/:id` | 删除 IP 条目 |
+| 管理 | `GET /api/admin/ip-list/mode` | 获取 IP 列表模式 |
+| 管理 | `PUT /api/admin/ip-list/mode` | 切换黑名单/白名单模式 |
 
 ## 🛠️ 技术栈
 

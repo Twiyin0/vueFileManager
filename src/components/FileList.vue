@@ -1,6 +1,23 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { FileItem } from '@/stores/files'
+import Icon from '@/components/Icon.vue'
+
+const fileIconMap: Record<string, { icon: string; color: string }> = {
+  folder: { icon: 'folder', color: 'text-blue-500' },
+  image: { icon: 'image', color: 'text-green-500' },
+  video: { icon: 'video', color: 'text-purple-500' },
+  audio: { icon: 'music', color: 'text-pink-500' },
+  pdf: { icon: 'file-alt', color: 'text-red-500' },
+  archive: { icon: 'box-archive', color: 'text-yellow-500' },
+  code: { icon: 'code', color: 'text-cyan-500' },
+  text: { icon: 'text', color: 'text-gray-500' },
+  file: { icon: 'file-alt', color: 'text-gray-400' },
+}
+
+function getFileIconInfo(file: FileItem) {
+  return fileIconMap[getFileIcon(file)] || fileIconMap.file
+}
 
 const props = withDefaults(defineProps<{
   files: FileItem[]
@@ -109,9 +126,7 @@ function getPreviewUrl(file: FileItem): string {
 
     <!-- 空状态 -->
     <div v-else-if="files.length === 0" class="flex flex-col items-center justify-center py-12" style="color: var(--text-secondary-color)">
-      <svg class="w-16 h-16 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-      </svg>
+      <Icon name="folder" class="w-16 h-16 mb-3" />
       <p>暂无文件</p>
     </div>
 
@@ -144,39 +159,7 @@ function getPreviewUrl(file: FileItem): string {
             <img v-if="getFileIcon(file) === 'image'" :src="getPreviewUrl(file)" :alt="file.name" class="thumb-img" loading="lazy" draggable="false" />
             <!-- 非图片：大图标 -->
             <div v-else class="thumb-icon">
-              <!-- 文件夹 -->
-              <svg v-if="getFileIcon(file) === 'folder'" class="w-10 h-10 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-              </svg>
-              <!-- 视频 -->
-              <svg v-else-if="getFileIcon(file) === 'video'" class="w-10 h-10 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <!-- 音频 -->
-              <svg v-else-if="getFileIcon(file) === 'audio'" class="w-10 h-10 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
-              </svg>
-              <!-- PDF -->
-              <svg v-else-if="getFileIcon(file) === 'pdf'" class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-              </svg>
-              <!-- 压缩包 -->
-              <svg v-else-if="getFileIcon(file) === 'archive'" class="w-10 h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-              </svg>
-              <!-- 代码 -->
-              <svg v-else-if="getFileIcon(file) === 'code'" class="w-10 h-10 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
-              </svg>
-              <!-- 文本 -->
-              <svg v-else-if="getFileIcon(file) === 'text'" class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-              </svg>
-              <!-- 默认 -->
-              <svg v-else class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-              </svg>
+              <Icon :name="getFileIconInfo(file).icon" :class="['w-10 h-10', getFileIconInfo(file).color]" />
             </div>
           </div>
           <!-- 文件名 -->
@@ -221,43 +204,7 @@ function getPreviewUrl(file: FileItem): string {
         </div>
         <!-- 名称 + 图标 -->
         <div :class="selectMode ? 'col-span-5 sm:col-span-4' : 'col-span-6 sm:col-span-5'" class="flex items-center gap-2.5 min-w-0">
-          <!-- 文件夹图标 -->
-          <svg v-if="getFileIcon(file) === 'folder'" class="w-5 h-5 flex-shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-          </svg>
-          <!-- 图片图标 -->
-          <svg v-else-if="getFileIcon(file) === 'image'" class="w-5 h-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-          </svg>
-          <!-- 视频图标 -->
-          <svg v-else-if="getFileIcon(file) === 'video'" class="w-5 h-5 flex-shrink-0 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-          <!-- 音频图标 -->
-          <svg v-else-if="getFileIcon(file) === 'audio'" class="w-5 h-5 flex-shrink-0 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-          </svg>
-          <!-- PDF 图标 -->
-          <svg v-else-if="getFileIcon(file) === 'pdf'" class="w-5 h-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-          </svg>
-          <!-- 压缩包图标 -->
-          <svg v-else-if="getFileIcon(file) === 'archive'" class="w-5 h-5 flex-shrink-0 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-          </svg>
-          <!-- 代码图标 -->
-          <svg v-else-if="getFileIcon(file) === 'code'" class="w-5 h-5 flex-shrink-0 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
-          </svg>
-          <!-- 文本图标 -->
-          <svg v-else-if="getFileIcon(file) === 'text'" class="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          <!-- 默认文件图标 -->
-          <svg v-else class="w-5 h-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-          </svg>
+          <Icon :name="getFileIconInfo(file).icon" :class="['w-5 h-5 flex-shrink-0', getFileIconInfo(file).color]" />
           <span class="truncate text-sm" style="color: var(--text-color)">{{ file.name }}</span>
         </div>
 
@@ -278,9 +225,7 @@ function getPreviewUrl(file: FileItem): string {
             class="p-1.5 rounded-md hover:opacity-80 transition-colors"
             title="详情"
           >
-            <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            <Icon name="circle-information" class="w-4 h-4" style="color: var(--text-secondary-color)" />
           </button>
           <button
             v-if="file.type === 'file'"
@@ -288,18 +233,14 @@ function getPreviewUrl(file: FileItem): string {
             class="p-1.5 rounded-md hover:opacity-80 transition-colors"
             title="下载"
           >
-            <svg class="w-4 h-4" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
+            <Icon name="download" class="w-4 h-4" style="color: var(--text-secondary-color)" />
           </button>
           <button
             @click="emit('delete', file)"
             class="p-1.5 rounded-md hover:opacity-80 transition-colors"
             title="删除"
           >
-            <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-            </svg>
+            <Icon name="trash" class="w-4 h-4 text-red-500" />
           </button>
         </div>
       </div>

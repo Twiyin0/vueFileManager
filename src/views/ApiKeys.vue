@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import Icon from '@/components/Icon.vue'
 
 interface ApiKey {
   id: number
@@ -101,9 +102,7 @@ function formatDate(dateStr: string): string {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">API Keys</h1>
         <button @click="showCreate = true" class="btn-primary text-sm flex items-center gap-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
+          <Icon name="plus" class="w-4 h-4" />
           创建 Key
         </button>
       </div>
@@ -122,9 +121,7 @@ function formatDate(dateStr: string): string {
 
       <!-- 空状态 -->
       <div v-else-if="keys.length === 0" class="card flex flex-col items-center justify-center py-16 text-gray-400 dark:text-dark-text-secondary">
-        <svg class="w-16 h-16 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-        </svg>
+        <Icon name="key" class="w-16 h-16 mb-3" />
         <p>暂无 API Key</p>
       </div>
 
@@ -158,21 +155,15 @@ function formatDate(dateStr: string): string {
               class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
               title="复制"
             >
-              <svg v-if="copiedId === key.id" class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-              </svg>
-              <svg v-else class="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
-              </svg>
+              <Icon v-if="copiedId === key.id" name="check" class="w-4 h-4 text-green-500" />
+              <Icon v-else name="clipboard" class="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" />
             </button>
             <button
               @click="confirmDelete(key)"
               class="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               title="删除"
             >
-              <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-              </svg>
+              <Icon name="trash" class="w-4 h-4 text-red-500" />
             </button>
           </div>
         </div>

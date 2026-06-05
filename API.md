@@ -32,6 +32,8 @@ X-API-Key: <your-api-key>
 { "username": "string", "password": "string" }
 // Response
 { "message": "登录成功", "token": "jwt-token", "user": { "id": 1, "username": "admin", "role": "admin" } }
+// 封禁用户
+403 { "error": "账号已被封禁" }
 ```
 
 ### GET `/api/auth/me` — 当前用户信息（需认证）
@@ -700,6 +702,10 @@ Response: 文件流（对应 MIME 类型）
 { "message": "用户已封禁", "banned": true }
 // 或
 { "message": "用户已解封", "banned": false }
+// 管理员不可被封禁
+400 { "error": "不能封禁管理员账户" }
+// 不能封禁自己
+400 { "error": "不能封禁自己" }
 ```
 
 ### PUT `/api/admin/users/:id/password` — 重置用户密码
@@ -714,6 +720,42 @@ Response: 文件流（对应 MIME 类型）
 ```json
 // Response
 { "message": "用户已删除" }
+```
+
+### GET `/api/admin/ip-blacklist` — IP 黑名单/白名单列表
+```json
+// Response
+{ "entries": [{ "id": 1, "ip_pattern": "192.168.1.0/24", "reason": "恶意扫描", "created_by": 1, "created_by_name": "admin", "created_at": "..." }] }
+```
+
+### POST `/api/admin/ip-blacklist` — 添加 IP 黑名单/白名单条目
+```json
+// Request Body
+{ "ip_pattern": "192.168.1.1", "reason": "可选原因" }
+// Response
+{ "message": "IP 黑名单添加成功", "entry": { "id": 1, "ip_pattern": "192.168.1.1", "reason": "" } }
+```
+
+### DELETE `/api/admin/ip-blacklist/:id` — 删除 IP 黑名单/白名单条目
+```json
+// Response
+{ "message": "IP 黑名单条目已删除" }
+// 注意：白名单模式下 127.0.0.1 不可删除，返回 400
+```
+
+### GET `/api/admin/ip-list/mode` — 获取 IP 列表模式
+```json
+// Response
+{ "mode": "blacklist" }  // 或 "whitelist"
+```
+
+### PUT `/api/admin/ip-list/mode` — 切换 IP 列表模式
+```json
+// Request Body
+{ "mode": "whitelist" }  // 或 "blacklist"
+// Response
+{ "message": "已切换为白名单模式", "mode": "whitelist" }
+// 切换到白名单时，若列表为空自动添加 127.0.0.1、::1、localhost
 ```
 
 ---

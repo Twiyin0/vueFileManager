@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
   show: boolean
@@ -101,9 +102,7 @@ function openFilePicker() {
             ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color)'
             : 'border-color: var(--border-color)'"
         >
-          <svg class="w-12 h-12 mx-auto mb-3" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-          </svg>
+          <Icon name="upload" class="w-12 h-12 mx-auto mb-3" style="color: var(--text-secondary-color)" />
           <p class="text-sm" style="color: var(--text-color)">点击或拖拽文件到此处上传</p>
           <p class="text-xs mt-1" style="color: var(--text-secondary-color)">最大 100MB</p>
         </div>

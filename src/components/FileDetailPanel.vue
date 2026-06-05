@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -11,22 +12,30 @@ const emit = defineEmits<{
   (e: 'favourite', item: any): void
 }>()
 
-const icon = computed(() => {
-  if (!props.item) return '📄'
-  if (props.item.type === 'folder') return '📁'
+const fileIconMap: Record<string, { icon: string; color: string }> = {
+  folder: { icon: 'folder', color: 'text-blue-500' },
+  image: { icon: 'image', color: 'text-green-500' },
+  video: { icon: 'video', color: 'text-purple-500' },
+  audio: { icon: 'music', color: 'text-pink-500' },
+  pdf: { icon: 'file-alt', color: 'text-red-500' },
+  archive: { icon: 'box-archive', color: 'text-yellow-500' },
+  code: { icon: 'code', color: 'text-cyan-500' },
+  text: { icon: 'text', color: 'text-gray-500' },
+  file: { icon: 'file-alt', color: 'text-gray-400' },
+}
+
+const iconInfo = computed(() => {
+  if (!props.item) return fileIconMap.file
+  if (props.item.type === 'folder') return fileIconMap.folder
   const ext = props.item.name.split('.').pop()?.toLowerCase() || ''
-  const iconMap: Record<string, string> = {
-    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
-    mp4: '🎬', webm: '🎬', avi: '🎬', mkv: '🎬',
-    mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵',
-    pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
-    zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
-    js: '📜', ts: '📜', py: '📜', java: '📜', go: '📜', rs: '📜',
-    html: '🌐', css: '🎨', json: '📋', xml: '📋', yaml: '📋',
-    txt: '📝', md: '📝', log: '📝',
-    vue: '💚', sh: '⚙️',
-  }
-  return iconMap[ext] || '📄'
+  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return fileIconMap.image
+  if (['mp4', 'avi', 'mov', 'mkv'].includes(ext)) return fileIconMap.video
+  if (['mp3', 'wav', 'flac', 'aac'].includes(ext)) return fileIconMap.audio
+  if (['pdf'].includes(ext)) return fileIconMap.pdf
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return fileIconMap.archive
+  if (['js', 'ts', 'py', 'java', 'go', 'rs', 'vue', 'html', 'css'].includes(ext)) return fileIconMap.code
+  if (['txt', 'md', 'json', 'yaml', 'yml', 'xml'].includes(ext)) return fileIconMap.text
+  return fileIconMap.file
 })
 
 function formatSize(bytes: number) {
@@ -57,9 +66,7 @@ const fileExt = computed(() => {
       <div class="flex items-center justify-between px-4 py-3 border-b dark:border-dark-border border-light-border">
         <h3 class="font-semibold text-sm dark:text-dark-text text-light-text">文件详情</h3>
         <button @click="emit('close')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
+          <Icon name="xmark" class="w-5 h-5" />
         </button>
       </div>
 
@@ -67,7 +74,7 @@ const fileExt = computed(() => {
       <div class="flex-1 overflow-y-auto p-4 space-y-4">
         <!-- 图标和名称 -->
         <div class="text-center py-4">
-          <div class="text-5xl mb-3">{{ icon }}</div>
+          <Icon :name="iconInfo.icon" :class="['w-14 h-14 mb-3', iconInfo.color]" />
           <p class="font-medium dark:text-dark-text text-light-text break-all">{{ item.name }}</p>
         </div>
 
@@ -94,7 +101,9 @@ const fileExt = computed(() => {
 
       <!-- 底部操作 -->
       <div class="p-4 border-t dark:border-dark-border border-light-border flex gap-2">
-        <button @click="emit('favourite', item)" class="btn-secondary flex-1 text-sm">⭐ 收藏</button>
+        <button @click="emit('favourite', item)" class="btn-secondary flex-1 text-sm flex items-center justify-center gap-1.5">
+          <Icon name="star-sharp" class="w-4 h-4 text-yellow-500" /> 收藏
+        </button>
       </div>
     </div>
   </Teleport>

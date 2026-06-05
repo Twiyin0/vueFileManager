@@ -9,6 +9,7 @@ const PUBLIC_BASE = 'http://localhost:3000'
 let adminToken = ''
 let userToken = ''
 let apiKey = ''
+let bannedApiKey = ''
 let shareCode = ''
 let signKey = ''
 let signUrl = ''
@@ -684,7 +685,8 @@ async function testPublicAccess() {
   })
 
   await test('GET /f/:username/* - 路径越权应 403', async () => {
-    const res = await rawApi('GET', `${PUBLIC_BASE}/f/testuser/../../../etc/passwd`)
+    // 使用 URL 编码的 / 防止 fetch 和 Express 自动规范化路径
+    const res = await rawApi('GET', `${PUBLIC_BASE}/f/testuser/..%2F..%2F..%2Fetc%2Fpasswd`)
     assert(res.status === 403 || res.status === 404, `状态码 ${res.status}`)
   })
 
@@ -790,8 +792,31 @@ async function testUserSettings() {
 async function testGuest() {
   console.log(cyan('\n━━━ 12. 访客 API ━━━'))
 
-  // 先开启 testuser 的访客模式
-  await api('PUT', '/user/settings', { guestEnabled: true, guestPath: '' }, auth(userToken))
+  // 确保 testuser 有默认存储池
+  const userPools = await api('GET', '/storage-pools', null, auth(userToken))
+  if (!userPools.data?.pools?.length) {
+    await api('POST', '/storage-pools', {
+      name: 'testuser本地存储', storageType: 'local', config: { localPath: './test-user-uploads' }
+    }, auth(userToken))
+  }
+  const poolsRes = await api('GET', '/storage-pools', null, auth(userToken))
+  const defaultPool = poolsRes.data.pools.find((p: any) => p.isDefault) || poolsRes.data.pools[0]
+  if (!defaultPool.isDefault) {
+    await api('POST', `/storage-pools/${defaultPool.id}/set-default`, null, auth(userToken))
+  }
+
+  // 开启访客模式
+  await api('PUT', '/user/settings', { guestEnabled: true }, auth(userToken))
+
+  // 创建访客分享
+  await test('POST /user/guest-shares - 创建访客分享', async () => {
+    const { status, data } = await api('POST', '/user/guest-shares', {
+      folderPath: '/',
+      storagePoolId: defaultPool.id,
+      label: '根目录'
+    }, auth(userToken))
+    assert(status === 200, `状态码 ${status}`)
+  })
 
   await test('GET /guest - 访客用户列表', async () => {
     const { status, data } = await api('GET', '/guest')
@@ -800,14 +825,23 @@ async function testGuest() {
     assert(data.users.some((u: any) => u.username === 'testuser'), '未找到 testuser')
   })
 
-  await test('GET /guest/testuser/list - 访客文件列表', async () => {
+  await test('GET /guest/testuser/list - 访客分享列表', async () => {
     const { status, data } = await api('GET', '/guest/testuser/list')
     assert(status === 200, `状态码 ${status}`)
-    assert(Array.isArray(data.files), '返回非数组')
+    assert(data.shares && Array.isArray(data.shares), '返回非数组')
+    assert(data.shares.length > 0, '分享列表为空')
+    console.log(yellow(`  访客分享: ${data.shares.length} 个`))
   })
 
-  // 关闭访客模式
-  await api('PUT', '/user/settings', { guestEnabled: false }, auth(userToken))
+  // 清理访客分享
+  await test('DELETE /user/guest-shares - 清理访客分享', async () => {
+    const shares = await api('GET', '/user/guest-shares', null, auth(userToken))
+    for (const s of shares.data.shares) {
+      await api('DELETE', `/user/guest-shares/${s.id}`, null, auth(userToken))
+    }
+    // 关闭访客模式
+    await api('PUT', '/user/settings', { guestEnabled: false }, auth(userToken))
+  })
 }
 
 // ==================== 13. 管理面板 ====================
@@ -860,14 +894,14 @@ async function testAdmin() {
 
   await test('POST /auth/login - 封禁用户登录应 403', async () => {
     const { status } = await api('POST', '/auth/login', { username: 'admin-created', password: 'admin123456' })
-    // 登录会成功拿到 token，但后续请求应被拒绝
-    // 实际上封禁检查在 authMiddleware，登录本身不检查
-    // 所以我们测试用 token 访问 API
-    const loginRes = await api('POST', '/auth/login', { username: 'admin-created', password: 'admin123456' })
-    if (loginRes.data?.token) {
-      const meRes = await api('GET', '/auth/me', null, auth(loginRes.data.token))
-      assert(meRes.status === 403, `封禁用户访问应 403, 实际 ${meRes.status}`)
-    }
+    assert(status === 403, `封禁用户登录应 403, 实际 ${status}`)
+  })
+
+  await test('PUT /admin/users/:id/ban - 不能封禁管理员', async () => {
+    const users = await api('GET', '/admin/users', null, auth(adminToken))
+    const admin = users.data.users.find((u: any) => u.username === 'admin')
+    const { status } = await api('PUT', `/admin/users/${admin.id}/ban`, null, auth(adminToken))
+    assert(status === 400, `不能封禁管理员应 400, 实际 ${status}`)
   })
 
   await test('PUT /admin/users/:id/ban - 解封用户', async () => {
@@ -923,10 +957,177 @@ async function testAdmin() {
   })
 }
 
-// ==================== 14. 清理 ====================
-async function testCleanup() {
-  console.log(cyan('\n━━━ 14. 清理 ━━━'))
+// ==================== 14. 封禁用户 API Key 测试 ====================
+async function testBannedApiKey() {
+  console.log(cyan('\n━━━ 14. 封禁用户 API Key ━━━'))
 
+  // 先创建一个用户并封禁
+  await api('POST', '/admin/users', { username: 'banned-api-user', password: 'test123456' }, auth(adminToken))
+  const users = await api('GET', '/admin/users', null, auth(adminToken))
+  const bannedUser = users.data.users.find((u: any) => u.username === 'banned-api-user')
+  const bannedLogin = await api('POST', '/auth/login', { username: 'banned-api-user', password: 'test123456' })
+  const bannedToken = bannedLogin.data.token
+
+  // 创建 API Key
+  await test('POST /user/apikeys - 为待封禁用户创建 API Key', async () => {
+    const { status, data } = await api('POST', '/user/apikeys', {
+      name: 'banned-key', permissions: 'read,write,delete'
+    }, auth(bannedToken))
+    assert(status === 200, `状态码 ${status}`)
+    bannedApiKey = data.key
+  })
+
+  // API Key 可正常使用
+  await test('GET /files/list - 封禁前 API Key 可用', async () => {
+    const { status } = await api('GET', '/files/list', null, { 'X-API-Key': bannedApiKey })
+    assert(status === 200, `状态码 ${status}`)
+  })
+
+  // 封禁用户
+  await test('PUT /admin/users/:id/ban - 封禁 API Key 所属用户', async () => {
+    const { status } = await api('PUT', `/admin/users/${bannedUser.id}/ban`, null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+  })
+
+  // API Key 应被拒绝
+  await test('GET /files/list - 封禁后 API Key 应 403', async () => {
+    const { status } = await api('GET', '/files/list', null, { 'X-API-Key': bannedApiKey })
+    assert(status === 403, `封禁用户 API Key 应 403, 实际 ${status}`)
+  })
+
+  // 清理
+  await api('PUT', `/admin/users/${bannedUser.id}/ban`, null, auth(adminToken)) // 解封
+  await api('DELETE', `/admin/users/${bannedUser.id}`, null, auth(adminToken))
+}
+
+// ==================== 15. IP 黑名单/白名单 ====================
+async function testIpBlacklist() {
+  console.log(cyan('\n━━━ 15. IP 黑名单/白名单 ━━━'))
+
+  // 确保当前是黑名单模式
+  await test('GET /admin/ip-list/mode - 获取当前模式', async () => {
+    const { status, data } = await api('GET', '/admin/ip-list/mode', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(['blacklist', 'whitelist'].includes(data.mode), `无效模式: ${data.mode}`)
+    console.log(yellow(`  当前模式: ${data.mode}`))
+  })
+
+  // 如果是白名单模式先切回黑名单
+  const modeRes = await api('GET', '/admin/ip-list/mode', null, auth(adminToken))
+  if (modeRes.data.mode === 'whitelist') {
+    await api('PUT', '/admin/ip-list/mode', { mode: 'blacklist' }, auth(adminToken))
+  }
+
+  // 清空黑名单
+  const listRes = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+  for (const entry of listRes.data.entries) {
+    await api('DELETE', `/admin/ip-blacklist/${entry.id}`, null, auth(adminToken))
+  }
+
+  await test('POST /admin/ip-blacklist - 添加黑名单条目', async () => {
+    const { status, data } = await api('POST', '/admin/ip-blacklist', {
+      ip_pattern: '10.0.0.1', reason: '测试IP'
+    }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.entry.ip_pattern === '10.0.0.1', 'IP 不匹配')
+  })
+
+  await test('POST /admin/ip-blacklist - 重复添加应 409', async () => {
+    const { status } = await api('POST', '/admin/ip-blacklist', {
+      ip_pattern: '10.0.0.1'
+    }, auth(adminToken))
+    assert(status === 409, `状态码 ${status}`)
+  })
+
+  await test('POST /admin/ip-blacklist - 无效 IP 应 400', async () => {
+    const { status } = await api('POST', '/admin/ip-blacklist', {
+      ip_pattern: 'not-an-ip'
+    }, auth(adminToken))
+    assert(status === 400, `状态码 ${status}`)
+  })
+
+  await test('POST /admin/ip-blacklist - 添加 CIDR 网段', async () => {
+    const { status, data } = await api('POST', '/admin/ip-blacklist', {
+      ip_pattern: '192.168.1.0/24', reason: '测试网段'
+    }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.entry.ip_pattern === '192.168.1.0/24', 'CIDR 不匹配')
+  })
+
+  await test('GET /admin/ip-blacklist - 查询列表', async () => {
+    const { status, data } = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(Array.isArray(data.entries), '返回非数组')
+    assert(data.entries.length >= 2, `条目数量不正确: ${data.entries.length}`)
+  })
+
+  await test('DELETE /admin/ip-blacklist/:id - 删除条目', async () => {
+    const list = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    const entry = list.data.entries.find((e: any) => e.ip_pattern === '10.0.0.1')
+    const { status } = await api('DELETE', `/admin/ip-blacklist/${entry.id}`, null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+  })
+
+  // 切换到白名单模式
+  await test('PUT /admin/ip-list/mode - 切换为白名单', async () => {
+    const { status, data } = await api('PUT', '/admin/ip-list/mode', { mode: 'whitelist' }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.mode === 'whitelist', '模式不正确')
+  })
+
+  await test('GET /admin/ip-list/mode - 验证白名单模式', async () => {
+    const { status, data } = await api('GET', '/admin/ip-list/mode', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.mode === 'whitelist', '模式不正确')
+  })
+
+  await test('GET /admin/ip-blacklist - 白名单应含默认本地 IP', async () => {
+    const { status, data } = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    const patterns = data.entries.map((e: any) => e.ip_pattern)
+    assert(patterns.includes('127.0.0.1'), '缺少 127.0.0.1')
+    assert(patterns.includes('::1'), '缺少 ::1')
+    console.log(yellow(`  白名单条目: ${patterns.join(', ')}`))
+  })
+
+  await test('DELETE /admin/ip-blacklist/:id - 白名单中 127.0.0.1 不可删除', async () => {
+    const list = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    const entry = list.data.entries.find((e: any) => e.ip_pattern === '127.0.0.1')
+    const { status } = await api('DELETE', `/admin/ip-blacklist/${entry.id}`, null, auth(adminToken))
+    assert(status === 400, `127.0.0.1 不可删除应 400, 实际 ${status}`)
+  })
+
+  await test('GET /files/list - 白名单模式下 127.0.0.1 可访问', async () => {
+    const { status } = await api('GET', '/files/list', null, auth(adminToken))
+    assert(status === 200, `白名单模式下 127.0.0.1 应可访问, 实际 ${status}`)
+  })
+
+  // 切回黑名单模式
+  await test('PUT /admin/ip-list/mode - 切回黑名单', async () => {
+    const { status, data } = await api('PUT', '/admin/ip-list/mode', { mode: 'blacklist' }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.mode === 'blacklist', '模式不正确')
+  })
+
+  // 清空黑名单
+  const finalList = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+  for (const entry of finalList.data.entries) {
+    await api('DELETE', `/admin/ip-blacklist/${entry.id}`, null, auth(adminToken))
+  }
+
+  await test('GET /admin/ip-blacklist - 清空后列表为空', async () => {
+    const { status, data } = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.entries.length === 0, `列表应为空, 实际 ${data.entries.length} 条`)
+  })
+
+}
+
+// ==================== 16. 清理 ====================
+async function testCleanup() {
+  console.log(cyan('\n━━━ 16. 清理 ━━━'))
+
+  // 清理可能残留的测试用户
   await test('DELETE /admin/users/:id - 删除 admin-created 用户', async () => {
     const users = await api('GET', '/admin/users', null, auth(adminToken))
     const created = users.data.users.find((u: any) => u.username === 'admin-created')
@@ -943,6 +1144,27 @@ async function testCleanup() {
       const { status } = await api('DELETE', `/admin/users/${tu.id}`, null, auth(adminToken))
       assert(status === 200, `状态码 ${status}`)
     }
+  })
+
+  await test('DELETE /admin/users/:id - 删除残留封禁测试用户', async () => {
+    const users = await api('GET', '/admin/users', null, auth(adminToken))
+    for (const u of users.data.users) {
+      if (['banned-api-user'].includes(u.username)) {
+        if (u.banned) await api('PUT', `/admin/users/${u.id}/ban`, null, auth(adminToken))
+        await api('DELETE', `/admin/users/${u.id}`, null, auth(adminToken))
+      }
+    }
+  })
+
+  // 确保 IP 列表清空且为黑名单模式
+  await test('清理 IP 黑名单/白名单', async () => {
+    await api('PUT', '/admin/ip-list/mode', { mode: 'blacklist' }, auth(adminToken))
+    const list = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    for (const entry of list.data.entries) {
+      await api('DELETE', `/admin/ip-blacklist/${entry.id}`, null, auth(adminToken))
+    }
+    const after = await api('GET', '/admin/ip-blacklist', null, auth(adminToken))
+    assert(after.data.entries.length === 0, 'IP 列表未清空')
   })
 
   await test('GET /admin/users - 验证清理', async () => {
@@ -973,6 +1195,8 @@ async function main() {
     await testUserSettings()
     await testGuest()
     await testAdmin()
+    await testBannedApiKey()
+    await testIpBlacklist()
     await testCleanup()
   } catch (err: any) {
     console.error(red(`\n测试执行出错: ${err.message}`))

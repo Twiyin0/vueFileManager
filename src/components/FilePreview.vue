@@ -5,6 +5,7 @@ import ArtPlayer from 'artplayer'
 import APlayer from 'aplayer'
 import Viewer from 'viewerjs'
 import VueMonacoEditor from '@guolao/vue-monaco-editor'
+import Icon from '@/components/Icon.vue'
 
 import 'aplayer/dist/APlayer.min.css'
 import 'viewerjs/dist/viewer.css'
@@ -37,6 +38,7 @@ const previewUrl = computed(() => {
 
 /** Generate preview URL for any file path (used for gallery images) */
 function getImagePreviewUrl(file: { path: string; poolId?: number }): string {
+  if (file.path.startsWith('/api/')) return file.path
   const base = '/api/files/preview'
   const params = new URLSearchParams({ path: file.path })
   const pid = file.poolId || props.poolId
@@ -429,15 +431,11 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
           <a :href="previewUrl" :download="fileName"
             class="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/90"
             title="下载">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
+            <Icon name="download" class="w-5 h-5" />
           </a>
           <button @click="emit('close')"
             class="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/90">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+            <Icon name="xmark" class="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -446,12 +444,12 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
       <button v-if="galleryFiles.length > 1" @click="navigateImage(-1)"
         class="gallery-nav-btn fixed top-1/2 -translate-y-1/2 left-4 z-[3000]"
         title="上一张 (←)">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        <Icon name="chevron-left" class="w-5 h-5" />
       </button>
       <button v-if="galleryFiles.length > 1" @click="navigateImage(1)"
         class="gallery-nav-btn fixed top-1/2 -translate-y-1/2 right-4 z-[3000]"
         title="下一张 (→)">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <Icon name="chevron-right" class="w-5 h-5" />
       </button>
     </template>
 
@@ -467,14 +465,10 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
           <h3 class="text-sm font-medium truncate flex-1 mr-3" style="color: var(--text-color)">{{ fileName }}</h3>
           <div class="flex items-center gap-1">
             <a :href="previewUrl" :download="fileName" class="p-1.5 rounded-md hover:opacity-80 transition-colors" title="下载">
-              <svg class="w-4 h-4" style="color: var(--text-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-              </svg>
+              <Icon name="download" class="w-4 h-4" style="color: var(--text-color)" />
             </a>
             <button @click="emit('close')" class="p-1.5 rounded-md hover:opacity-80 transition-colors">
-              <svg class="w-4 h-4" style="color: var(--text-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
+              <Icon name="xmark" class="w-4 h-4" style="color: var(--text-color)" />
             </button>
           </div>
         </div>
@@ -504,19 +498,19 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             <div class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0 flex-wrap"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
               <button @click="pdfPrevPage" :disabled="pdfPageNum <= 1" class="toolbar-btn" title="上一页">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                <Icon name="chevron-left" class="w-4 h-4" />
               </button>
               <span class="text-sm font-mono" style="color: var(--text-color)">{{ pdfPageNum }} / {{ pdfTotalPages }}</span>
               <button @click="pdfNextPage" :disabled="pdfPageNum >= pdfTotalPages" class="toolbar-btn" title="下一页">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                <Icon name="chevron-right" class="w-4 h-4" />
               </button>
               <span class="w-px h-5 mx-1" style="background: var(--border-color)" />
               <button @click="pdfZoomOut" class="toolbar-btn" title="缩小">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                <Icon name="minus" class="w-4 h-4" />
               </button>
               <span class="text-xs font-mono" style="color: var(--text-secondary-color)">{{ Math.round(pdfScale * 100) }}%</span>
               <button @click="pdfZoomIn" class="toolbar-btn" title="放大">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <Icon name="plus" class="w-4 h-4" />
               </button>
               <span class="flex-1" />
               <a :href="previewUrl" :download="fileName" class="toolbar-btn text-xs">下载</a>
@@ -567,9 +561,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 
           <!-- UNSUPPORTED -->
           <div v-if="!loading && fileType === 'unknown'" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
-            <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-            </svg>
+            <Icon name="file-alt" class="w-16 h-16 mb-4" />
             <p class="text-lg" style="color: var(--text-secondary-color)">不支持预览此文件类型</p>
             <a :href="previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">下载文件</a>
           </div>

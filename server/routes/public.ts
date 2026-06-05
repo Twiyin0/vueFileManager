@@ -26,18 +26,9 @@ const mimeTypes: Record<string, string> = {
 
 // 安全检查：防止路径越权（目录遍历攻击）
 function isPathSafe(targetPath: string): boolean {
-  // 规范化路径并检查是否包含 ..
-  const normalized = targetPath.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\//, '')
-  const segments = normalized.split('/')
-  let depth = 0
-  for (const seg of segments) {
-    if (seg === '..') {
-      depth--
-      if (depth < 0) return false
-    } else if (seg !== '.' && seg !== '') {
-      depth++
-    }
-  }
+  if (!targetPath) return true
+  // 检查原始路径中是否包含 .. 段（Express 会预处理规范化，所以用正则兜底）
+  if (/\.\./.test(targetPath)) return false
   return true
 }
 
@@ -53,7 +44,7 @@ router.get('/:username/*', async (req: Request, res: Response) => {
     }
 
     // 查找用户
-    const user = getUserByUsername(username)
+    const user = getUserByUsername(username as string)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }

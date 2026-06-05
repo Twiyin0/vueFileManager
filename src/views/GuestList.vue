@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import Icon from '@/components/Icon.vue'
 
 interface GuestUser {
   username: string
@@ -55,9 +56,7 @@ onMounted(async () => {
 
         <!-- 空状态 -->
         <div v-else-if="users.length === 0" class="card flex flex-col items-center justify-center py-20 text-gray-400 dark:text-dark-text-secondary">
-          <svg class="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
-          </svg>
+          <Icon name="globe" class="w-20 h-20 mb-4" />
           <p class="text-lg">暂无公开分享的文件</p>
           <p class="text-sm mt-1">用户可以在设置中开启访客模式并分享文件夹</p>
         </div>
@@ -71,9 +70,7 @@ onMounted(async () => {
             class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group"
           >
             <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-dark-accent-soft flex items-center justify-center">
-              <svg class="w-6 h-6 text-blue-500 dark:text-dark-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-              </svg>
+              <Icon name="user" class="w-6 h-6 text-blue-500 dark:text-dark-accent" />
             </div>
             <div class="flex-1 min-w-0">
               <h3 class="font-medium dark:text-dark-text text-light-text group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
@@ -83,9 +80,7 @@ onMounted(async () => {
                 {{ user.share_count }} 个共享文件夹
               </p>
             </div>
-            <svg class="w-5 h-5 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
+            <Icon name="chevron-right" class="w-5 h-5 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
           </router-link>
         </div>
       </div>

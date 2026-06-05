@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
   message: string
@@ -37,15 +38,9 @@ watch(() => props.show, (val) => {
             'bg-red-500 text-white': type === 'error',
             'bg-blue-500 text-white': type === 'info' || !type
           }">
-          <svg v-if="type === 'success'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>
-          <svg v-else-if="type === 'error'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
+          <Icon v-if="type === 'success'" name="check" class="w-4 h-4" />
+          <Icon v-else-if="type === 'error'" name="xmark" class="w-4 h-4" />
+          <Icon v-else name="circle-information" class="w-4 h-4" />
           {{ message }}
         </div>
       </div>

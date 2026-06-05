@@ -1,3 +1,4 @@
+// @ts-ignore - upyun has no type declarations
 import upyun from 'upyun'
 import https from 'https'
 import { PassThrough } from 'stream'
@@ -63,9 +64,9 @@ export class UpyunStorage implements StorageProvider {
     const dirPath = this.normalizePath(prefix || '/')
     try {
       const result = await withRetry(() => this.client.listDir(dirPath))
-      if (!result || !result.files) return []
+      if (!result || !(result as any).files) return []
 
-      const files: FileInfo[] = result.files.map((file: any) => {
+      const files: FileInfo[] = (result as any).files.map((file: any) => {
         const filePath = dirPath === '/' ? `/${file.name}` : `${dirPath}/${file.name}`
         return {
           name: file.name,

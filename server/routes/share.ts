@@ -2,7 +2,7 @@ import { Router, Response, Request } from 'express'
 import crypto from 'crypto'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
-import { getStorage } from '../services/factory'
+import { getStorage, getStorageByPoolId } from '../services/factory'
 
 const router = Router()
 
@@ -35,7 +35,7 @@ function getShareUsername(shareId: number): string | null {
 // 生成分享链接
 router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
-    const { filePath, fileType, password, expiresIn, maxDownloads } = req.body
+    const { filePath, fileType, password, expiresIn, maxDownloads, storagePoolId } = req.body
     if (!filePath) {
       return res.status(400).json({ error: '缺少文件路径' })
     }
@@ -48,9 +48,9 @@ router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
     }
 
     db.prepare(`
-      INSERT INTO shares (user_id, file_path, file_type, share_code, password, expires_at, max_downloads, sign_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(req.userId!, filePath, fileType || 'file', shareCode, password || null, expiresAt, maxDownloads || null, signKey)
+      INSERT INTO shares (user_id, file_path, file_type, share_code, password, expires_at, max_downloads, sign_key, storage_pool_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(req.userId!, filePath, fileType || 'file', shareCode, password || null, expiresAt, maxDownloads || null, signKey, storagePoolId || null)
 
     // 获取用户名用于生成签名
     const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
@@ -204,7 +204,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     }
 
     // 下载文件
-    const storage = getStorage(share.user_id)
+    const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
     const data = await storage.download(share.file_path)
     const fileName = share.file_path.split('/').pop() || 'download'
 
@@ -255,7 +255,7 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
       return res.status(403).json({ error: '签名验证失败' })
     }
 
-    const storage = getStorage(share.user_id)
+    const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
     const data = await storage.download(share.file_path)
     const ext = share.file_path.split('.').pop()?.toLowerCase() || ''
     const mimeTypes: Record<string, string> = {

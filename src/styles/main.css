@@ -152,6 +152,11 @@ body {
   box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.15);
 }
 
+/* 下拉选择框紧凑样式 */
+select.input-field {
+  @apply py-1.5;
+}
+
 .dark .input-field:focus {
   box-shadow: 0 0 0 3px rgba(107, 124, 255, 0.15);
 }

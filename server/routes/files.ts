@@ -259,7 +259,7 @@ router.post('/upload/init', flexibleAuth, requirePermission('write'), async (req
 // 断点续传：上传分片
 router.patch('/upload/:uploadId/chunk', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    const { uploadId } = req.params
+    const uploadId = req.params.uploadId as string
     const contentRange = req.headers['content-range'] as string
     if (!contentRange) {
       return res.status(400).json({ error: '缺少 Content-Range 头' })
@@ -327,7 +327,7 @@ router.patch('/upload/:uploadId/chunk', flexibleAuth, requirePermission('write')
 // 断点续传：查询上传状态
 router.get('/upload/:uploadId/status', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    const { uploadId } = req.params
+    const uploadId = req.params.uploadId as string
     const uploadDir = path.join(UPLOAD_TEMP_DIR, uploadId)
     const metaPath = path.join(uploadDir, 'meta.json')
 
@@ -356,7 +356,7 @@ router.get('/upload/:uploadId/status', flexibleAuth, requirePermission('read'), 
 // 断点续传：合并分片完成上传
 router.post('/upload/:uploadId/complete', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    const { uploadId } = req.params
+    const uploadId = req.params.uploadId as string
     const uploadDir = path.join(UPLOAD_TEMP_DIR, uploadId)
     const metaPath = path.join(uploadDir, 'meta.json')
 

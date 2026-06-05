@@ -32,7 +32,7 @@
 
 ### 规则
 
-1. **输入框**：统一使用 `.input-field` 类，已内置暗色 placeholder、focus 样式。**禁止**手写 `bg-white dark:bg-dark-surface ...` 替代 `.input-field`
+1. **输入框/下拉框**：统一使用 `.input-field` 类，已内置暗色 placeholder、focus 样式。**禁止**手写 `bg-white dark:bg-dark-surface ...` 替代 `.input-field`。`<select>` 元素使用 `select.input-field` 自动获得紧凑内边距（`py-1.5`）
 2. **对话框/面板背景**：用 `.card` 类或 `style="background-color: var(--card-color)"`，**禁止**裸用 `bg-white`
 3. **对话框遮罩**：必须带 `dark:bg-black/60`，如 `bg-black/40 dark:bg-black/60`
 4. **文本/代码预览**：用 `var(--surface-color)` 而非 `white`
@@ -176,6 +176,47 @@
 
 - 路由：`/guest`（用户列表）、`/guest/:username`（文件夹列表）、`/guest/:username/:shareId`（文件浏览）
 - 访客页左上角使用 `logo.svg`（34×34px），与用户界面一致
+
+## 用户封禁系统
+
+用户封禁字段 `users.banned`（INTEGER, 0/1），需在 **3 个认证入口** 同时检查：
+
+1. **登录路由** (`server/routes/auth.ts`) — 密码验证通过后、生成 JWT 前检查 `user.banned`
+2. **API Key 中间件** (`server/middleware/apikey.ts` `apiKeyMiddleware`) — 查询时 JOIN users 并 SELECT `u.banned`，验证后检查
+3. **统一认证** (`server/middleware/apikey.ts` `flexibleAuth`) — JWT 路径查询用户时 SELECT `banned`，验证后检查；API Key 路径委托给已修复的 `apiKeyMiddleware`
+
+封禁响应统一为 `403 { error: '账号已被封禁' }`。
+
+**管理员保护**：管理员账户（`role = 'admin'`）不能被封禁，ban 接口会返回 `400 { error: '不能封禁管理员账户' }`。
+
+## IP 黑名单/白名单系统
+
+数据库表 `ip_blacklist` + `ip_whitelist`（`server/db.ts` 迁移创建），各自独立存储，支持精确 IPv4 和 CIDR 网段。配置表 `ip_list_config` 存储当前模式（`blacklist` / `whitelist`），中间件和管理路由按模式查询对应表。
+
+### 模式
+
+- **黑名单模式**（默认）：拦截列表中的 IP
+- **白名单模式**：仅允许列表中的 IP，127.0.0.1 / ::1 / localhost 始终放行，127.0.0.1 不可删除
+
+默认模式可在 `config.yml` 中通过 `ip_list_mode` 配置。切换到白名单时若列表为空，自动添加 127.0.0.1、::1、localhost。
+
+### 中间件
+
+`ipBlacklistMiddleware`（`server/middleware/auth.ts`）在所有 API 路由之前执行，根据模式检查客户端 IP。在 `server/index.ts` 中通过 `app.use('/api', ipBlacklistMiddleware)` 注册。
+
+IP 获取优先级：`X-Forwarded-For` 头 → `req.socket.remoteAddress`，自动去除 `::ffff:` IPv6 前缀。
+
+### API 路由（`server/routes/admin.ts`）
+
+均需 `authMiddleware` + `adminMiddleware`：
+
+- `GET /api/admin/ip-blacklist` — 查询列表
+- `POST /api/admin/ip-blacklist` — 添加 `{ ip_pattern, reason? }`
+- `DELETE /api/admin/ip-blacklist/:id` — 删除（白名单模式下 127.0.0.1 不可删除）
+- `GET /api/admin/ip-list/mode` — 获取当前模式
+- `PUT /api/admin/ip-list/mode` — 切换模式 `{ mode: 'blacklist' | 'whitelist' }`
+
+IP 格式校验：正则 `(/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/)` + 每段 0-255 + 掩码 0-32。
 
 ## Mac 兼容性
 

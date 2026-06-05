@@ -6,6 +6,7 @@ const props = defineProps<{
   show: boolean
   filePath: string
   fileName: string
+  poolId?: number
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +39,7 @@ async function createShare() {
     const res = await api.post<{ shareCode: string; url: string; signUrl: string; signKey: string }>('/share/create', {
       filePath: props.filePath,
       fileType: 'file',
+      storagePoolId: props.poolId,
       password: usePassword.value ? password.value : undefined,
       expiresIn: expiresIn.value || undefined,
       maxDownloads: maxDownloads.value || undefined,
@@ -123,9 +125,12 @@ function close() {
           <div class="space-y-4">
             <!-- 密码保护 -->
             <div>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input v-model="usePassword" type="checkbox" class="rounded border-gray-300 text-blue-500 focus:ring-blue-500" />
+              <label class="flex items-center justify-between cursor-pointer">
                 <span class="text-sm" style="color: var(--text-color)">密码保护</span>
+                <div class="relative inline-flex items-center">
+                  <input v-model="usePassword" type="checkbox" class="sr-only peer" />
+                  <div class="w-9 h-5 bg-gray-200 dark:bg-dark-border rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                </div>
               </label>
               <input
                 v-if="usePassword"
@@ -152,7 +157,7 @@ function close() {
               <input
                 v-model="maxDownloads"
                 type="number"
-                class="input-field"
+                class="input-field [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 placeholder="留空表示不限制"
                 min="1"
               />

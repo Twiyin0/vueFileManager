@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { api } from '@/api'
+import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
   show: boolean
@@ -125,13 +126,9 @@ watch([selectedPoolId, () => props.pools], () => {
               class="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 transition-colors hover:bg-gray-50 dark:hover:bg-dark-hover border-b last:border-0"
               style="border-color: var(--border-color); color: var(--text-color)"
             >
-              <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-              </svg>
+              <Icon name="folder" class="w-4 h-4 text-blue-500 flex-shrink-0" />
               <span class="truncate">{{ folder.name }}</span>
-              <svg class="w-4 h-4 ml-auto flex-shrink-0" style="color: var(--text-secondary-color)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-              </svg>
+              <Icon name="chevron-right" class="w-4 h-4 ml-auto flex-shrink-0" style="color: var(--text-secondary-color)" />
             </button>
           </div>
         </div>

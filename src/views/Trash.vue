@@ -2,6 +2,32 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import Layout from '@/components/Layout.vue'
+import Icon from '@/components/Icon.vue'
+
+const fileIconMap: Record<string, { icon: string; color: string }> = {
+  folder: { icon: 'folder', color: 'text-blue-500' },
+  image: { icon: 'image', color: 'text-green-500' },
+  video: { icon: 'video', color: 'text-purple-500' },
+  audio: { icon: 'music', color: 'text-pink-500' },
+  pdf: { icon: 'file-alt', color: 'text-red-500' },
+  archive: { icon: 'box-archive', color: 'text-yellow-500' },
+  code: { icon: 'code', color: 'text-cyan-500' },
+  text: { icon: 'text', color: 'text-gray-500' },
+  file: { icon: 'file-alt', color: 'text-gray-400' },
+}
+
+function getFileIcon(name: string, type: string): { icon: string; color: string } {
+  if (type === 'folder') return fileIconMap.folder
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return fileIconMap.image
+  if (['mp4', 'avi', 'mov', 'mkv'].includes(ext)) return fileIconMap.video
+  if (['mp3', 'wav', 'flac', 'aac'].includes(ext)) return fileIconMap.audio
+  if (['pdf'].includes(ext)) return fileIconMap.pdf
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return fileIconMap.archive
+  if (['js', 'ts', 'py', 'java', 'go', 'rs', 'vue', 'html', 'css'].includes(ext)) return fileIconMap.code
+  if (['txt', 'md', 'json', 'yaml', 'yml', 'xml'].includes(ext)) return fileIconMap.text
+  return fileIconMap.file
+}
 
 const loading = ref(false)
 const items = ref<any[]>([])
@@ -90,7 +116,7 @@ function formatDate(date: string) {
         <div v-for="item in items" :key="item.id"
           class="card flex items-center justify-between p-4">
           <div class="flex items-center gap-3">
-            <span class="text-2xl">{{ item.file_type === 'folder' ? '📁' : '📄' }}</span>
+            <Icon :name="getFileIcon(item.file_name, item.file_type).icon" :class="['w-6 h-6', getFileIcon(item.file_name, item.file_type).color]" />
             <div>
               <p class="font-medium dark:text-dark-text text-light-text">{{ item.file_name }}</p>
               <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
@@ -106,7 +132,7 @@ function formatDate(date: string) {
       </div>
 
       <div v-else class="text-center py-20">
-        <div class="text-6xl mb-4">🗑️</div>
+        <Icon name="trash" class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
         <h3 class="text-lg font-semibold dark:text-dark-text text-light-text mb-2">回收站为空</h3>
         <p class="text-gray-500 dark:text-dark-text-secondary">删除的文件会出现在这里</p>
       </div>

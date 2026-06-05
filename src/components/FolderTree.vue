@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { api } from '@/api'
+import Icon from '@/components/Icon.vue'
 
 interface TreeNode {
   name: string
@@ -117,9 +118,7 @@ watch(() => props.poolId, loadRoot)
     <div @click="emit('navigate', '')"
       class="flex items-center gap-1 px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-dark-hover"
       :class="!poolId && currentPath === '' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'dark:text-dark-text text-light-text'">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-      </svg>
+      <Icon name="house-line" class="w-4 h-4" />
       <span>{{ poolId ? '返回存储池' : '全部存储池' }}</span>
     </div>
 
@@ -128,10 +127,9 @@ watch(() => props.poolId, loadRoot)
       <div @click="toggleNode(node); navigate(node)"
         class="flex items-center gap-1 px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-dark-hover ml-2"
         :class="(node.isPool && poolId === node.poolId) || (!node.isPool && currentPath === node.path) ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'dark:text-dark-text text-light-text'">
-        <svg v-if="!node.isPool" class="w-3 h-3 transition-transform" :class="node.expanded ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
-        <span class="text-sm">{{ node.isPool ? '🗄️' : '📁' }}</span>
+        <Icon v-if="!node.isPool" name="chevron-right" class="w-3 h-3 transition-transform" :class="node.expanded ? 'rotate-90' : ''" />
+        <Icon v-if="node.isPool" name="container-storage" class="w-4 h-4 text-blue-500" />
+        <Icon v-else :name="node.expanded ? 'folder-minus' : 'folder-plus'" class="w-4 h-4 text-blue-500" />
         <span class="truncate">{{ node.name }}</span>
       </div>
 
@@ -141,10 +139,8 @@ watch(() => props.poolId, loadRoot)
           @click="toggleNode(child); navigate(child)"
           class="flex items-center gap-1 px-2 py-1.5 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-dark-hover ml-6"
           :class="currentPath === child.path ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'dark:text-dark-text text-light-text'">
-          <svg class="w-3 h-3 transition-transform" :class="child.expanded ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-          </svg>
-          <span class="text-sm">📁</span>
+          <Icon name="chevron-right" class="w-3 h-3 transition-transform" :class="child.expanded ? 'rotate-90' : ''" />
+          <Icon :name="child.expanded ? 'folder-minus' : 'folder-plus'" class="w-4 h-4 text-blue-500" />
           <span class="truncate">{{ child.name }}</span>
         </div>
       </template>
