@@ -281,6 +281,57 @@ async function testFiles() {
     console.log(yellow(`  统计: ${data.fileCount} 文件, ${data.folderCount} 文件夹, ${data.totalSize} bytes`))
   })
 
+  await test('POST /files/download-zip - 单文件打包下载', async () => {
+    // 先上传一个测试文件
+    const uploadRes = await fetch(`${BASE}/files/upload?path=test-dir`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: (() => { const fd = new FormData(); fd.append('file', new Blob(['zip test content']), 'zip-test.txt'); return fd })()
+    })
+    assert(uploadRes.ok, '上传测试文件失败')
+
+    const res = await fetch(`${BASE}/files/download-zip`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ paths: ['test-dir/zip-test.txt'], poolId: testPoolId })
+    })
+    assert(res.ok, `下载失败: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    assert(buffer.length > 0, 'ZIP 文件为空')
+    // ZIP 文件头魔数 PK
+    assert(buffer[0] === 0x50 && buffer[1] === 0x4B, '不是有效的 ZIP 文件')
+  })
+
+  await test('POST /files/download-zip - 多文件打包下载', async () => {
+    // 再上传一个文件
+    await fetch(`${BASE}/files/upload?path=test-dir`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: (() => { const fd = new FormData(); fd.append('file', new Blob(['another file']), 'zip-test2.txt'); return fd })()
+    })
+
+    const res = await fetch(`${BASE}/files/download-zip`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ paths: ['test-dir/zip-test.txt', 'test-dir/zip-test2.txt'], poolId: testPoolId })
+    })
+    assert(res.ok, `下载失败: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    assert(buffer.length > 0, 'ZIP 文件为空')
+    assert(buffer[0] === 0x50 && buffer[1] === 0x4B, '不是有效的 ZIP 文件')
+  })
+
+  await test('POST /files/download-zip - 空路径应 400', async () => {
+    const { status } = await api('POST', '/files/download-zip', { paths: [] }, auth(adminToken))
+    assert(status === 400, `状态码 ${status}`)
+  })
+
   await test('POST /files/batch-delete - 批量删除', async () => {
     // 先创建几个
     await api('POST', '/files/mkdir', { path: 'test-dir/batch-a' }, auth(adminToken))
@@ -808,17 +859,25 @@ async function testGuest() {
   // 开启访客模式
   await api('PUT', '/user/settings', { guestEnabled: true }, auth(userToken))
 
-  // 创建访客分享（带权限）
+  // 创建测试文件夹和文件
+  await api('POST', '/files/mkdir', { path: 'guest-test' }, auth(userToken))
+  await fetch(`${BASE}/files/upload?path=guest-test`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${userToken}` },
+    body: (() => { const fd = new FormData(); fd.append('file', new Blob(['guest test']), 'guest-file.txt'); return fd })()
+  })
+
+  // 创建访客分享（全权限）
   let guestShareId = 0
-  await test('POST /user/guest-shares - 创建访客分享（带权限）', async () => {
+  await test('POST /user/guest-shares - 创建访客分享（全权限）', async () => {
     const { status, data } = await api('POST', '/user/guest-shares', {
-      folderPath: '/',
+      folderPath: 'guest-test',
       storagePoolId: defaultPool.id,
-      label: '根目录',
-      permissions: 'preview,download'
+      label: '测试文件夹',
+      permissions: 'read,write,delete,edit'
     }, auth(userToken))
     assert(status === 200, `状态码 ${status}`)
-    assert(data.share.permissions === 'preview,download', `权限不匹配: ${data.share.permissions}`)
+    assert(data.share.permissions === 'read,write,delete,edit', `权限不匹配: ${data.share.permissions}`)
     guestShareId = data.share.id
   })
 
@@ -838,30 +897,107 @@ async function testGuest() {
     console.log(yellow(`  访客分享: ${data.shares.length} 个, 权限: ${data.shares[0].permissions}`))
   })
 
-  await test('PUT /user/guest-shares/:id - 更新访客分享权限', async () => {
+  await test('GET /guest/testuser/:shareId/list - 访客文件列表', async () => {
+    const { status, data } = await api('GET', `/guest/testuser/${guestShareId}/list`)
+    assert(status === 200, `状态码 ${status}`)
+    assert(Array.isArray(data.files), '返回非数组')
+    assert(data.files.some((f: any) => f.name === 'guest-file.txt'), '未找到 guest-file.txt')
+    assert(data.permissions === 'read,write,delete,edit', `权限不匹配: ${data.permissions}`)
+  })
+
+  // 测试访客创建文件夹
+  await test('POST /guest/:username/:shareId/mkdir - 访客创建文件夹', async () => {
+    const { status, data } = await api('POST', `/guest/testuser/${guestShareId}/mkdir`, { path: 'guest-folder' })
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.message === '创建成功', `消息不匹配: ${data.message}`)
+  })
+
+  // 验证文件夹已创建
+  await test('GET /guest/testuser/:shareId/list - 验证文件夹已创建', async () => {
+    const { status, data } = await api('GET', `/guest/testuser/${guestShareId}/list`)
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.files.some((f: any) => f.name === 'guest-folder' && f.type === 'folder'), '未找到 guest-folder')
+  })
+
+  // 测试访客重命名
+  await test('POST /guest/:username/:shareId/rename - 访客重命名文件', async () => {
+    const { status, data } = await api('POST', `/guest/testuser/${guestShareId}/rename`, {
+      path: 'guest-file.txt', newName: 'guest-renamed.txt'
+    })
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.message === '重命名成功', `消息不匹配: ${data.message}`)
+  })
+
+  // 验证重命名成功
+  await test('GET /guest/testuser/:shareId/list - 验证重命名成功', async () => {
+    const { status, data } = await api('GET', `/guest/testuser/${guestShareId}/list`)
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.files.some((f: any) => f.name === 'guest-renamed.txt'), '未找到 guest-renamed.txt')
+    assert(!data.files.some((f: any) => f.name === 'guest-file.txt'), 'guest-file.txt 应已不存在')
+  })
+
+  // 测试访客预览
+  await test('GET /guest/:username/:shareId/preview - 访客预览文件', async () => {
+    const res = await fetch(`${BASE}/guest/testuser/${guestShareId}/preview?path=guest-renamed.txt`)
+    assert(res.ok, `预览失败: ${res.status}`)
+    const text = await res.text()
+    assert(text === 'guest test', `内容不匹配: ${text}`)
+  })
+
+  // 测试访客删除
+  await test('POST /guest/:username/:shareId/delete - 访客删除文件', async () => {
+    const { status, data } = await api('POST', `/guest/testuser/${guestShareId}/delete`, { path: 'guest-renamed.txt' })
+    assert(status === 200, `状态码 ${status}`)
+    assert(data.message === '删除成功', `消息不匹配: ${data.message}`)
+  })
+
+  // 验证文件已删除
+  await test('GET /guest/testuser/:shareId/list - 验证文件已删除', async () => {
+    const { status, data } = await api('GET', `/guest/testuser/${guestShareId}/list`)
+    assert(status === 200, `状态码 ${status}`)
+    assert(!data.files.some((f: any) => f.name === 'guest-renamed.txt'), '文件应已删除')
+  })
+
+  // 验证回收站有记录（标注访客删除）
+  await test('GET /trash - 验证回收站有访客删除记录', async () => {
+    const { status, data } = await api('GET', '/trash', null, auth(userToken))
+    assert(status === 200, `状态码 ${status}`)
+    const guestDeleted = data.items.find((i: any) => i.deleted_by && i.deleted_by.includes('访客'))
+    assert(guestDeleted, '回收站中无访客删除记录')
+    assert(guestDeleted.deleted_by.includes('testuser'), `deleted_by 不正确: ${guestDeleted.deleted_by}`)
+    console.log(yellow(`  回收站记录: ${guestDeleted.file_name}, deleted_by: ${guestDeleted.deleted_by}`))
+  })
+
+  // 测试无权限场景
+  await test('PUT /user/guest-shares/:id - 降级为只读权限', async () => {
     const { status, data } = await api('PUT', `/user/guest-shares/${guestShareId}`, {
-      permissions: 'preview'
+      permissions: 'read'
     }, auth(userToken))
     assert(status === 200, `状态码 ${status}`)
-    assert(data.share.permissions === 'preview', `权限未更新: ${data.share.permissions}`)
+    assert(data.share.permissions === 'read', `权限未更新: ${data.share.permissions}`)
   })
 
-  await test('GET /guest/testuser/list - 验证权限已更新', async () => {
-    const { status, data } = await api('GET', '/guest/testuser/list')
-    assert(status === 200, `状态码 ${status}`)
-    const share = data.shares.find((s: any) => s.id === guestShareId)
-    assert(share, '未找到分享')
-    assert(share.permissions === 'preview', `权限不匹配: ${share.permissions}`)
-  })
-
-  // 测试无 download 权限时下载应 403
-  await test('GET /guest/:username/:shareId/download - 无下载权限应 403', async () => {
-    const { status } = await rawApi('GET', `${BASE}/guest/testuser/${guestShareId}/download?path=test.txt`)
+  await test('POST /guest/:username/:shareId/mkdir - 无写入权限应 403', async () => {
+    const { status } = await api('POST', `/guest/testuser/${guestShareId}/mkdir`, { path: 'should-fail' })
     assert(status === 403, `状态码 ${status}`)
   })
 
-  // 恢复 download 权限用于后续测试
-  await api('PUT', `/user/guest-shares/${guestShareId}`, { permissions: 'preview,download' }, auth(userToken))
+  await test('POST /guest/:username/:shareId/rename - 无编辑权限应 403', async () => {
+    const { status } = await api('POST', `/guest/testuser/${guestShareId}/rename`, {
+      path: 'guest-folder', newName: 'renamed-folder'
+    })
+    assert(status === 403, `状态码 ${status}`)
+  })
+
+  await test('POST /guest/:username/:shareId/delete - 无删除权限应 403', async () => {
+    const { status } = await api('POST', `/guest/testuser/${guestShareId}/delete`, { path: 'guest-folder' })
+    assert(status === 403, `状态码 ${status}`)
+  })
+
+  await test('POST /guest/:username/:shareId/upload - 无上传权限应 403', async () => {
+    const { status } = await api('POST', `/guest/testuser/${guestShareId}/upload`, {})
+    assert(status === 403, `状态码 ${status}`)
+  })
 
   // 清理访客分享
   await test('DELETE /user/guest-shares - 清理访客分享', async () => {
@@ -872,6 +1008,9 @@ async function testGuest() {
     // 关闭访客模式
     await api('PUT', '/user/settings', { guestEnabled: false }, auth(userToken))
   })
+
+  // 清理测试文件
+  await api('DELETE', '/files/delete?path=guest-test&permanent=true', null, auth(userToken))
 }
 
 // ==================== 13. 管理面板 ====================
