@@ -32,11 +32,14 @@ const editShare = ref<any>(null)
 const showEditDialog = ref(false)
 
 const permLabels: Record<string, string> = {
+  read: '读取',
+  write: '写入',
+  delete: '删除',
+  edit: '文件编辑',
+  // 兼容旧格式
   preview: '预览',
   download: '下载',
-  upload: '上传',
-  edit: '编辑',
-  delete: '删除'
+  upload: '上传'
 }
 
 onMounted(async () => {

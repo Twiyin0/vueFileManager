@@ -181,13 +181,12 @@
 
 `guest_shares` 表有 `permissions` 字段（TEXT，逗号分隔），控制访客可执行的操作：
 
-| 权限 | 说明 | API 路由 |
-|------|------|----------|
-| `preview` | 预览文件 | `GET /api/guest/:username/:shareId/preview` |
-| `download` | 下载文件 | `GET /api/guest/:username/:shareId/download` |
-| `upload` | 上传文件 | `POST /api/guest/:username/:shareId/upload` |
-| `edit` | 编辑文本/代码文件内容 | `POST /api/guest/:username/:shareId/write` |
-| `delete` | 删除文件 | （预留，暂未实现路由） |
+| 权限 | 说明 | 包含操作 | API 路由 |
+|------|------|----------|----------|
+| `read` | 读取 | 预览、下载 | `GET /preview`, `GET /download` |
+| `write` | 写入 | 上传、创建文件夹 | `POST /upload`, `POST /mkdir` |
+| `delete` | 删除 | 删除文件/文件夹 | `POST /delete` |
+| `edit` | 文件编辑 | 编辑内容、重命名 | `POST /write`, `POST /rename` |
 
 默认权限：`preview,download`（只读）。创建/编辑分享时可自定义。
 

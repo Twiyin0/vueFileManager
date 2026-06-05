@@ -9,7 +9,7 @@ const router = Router()
 router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const items = db.prepare(`
-      SELECT t.*, sp.name as pool_name, sp.storage_type
+      SELECT t.*, t.deleted_by, sp.name as pool_name, sp.storage_type
       FROM trash t
       JOIN storage_pools sp ON t.storage_pool_id = sp.id
       WHERE t.user_id = ?

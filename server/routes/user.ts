@@ -198,7 +198,7 @@ router.post('/guest-shares', authMiddleware, (req: AuthRequest, res: Response) =
       return res.status(409).json({ error: '该文件夹已分享至访客模式' })
     }
 
-    const perms = permissions || 'preview,download'
+    const perms = permissions || 'read'
 
     const result = db.prepare('INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions) VALUES (?, ?, ?, ?, ?)')
       .run(req.userId!, folderPath, storagePoolId, label || folderPath.split('/').pop() || '根目录', perms)

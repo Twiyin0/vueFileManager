@@ -94,7 +94,7 @@ const currentPoolId = computed(() => {
 })
 const pools = ref<{ id: number; name: string }[]>([])
 
-const currentPath = computed(() => (route.query.path as string) || '')
+const currentPath = computed(() => ((route.query.path as string) || '').replace(/\\/g, '/'))
 
 const pathSegments = computed(() => {
   if (!currentPath.value) return []

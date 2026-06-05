@@ -67,7 +67,7 @@
 
 ### 权限系统
 - 🔑 API Key 权限管理（read/write/delete）
-- 🚪 访客模式（多文件夹分享，右键菜单一键分享，权限可配置：预览/下载/上传/编辑/删除）
+- 🚪 访客模式（多文件夹分享，右键菜单一键分享，四级权限：读取/写入/删除/文件编辑）
 - 🛡️ 管理员面板
 
 ### 兼容性
@@ -351,6 +351,9 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 访客 | `GET /api/guest/:username/:shareId/preview` | 访客预览文件 |
 | 访客 | `POST /api/guest/:username/:shareId/upload` | 访客上传文件 |
 | 访客 | `POST /api/guest/:username/:shareId/write` | 访客编辑文件内容 |
+| 访客 | `POST /api/guest/:username/:shareId/delete` | 访客删除文件 |
+| 访客 | `POST /api/guest/:username/:shareId/rename` | 访客重命名文件 |
+| 访客 | `POST /api/guest/:username/:shareId/mkdir` | 访客创建文件夹 |
 | 用户 | `GET /api/user/info` | 用户完整信息（含存储池和统计） |
 | 用户 | `GET /api/user/settings` | 获取设置 |
 | 用户 | `PUT /api/user/settings` | 更新设置 |

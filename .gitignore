@@ -10,6 +10,8 @@ vite.config.d.ts
 .env
 package-lock.json
 yarn.lock
+.yarn
+.yarnrc.yml
 .idea
 .vscode
 .claude

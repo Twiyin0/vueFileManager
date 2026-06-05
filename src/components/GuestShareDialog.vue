@@ -20,31 +20,31 @@ const label = ref(props.folderName || '')
 const loading = ref(false)
 const error = ref('')
 
-// 权限状态
+// 权限状态（四级权限体系）
 const perms = ref({
-  preview: true,
-  download: true,
-  upload: false,
+  read: true,
+  write: false,
   delete: false,
   edit: false
 })
 
-// 从已有分享数据初始化
+// 从已有分享数据初始化（兼容旧权限格式）
 watch(() => props.editShare, (share) => {
   if (share) {
     label.value = share.label
     const parts = share.permissions.split(',').map(s => s.trim())
-    perms.value.preview = parts.includes('preview')
-    perms.value.download = parts.includes('download')
-    perms.value.upload = parts.includes('upload')
+    // 新格式直接读取
+    perms.value.read = parts.includes('read') || parts.includes('preview') || parts.includes('download')
+    perms.value.write = parts.includes('write') || parts.includes('upload')
     perms.value.delete = parts.includes('delete')
+    perms.value.edit = parts.includes('edit')
   }
 }, { immediate: true })
 
 watch(() => props.show, (val) => {
   if (val && !props.editShare) {
     label.value = props.folderName || ''
-    perms.value = { preview: true, download: true, upload: false, delete: false, edit: false }
+    perms.value = { read: true, write: false, delete: false, edit: false }
   }
   if (val) error.value = ''
 })
@@ -109,28 +109,24 @@ async function handleSubmit() {
             <label class="block text-sm font-medium mb-2" style="color: var(--text-color)">访客权限</label>
             <div class="space-y-2.5">
               <label class="flex items-center gap-2.5 cursor-pointer">
-                <input type="checkbox" v-model="perms.preview" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm" style="color: var(--text-color)">预览文件</span>
-                <span class="text-xs" style="color: var(--text-secondary-color)">（图片、视频、音频、PDF、代码）</span>
+                <input type="checkbox" v-model="perms.read" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm" style="color: var(--text-color)">读取</span>
+                <span class="text-xs" style="color: var(--text-secondary-color)">（预览、下载文件）</span>
               </label>
               <label class="flex items-center gap-2.5 cursor-pointer">
-                <input type="checkbox" v-model="perms.download" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm" style="color: var(--text-color)">下载文件</span>
-              </label>
-              <label class="flex items-center gap-2.5 cursor-pointer">
-                <input type="checkbox" v-model="perms.upload" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm" style="color: var(--text-color)">上传文件</span>
-                <span class="text-xs" style="color: var(--text-secondary-color)">（可向文件夹上传新文件）</span>
-              </label>
-              <label class="flex items-center gap-2.5 cursor-pointer">
-                <input type="checkbox" v-model="perms.edit" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm" style="color: var(--text-color)">编辑文件</span>
-                <span class="text-xs" style="color: var(--text-secondary-color)">（可编辑文本/代码文件内容）</span>
+                <input type="checkbox" v-model="perms.write" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm" style="color: var(--text-color)">写入</span>
+                <span class="text-xs" style="color: var(--text-secondary-color)">（上传文件）</span>
               </label>
               <label class="flex items-center gap-2.5 cursor-pointer">
                 <input type="checkbox" v-model="perms.delete" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span class="text-sm" style="color: var(--text-color)">删除文件</span>
-                <span class="text-xs" style="color: var(--text-secondary-color)">（可删除文件夹内的文件）</span>
+                <span class="text-sm" style="color: var(--text-color)">删除</span>
+                <span class="text-xs" style="color: var(--text-secondary-color)">（删除文件与文件夹）</span>
+              </label>
+              <label class="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" v-model="perms.edit" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm" style="color: var(--text-color)">文件编辑</span>
+                <span class="text-xs" style="color: var(--text-secondary-color)">（编辑文件内容、重命名）</span>
               </label>
             </div>
           </div>

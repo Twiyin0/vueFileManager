@@ -823,19 +823,46 @@ Form Fields: file（文件）、dirPath（目标子目录，可选）
 400 { "error": "文件内容不能超过 10MB" }
 ```
 
+### POST `/api/guest/:username/:shareId/delete` — 访客删除文件
+需 `delete` 权限。删除的文件会移入回收站并标注为访客删除。
+```json
+// Request Body
+{ "path": "file.txt" }
+// Response
+{ "message": "删除成功" }
+```
+
+### POST `/api/guest/:username/:shareId/rename` — 访客重命名文件
+需 `edit` 权限（edit 包含 rename）。
+```json
+// Request Body
+{ "path": "old-name.txt", "newName": "new-name.txt" }
+// Response
+{ "message": "重命名成功" }
+```
+
+### POST `/api/guest/:username/:shareId/mkdir` — 访客创建文件夹
+需 `write` 权限（write 包含 upload）。
+```json
+// Request Body
+{ "path": "new-folder" }
+// Response
+{ "message": "创建成功", "path": "new-folder" }
+```
+
 ### 访客权限
 
 创建访客分享时可指定 `permissions` 字段（逗号分隔），控制访客可执行的操作：
 
-| 权限 | 说明 |
-|------|------|
-| `preview` | 预览文件（图片/视频/音频/PDF/代码） |
-| `download` | 下载文件 |
-| `upload` | 上传文件到分享文件夹 |
-| `edit` | 编辑文本/代码文件内容（Monaco Editor） |
-| `delete` | 删除文件夹内的文件 |
+| 权限 | 说明 | 包含操作 |
+|------|------|----------|
+| `read` | 读取 | 预览文件、下载文件 |
+| `write` | 写入 | 上传文件 |
+| `delete` | 删除 | 删除文件与文件夹 |
+| `edit` | 文件编辑 | 编辑文件内容、重命名 |
 
-默认权限：`preview,download`（只读）。
+权限支持别名：`read` 自动包含 `preview` 和 `download`，`write` 自动包含 `upload`，`edit` 自动包含 `rename`。
+默认权限：`read`（只读）。
 
 ---
 

@@ -8,6 +8,7 @@ import FileList from '@/components/FileList.vue'
 import FilePreview from '@/components/FilePreview.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import FileDetailPanel from '@/components/FileDetailPanel.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
 
 const route = useRoute()
@@ -45,9 +46,22 @@ const uploadFile = ref<File | null>(null)
 const uploading = ref(false)
 const uploadError = ref('')
 
+// 删除确认
+const showDeleteConfirm = ref(false)
+const fileToDelete = ref<FileItem | null>(null)
+
+// 重命名
+const showRename = ref(false)
+const fileToRename = ref<FileItem | null>(null)
+const newFileName = ref('')
+
+// 新建文件夹
+const showCreateFolder = ref(false)
+const newFolderName = ref('')
+
 const username = computed(() => route.params.username as string)
 const shareId = computed(() => route.params.shareId as string)
-const currentPath = computed(() => (route.query.path as string) || '')
+const currentPath = computed(() => ((route.query.path as string) || '').replace(/\\/g, '/'))
 
 const pathSegments = computed(() => {
   if (!currentPath.value) return []
@@ -56,7 +70,21 @@ const pathSegments = computed(() => {
 
 const isFolderView = computed(() => !!shareId.value)
 
-const hasPermission = (action: string) => sharePermissions.value.split(',').map(s => s.trim()).includes(action)
+// 权限别名映射
+const permissionAliases: Record<string, string[]> = {
+  read: ['preview', 'download'],
+  write: ['upload'],
+  edit: ['rename'],
+}
+
+const hasPermission = (action: string) => {
+  const perms = sharePermissions.value.split(',').map(s => s.trim())
+  if (perms.includes(action)) return true
+  for (const [parent, aliases] of Object.entries(permissionAliases)) {
+    if (aliases.includes(action) && perms.includes(parent)) return true
+  }
+  return false
+}
 
 const guestBaseUrl = computed(() => {
   if (!shareId.value) return undefined
@@ -73,6 +101,8 @@ const allowedContextMenuActions = computed(() => {
   if (hasPermission('preview')) actions.push('preview')
   if (hasPermission('download')) actions.push('download')
   if (hasPermission('delete')) actions.push('delete')
+  if (hasPermission('rename')) actions.push('rename')
+  if (hasPermission('upload')) actions.push('new-folder')
   actions.push('info')
   return actions
 })
@@ -199,8 +229,75 @@ function handleContextAction(action: string, item?: any) {
       if (item) { detailItem.value = item; showDetailPanel.value = true }
       break
     case 'delete':
-      // 删除功能可后续扩展
+      if (item) { fileToDelete.value = item; showDeleteConfirm.value = true }
       break
+    case 'rename':
+      if (item) { fileToRename.value = item; newFileName.value = item.name; showRename.value = true }
+      break
+    case 'new-folder':
+      newFolderName.value = ''
+      showCreateFolder.value = true
+      break
+    case 'refresh':
+      fetchFiles()
+      break
+  }
+}
+
+async function handleDelete() {
+  if (!fileToDelete.value) return
+  try {
+    const url = `/api/guest/${username.value}/${shareId.value}/delete`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: fileToDelete.value.path })
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || '删除失败')
+    }
+    await fetchFiles()
+  } catch (err: any) {
+    uploadError.value = err.message
+  }
+  showDeleteConfirm.value = false
+  fileToDelete.value = null
+}
+
+async function handleRename() {
+  if (!fileToRename.value || !newFileName.value.trim()) return
+  try {
+    const url = `/api/guest/${username.value}/${shareId.value}/rename`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: fileToRename.value.path, newName: newFileName.value.trim() })
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || '重命名失败')
+    }
+    await fetchFiles()
+  } catch (err: any) {
+    uploadError.value = err.message
+  }
+  showRename.value = false
+  fileToRename.value = null
+}
+
+async function handleCreateFolder() {
+  if (!newFolderName.value.trim()) return
+  try {
+    const dirPath = currentPath.value
+      ? `${currentPath.value}/${newFolderName.value.trim()}`
+      : newFolderName.value.trim()
+    await api.post(`/guest/${username.value}/${shareId.value}/mkdir`, { path: dirPath })
+    showCreateFolder.value = false
+    newFolderName.value = ''
+    await fetchFiles()
+  } catch (err: any) {
+    uploadError.value = err.message
   }
 }
 
@@ -244,11 +341,14 @@ function formatDate(dateStr: string): string {
 }
 
 const permLabels: Record<string, string> = {
+  read: '读取',
+  write: '写入',
+  delete: '删除',
+  edit: '文件编辑',
+  // 兼容旧格式
   preview: '预览',
   download: '下载',
-  upload: '上传',
-  edit: '编辑',
-  delete: '删除'
+  upload: '上传'
 }
 </script>
 
@@ -357,6 +457,16 @@ const permLabels: Record<string, string> = {
 
             <!-- 工具栏 -->
             <div class="flex items-center gap-1.5">
+              <!-- 新建文件夹 -->
+              <button
+                v-if="hasPermission('upload')"
+                @click="showCreateFolder = true"
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
+                title="新建文件夹"
+              >
+                <Icon name="folder-plus" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              </button>
+
               <!-- 上传按钮 -->
               <button
                 v-if="hasPermission('upload')"
@@ -429,7 +539,7 @@ const permLabels: Record<string, string> = {
       :x="contextMenu.x"
       :y="contextMenu.y"
       :item="contextMenu.item"
-      :read-only="true"
+      :read-only="false"
       :allowed-actions="allowedContextMenuActions"
       @close="contextMenu.visible = false"
       @action="handleContextAction"
@@ -454,5 +564,46 @@ const permLabels: Record<string, string> = {
       :item="detailItem"
       @close="showDetailPanel = false"
     />
+
+    <!-- 删除确认 -->
+    <ConfirmDialog
+      :show="showDeleteConfirm"
+      title="确认删除"
+      :message="`确定要删除「${fileToDelete?.name}」吗？`"
+      confirm-text="删除"
+      :danger="true"
+      @confirm="handleDelete"
+      @cancel="showDeleteConfirm = false; fileToDelete = null"
+    />
+
+    <!-- 新建文件夹对话框 -->
+    <Teleport to="body">
+      <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false"/>
+        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+          <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">新建文件夹</h3>
+          <input v-model="newFolderName" type="text" class="input-field mb-4" placeholder="文件夹名称" @keyup.enter="handleCreateFolder" />
+          <div class="flex justify-end gap-3">
+            <button @click="showCreateFolder = false" class="btn-secondary text-sm">取消</button>
+            <button @click="handleCreateFolder" class="btn-primary text-sm">创建</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 重命名对话框 -->
+    <Teleport to="body">
+      <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false"/>
+        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+          <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">重命名</h3>
+          <input v-model="newFileName" type="text" class="input-field mb-4" placeholder="新名称" @keyup.enter="handleRename" />
+          <div class="flex justify-end gap-3">
+            <button @click="showRename = false" class="btn-secondary text-sm">取消</button>
+            <button @click="handleRename" class="btn-primary text-sm">确认</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

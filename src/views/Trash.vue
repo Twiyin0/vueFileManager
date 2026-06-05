@@ -118,7 +118,12 @@ function formatDate(date: string) {
           <div class="flex items-center gap-3">
             <Icon :name="getFileIcon(item.file_name, item.file_type).icon" :class="['w-6 h-6', getFileIcon(item.file_name, item.file_type).color]" />
             <div>
-              <p class="font-medium dark:text-dark-text text-light-text">{{ item.file_name }}</p>
+              <p class="font-medium dark:text-dark-text text-light-text">
+                {{ item.file_name }}
+                <span v-if="item.deleted_by" class="ml-2 px-1.5 py-0.5 text-xs rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                  {{ item.deleted_by }}
+                </span>
+              </p>
               <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
                 原路径: {{ item.original_path }} | 删除于: {{ formatDate(item.deleted_at) }}
               </p>

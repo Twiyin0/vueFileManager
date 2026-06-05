@@ -397,6 +397,61 @@ function migrateGuestSharePermissions() {
 }
 migrateGuestSharePermissions()
 
+// 迁移：给 trash 表加 deleted_by 列（标注访客删除）
+function migrateTrashDeletedBy() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(trash)").all() as any[]
+    if (!cols.some((c: any) => c.name === 'deleted_by')) {
+      db.exec("ALTER TABLE trash ADD COLUMN deleted_by TEXT DEFAULT ''")
+      console.log('✅ 已添加 trash.deleted_by 字段')
+    }
+  } catch (err) {
+    console.error('⚠️ trash.deleted_by 迁移失败:', err)
+  }
+}
+migrateTrashDeletedBy()
+
+// 迁移：将旧权限名称转换为新权限体系 (preview,download → read)
+function migrateGuestPermissionsV2() {
+  try {
+    const shares = db.prepare('SELECT id, permissions FROM guest_shares').all() as any[]
+    for (const share of shares) {
+      if (!share.permissions) continue
+      const perms = share.permissions.split(',').map((s: string) => s.trim())
+      const newPerms: string[] = []
+      // 如果同时有 preview 和 download，合并为 read
+      if (perms.includes('preview') || perms.includes('download')) {
+        if (!newPerms.includes('read')) newPerms.push('read')
+      }
+      if (perms.includes('upload')) {
+        if (!newPerms.includes('write')) newPerms.push('write')
+      }
+      if (perms.includes('edit')) {
+        if (!newPerms.includes('edit')) newPerms.push('edit')
+      }
+      if (perms.includes('delete')) {
+        if (!newPerms.includes('delete')) newPerms.push('delete')
+      }
+      // 可能已经是新格式
+      if (perms.includes('read') && !newPerms.includes('read')) newPerms.push('read')
+      if (perms.includes('write') && !newPerms.includes('write')) newPerms.push('write')
+      if (perms.includes('rename')) {
+        if (!newPerms.includes('edit')) newPerms.push('edit')
+      }
+      const newPermStr = newPerms.join(',')
+      if (newPermStr !== share.permissions && newPermStr.length > 0) {
+        db.prepare('UPDATE guest_shares SET permissions = ? WHERE id = ?').run(newPermStr, share.id)
+      }
+    }
+    if (shares.length > 0) {
+      console.log(`✅ 已迁移 ${shares.length} 条访客权限到新格式`)
+    }
+  } catch (err) {
+    console.error('⚠️ 访客权限 v2 迁移失败:', err)
+  }
+}
+migrateGuestPermissionsV2()
+
 // 如果没有管理员用户，创建默认管理员
 const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin')
 if (!adminExists) {

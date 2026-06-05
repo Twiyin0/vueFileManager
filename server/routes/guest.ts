@@ -23,10 +23,23 @@ const mimeTypes: Record<string, string> = {
 // multer 配置
 const upload = multer({ storage: multer.memoryStorage() })
 
-// 权限检查
+// 权限别名映射：高级权限包含低级权限
+const permissionAliases: Record<string, string[]> = {
+  read: ['preview', 'download'],
+  write: ['upload'],
+  edit: ['rename'],
+}
+
+// 权限检查（支持别名：read 包含 preview/download，write 包含 upload，edit 包含 rename）
 function hasPermission(permissions: string, action: string): boolean {
   if (!permissions) return false
-  return permissions.split(',').map(s => s.trim()).includes(action)
+  const perms = permissions.split(',').map(s => s.trim())
+  if (perms.includes(action)) return true
+  // 检查别名：如果请求的 action 是某个高级权限的别名
+  for (const [parent, aliases] of Object.entries(permissionAliases)) {
+    if (aliases.includes(action) && perms.includes(parent)) return true
+  }
+  return false
 }
 
 // 安全检查：防止路径越权
@@ -121,11 +134,12 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
     const files = await storage.list(fullPath)
 
     // 过滤路径前缀，返回给访客的是相对于 basePath 的路径
+    const prefix = basePath ? basePath + '/' : ''
     const result = files
       .filter(f => !/^\._/.test(f.name) && f.name !== '.DS_Store')
       .map(f => ({
         ...f,
-        path: basePath ? f.path.replace(basePath + '/', '').replace(basePath, '') : f.path
+        path: prefix ? (f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path) : f.path
       }))
 
     res.json({ files: result, owner: user.username, shareLabel: share.label, permissions: share.permissions })
@@ -340,6 +354,154 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
     await storage.upload(fullPath, Buffer.from(content, 'utf-8'))
 
     res.json({ success: true, path: filePath })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 访客删除文件
+router.post('/:username/:shareId/delete', async (req: Request, res: Response) => {
+  try {
+    const user = getUserByUsername(req.params.username as string)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    const settings = db.prepare('SELECT guest_enabled FROM user_settings WHERE user_id = ?').get(user.id) as any
+    if (!settings || !settings.guest_enabled) {
+      return res.status(403).json({ error: '该用户未开启访客模式' })
+    }
+
+    const share = db.prepare('SELECT * FROM guest_shares WHERE id = ? AND user_id = ?')
+      .get(req.params.shareId, user.id) as any
+    if (!share) {
+      return res.status(404).json({ error: '分享不存在' })
+    }
+
+    if (!hasPermission(share.permissions, 'delete')) {
+      return res.status(403).json({ error: '该分享未开启删除权限' })
+    }
+
+    const { path: filePath } = req.body
+    if (!filePath) {
+      return res.status(400).json({ error: '缺少文件路径' })
+    }
+
+    if (!isPathSafe(filePath)) {
+      return res.status(403).json({ error: '无权访问此路径' })
+    }
+
+    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
+    const fullPath = basePath ? `${basePath}/${filePath}` : filePath
+
+    // 获取文件信息
+    const stat = await storage.info(fullPath).catch(() => ({ type: 'file' as const }))
+    const fileName = filePath.split('/').pop() || filePath
+
+    // 移入回收站（标注访客删除）
+    const trashPath = `/.trash/${fileName}_${Date.now()}`
+    try {
+      const data = await storage.download(fullPath)
+      await storage.upload(trashPath, data)
+    } catch {}
+    db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `访客: ${req.params.username}`)
+
+    await storage.remove(fullPath)
+
+    res.json({ message: '删除成功' })
+  } catch (err: any) {
+    if (err.message === '文件不存在' || err.code === 'ENOENT') {
+      return res.status(404).json({ error: '文件不存在' })
+    }
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 访客创建文件夹
+router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => {
+  try {
+    const user = getUserByUsername(req.params.username as string)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    const settings = db.prepare('SELECT guest_enabled FROM user_settings WHERE user_id = ?').get(user.id) as any
+    if (!settings || !settings.guest_enabled) {
+      return res.status(403).json({ error: '该用户未开启访客模式' })
+    }
+
+    const share = db.prepare('SELECT * FROM guest_shares WHERE id = ? AND user_id = ?')
+      .get(req.params.shareId, user.id) as any
+    if (!share) {
+      return res.status(404).json({ error: '分享不存在' })
+    }
+
+    if (!hasPermission(share.permissions, 'upload')) {
+      return res.status(403).json({ error: '该分享未开启写入权限' })
+    }
+
+    const { path: dirPath } = req.body
+    if (!dirPath) {
+      return res.status(400).json({ error: '缺少文件夹路径' })
+    }
+
+    if (!isPathSafe(dirPath)) {
+      return res.status(403).json({ error: '无权访问此路径' })
+    }
+
+    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
+    const fullPath = basePath ? `${basePath}/${dirPath}` : dirPath
+
+    await storage.mkdir(fullPath)
+
+    res.json({ message: '创建成功', path: dirPath })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 访客重命名文件
+router.post('/:username/:shareId/rename', async (req: Request, res: Response) => {
+  try {
+    const user = getUserByUsername(req.params.username as string)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    const settings = db.prepare('SELECT guest_enabled FROM user_settings WHERE user_id = ?').get(user.id) as any
+    if (!settings || !settings.guest_enabled) {
+      return res.status(403).json({ error: '该用户未开启访客模式' })
+    }
+
+    const share = db.prepare('SELECT * FROM guest_shares WHERE id = ? AND user_id = ?')
+      .get(req.params.shareId, user.id) as any
+    if (!share) {
+      return res.status(404).json({ error: '分享不存在' })
+    }
+
+    if (!hasPermission(share.permissions, 'rename')) {
+      return res.status(403).json({ error: '该分享未开启重命名权限' })
+    }
+
+    const { path: filePath, newName } = req.body
+    if (!filePath || !newName) {
+      return res.status(400).json({ error: '缺少文件路径或新名称' })
+    }
+
+    if (!isPathSafe(filePath)) {
+      return res.status(403).json({ error: '无权访问此路径' })
+    }
+
+    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
+    const fullPath = basePath ? `${basePath}/${filePath}` : filePath
+
+    await storage.rename(fullPath, newName)
+
+    res.json({ message: '重命名成功' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

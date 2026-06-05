@@ -66,27 +66,27 @@ onUnmounted(() => {
         </button>
         <template v-if="!readOnly">
           <div class="border-t dark:border-dark-border border-light-border my-1"></div>
-          <button @click="handleAction('rename')"
+          <button @click="handleAction('rename')" v-if="isAllowed('rename')"
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="pen" class="w-4 h-4" /> 重命名
           </button>
-          <button @click="handleAction('move')"
+          <button @click="handleAction('move')" v-if="isAllowed('move')"
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 移动到
           </button>
-          <button @click="handleAction('copy')"
+          <button @click="handleAction('copy')" v-if="isAllowed('copy')"
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="clipboard" class="w-4 h-4" /> 复制
           </button>
-          <button @click="handleAction('share')"
+          <button @click="handleAction('share')" v-if="isAllowed('share')"
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="link-alt" class="w-4 h-4" /> 分享
           </button>
-          <button @click="handleAction('favourite')"
+          <button @click="handleAction('favourite')" v-if="isAllowed('favourite')"
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="star-sharp" class="w-4 h-4 text-yellow-500" /> 收藏
           </button>
-          <button @click="handleAction('guest-share')" v-if="item.type === 'folder'"
+          <button @click="handleAction('guest-share')" v-if="item.type === 'folder' && isAllowed('guest-share')"
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="globe" class="w-4 h-4" /> 分享至访客
           </button>
