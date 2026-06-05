@@ -58,6 +58,11 @@ const guestBaseUrl = computed(() => {
   return `/api/guest/${username.value}/${shareId.value}/preview`
 })
 
+const guestSaveUrl = computed(() => {
+  if (!shareId.value || !hasPermission('edit')) return undefined
+  return `/api/guest/${username.value}/${shareId.value}/write`
+})
+
 const allowedContextMenuActions = computed(() => {
   const actions: string[] = []
   if (hasPermission('preview')) actions.push('preview')
@@ -237,6 +242,7 @@ const permLabels: Record<string, string> = {
   preview: '预览',
   download: '下载',
   upload: '上传',
+  edit: '编辑',
   delete: '删除'
 }
 </script>
@@ -403,6 +409,7 @@ const permLabels: Record<string, string> = {
             :loading="loading"
             :show-actions="false"
             :view-mode="viewMode"
+            :guest-base-url="guestBaseUrl"
             @open="openFile"
             @download="handleDownload"
             @contextmenu="handleContextMenu"
@@ -430,6 +437,8 @@ const permLabels: Record<string, string> = {
       :file-path="fileToPreview.path"
       :file-name="fileToPreview.name"
       :guest-base-url="guestBaseUrl"
+      :guest-save-url="guestSaveUrl"
+      :editable="hasPermission('edit')"
       :file-list="files"
       @close="showPreview = false; fileToPreview = null"
     />

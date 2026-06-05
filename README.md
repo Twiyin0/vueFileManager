@@ -67,7 +67,7 @@
 
 ### 权限系统
 - 🔑 API Key 权限管理（read/write/delete）
-- 🚪 访客模式（多文件夹分享，右键菜单一键分享）
+- 🚪 访客模式（多文件夹分享，右键菜单一键分享，权限可配置：预览/下载/上传/编辑/删除）
 - 🛡️ 管理员面板
 
 ### 兼容性
@@ -277,7 +277,7 @@ npx tsx test/upyun.ts
 - ✅ 匿名公网访问 API（路径越权防护）
 - ✅ API Key API（创建/列表/认证/删除）
 - ✅ 用户设置 API（获取/更新/恢复默认）
-- ✅ 访客 API（用户列表/分享列表/权限配置/权限更新/下载权限检查）
+- ✅ 访客 API（用户列表/分享列表/权限配置/权限更新/下载权限检查/编辑权限）
 - ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制/管理员保护）
 - ✅ 封禁用户 API Key 验证（403 拒绝）
 - ✅ IP 黑名单/白名单（CRUD/模式切换/白名单默认IP/127.0.0.1保护）
@@ -350,6 +350,7 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 公开 | `GET /f/:username/*` | 匿名访问文件 |
 | 访客 | `GET /api/guest/:username/:shareId/preview` | 访客预览文件 |
 | 访客 | `POST /api/guest/:username/:shareId/upload` | 访客上传文件 |
+| 访客 | `POST /api/guest/:username/:shareId/write` | 访客编辑文件内容 |
 | 用户 | `GET /api/user/info` | 用户完整信息（含存储池和统计） |
 | 用户 | `GET /api/user/settings` | 获取设置 |
 | 用户 | `PUT /api/user/settings` | 更新设置 |

@@ -186,6 +186,7 @@
 | `preview` | 预览文件 | `GET /api/guest/:username/:shareId/preview` |
 | `download` | 下载文件 | `GET /api/guest/:username/:shareId/download` |
 | `upload` | 上传文件 | `POST /api/guest/:username/:shareId/upload` |
+| `edit` | 编辑文本/代码文件内容 | `POST /api/guest/:username/:shareId/write` |
 | `delete` | 删除文件 | （预留，暂未实现路由） |
 
 默认权限：`preview,download`（只读）。创建/编辑分享时可自定义。
@@ -194,7 +195,8 @@
 - `Guest.vue`：根据权限显示/隐藏预览、下载、上传功能
 - `ContextMenu.vue`：`readOnly` 模式 + `allowedActions` prop 控制菜单项
 - `GuestShareDialog.vue`：创建/编辑分享时的权限复选框
-- `FilePreview.vue`：`guestBaseUrl` prop 支持访客预览 URL
+- `FilePreview.vue`：`guestBaseUrl` prop 支持访客预览 URL，`guestSaveUrl` + `editable` prop 支持访客编辑
+- `FileList.vue`：`guestBaseUrl` prop 支持网格模式缩略图
 
 ## 用户封禁系统
 

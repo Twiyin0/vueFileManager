@@ -20,6 +20,10 @@ const props = defineProps<{
   fileList?: { path: string; name: string; poolId?: number }[]
   /** Guest preview base URL (e.g. /api/guest/:username/:shareId/preview) */
   guestBaseUrl?: string
+  /** Guest save URL for text editing (e.g. /api/guest/:username/:shareId/write) */
+  guestSaveUrl?: string
+  /** Whether the file is editable (guest mode permission) */
+  editable?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -153,7 +157,17 @@ async function saveTextFile() {
   isSaving.value = true
   saveMsg.value = '保存中...'
   try {
-    await api.post('/files/write', { path: props.filePath, content: textContent.value, poolId: props.poolId })
+    if (props.guestSaveUrl) {
+      await fetch(props.guestSaveUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: props.filePath, content: textContent.value })
+      }).then(async r => {
+        if (!r.ok) { const d = await r.json(); throw new Error(d.error || '保存失败') }
+      })
+    } else {
+      await api.post('/files/write', { path: props.filePath, content: textContent.value, poolId: props.poolId })
+    }
     saveMsg.value = '已保存'
   } catch (err: any) {
     saveMsg.value = '保存失败'
@@ -176,8 +190,9 @@ function handleMonacoMount(editor: any, monaco: any) {
 }
 
 /** Monaco options: tuned for performance on large files */
-const monacoOptions = {
-  readOnly: false,
+const isEditorReadOnly = computed(() => props.guestBaseUrl ? !props.editable : false)
+const monacoOptions = computed(() => ({
+  readOnly: isEditorReadOnly.value,
   minimap: { enabled: false },
   automaticLayout: true,
   scrollBeyondLastLine: false,
@@ -198,7 +213,7 @@ const monacoOptions = {
   hideCursorInOverviewRuler: true,
   overviewRulerBorder: false,
   overviewRulerLanes: 0,
-}
+}))
 
 const languageMap: Record<string, string> = {
   js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
@@ -541,7 +556,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
               style="border-color: var(--border-color); background-color: var(--hover-color)">
               <span class="text-xs" style="color: var(--text-secondary-color)">{{ monacoLanguage }}</span>
               <span class="flex-1" />
-              <button @click="saveTextFile"
+              <button v-if="!isEditorReadOnly" @click="saveTextFile"
                 :disabled="isSaving"
                 class="px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-50"
                 style="background-color: var(--accent-color); color: #fff">

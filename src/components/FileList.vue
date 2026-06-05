@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<{
   selectedFiles?: Set<string>
   viewMode?: 'list' | 'grid'
   currentPoolId?: number
+  guestBaseUrl?: string
 }>(), {
   viewMode: 'list'
 })
@@ -105,6 +106,9 @@ function getFileIcon(file: FileItem): string {
 }
 
 function getPreviewUrl(file: FileItem): string {
+  if (props.guestBaseUrl) {
+    return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
+  }
   const params = new URLSearchParams({ path: file.path })
   const poolId = file.poolId || props.currentPoolId
   if (poolId) params.set('poolId', String(poolId))

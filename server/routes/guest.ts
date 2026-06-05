@@ -295,4 +295,54 @@ router.post('/:username/:shareId/upload', upload.single('file'), async (req: Req
   }
 })
 
+// 访客编辑文件内容
+router.post('/:username/:shareId/write', async (req: Request, res: Response) => {
+  try {
+    const user = getUserByUsername(req.params.username as string)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    const settings = db.prepare('SELECT guest_enabled FROM user_settings WHERE user_id = ?').get(user.id) as any
+    if (!settings || !settings.guest_enabled) {
+      return res.status(403).json({ error: '该用户未开启访客模式' })
+    }
+
+    const share = db.prepare('SELECT * FROM guest_shares WHERE id = ? AND user_id = ?')
+      .get(req.params.shareId, user.id) as any
+    if (!share) {
+      return res.status(404).json({ error: '分享不存在' })
+    }
+
+    if (!hasPermission(share.permissions, 'edit')) {
+      return res.status(403).json({ error: '该分享未开启编辑权限' })
+    }
+
+    const { path: filePath, content } = req.body
+    if (!filePath || content === undefined) {
+      return res.status(400).json({ error: '缺少文件路径或内容' })
+    }
+
+    if (!isPathSafe(filePath)) {
+      return res.status(403).json({ error: '无权访问此路径' })
+    }
+
+    // 限制内容大小 10MB
+    if (content.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: '文件内容不能超过 10MB' })
+    }
+
+    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
+    const basePath = share.folder_path
+    const fullPath = basePath ? `${basePath}/${filePath}` : filePath
+
+    // 上传新内容
+    await storage.upload(fullPath, Buffer.from(content, 'utf-8'))
+
+    res.json({ success: true, path: filePath })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 export default router

@@ -35,6 +35,7 @@ const permLabels: Record<string, string> = {
   preview: '预览',
   download: '下载',
   upload: '上传',
+  edit: '编辑',
   delete: '删除'
 }
 

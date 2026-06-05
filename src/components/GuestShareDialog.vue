@@ -25,7 +25,8 @@ const perms = ref({
   preview: true,
   download: true,
   upload: false,
-  delete: false
+  delete: false,
+  edit: false
 })
 
 // 从已有分享数据初始化
@@ -120,6 +121,11 @@ async function handleSubmit() {
                 <input type="checkbox" v-model="perms.upload" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span class="text-sm" style="color: var(--text-color)">上传文件</span>
                 <span class="text-xs" style="color: var(--text-secondary-color)">（可向文件夹上传新文件）</span>
+              </label>
+              <label class="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" v-model="perms.edit" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span class="text-sm" style="color: var(--text-color)">编辑文件</span>
+                <span class="text-xs" style="color: var(--text-secondary-color)">（可编辑文本/代码文件内容）</span>
               </label>
               <label class="flex items-center gap-2.5 cursor-pointer">
                 <input type="checkbox" v-model="perms.delete" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />

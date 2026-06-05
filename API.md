@@ -812,6 +812,17 @@ Form Fields: file（文件）、dirPath（目标子目录，可选）
 { "message": "上传成功", "path": "file.txt" }
 ```
 
+### POST `/api/guest/:username/:shareId/write` — 访客编辑文件内容
+需 `edit` 权限。
+```json
+// Request Body
+{ "path": "file.txt", "content": "new content" }
+// Response
+{ "success": true, "path": "file.txt" }
+// 内容超过 10MB
+400 { "error": "文件内容不能超过 10MB" }
+```
+
 ### 访客权限
 
 创建访客分享时可指定 `permissions` 字段（逗号分隔），控制访客可执行的操作：
@@ -821,6 +832,7 @@ Form Fields: file（文件）、dirPath（目标子目录，可选）
 | `preview` | 预览文件（图片/视频/音频/PDF/代码） |
 | `download` | 下载文件 |
 | `upload` | 上传文件到分享文件夹 |
+| `edit` | 编辑文本/代码文件内容（Monaco Editor） |
 | `delete` | 删除文件夹内的文件 |
 
 默认权限：`preview,download`（只读）。
