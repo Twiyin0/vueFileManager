@@ -115,7 +115,7 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
     const relativePath = (req.query.path as string) || ''
-    const basePath = share.folder_path
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const fullPath = basePath ? (relativePath ? `${basePath}/${relativePath}` : basePath) : relativePath
 
     const files = await storage.list(fullPath)
@@ -167,7 +167,7 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = share.folder_path
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const fullPath = basePath ? `${basePath}/${relativePath}` : relativePath
 
     // 获取文件信息确认是文件
@@ -227,7 +227,7 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = share.folder_path
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const fullPath = basePath ? `${basePath}/${relativePath}` : relativePath
     const data = await storage.download(fullPath)
     const fileName = relativePath.split('/').pop() || 'download'
@@ -281,7 +281,7 @@ router.post('/:username/:shareId/upload', upload.single('file'), async (req: Req
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = share.folder_path
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const filePath = basePath
       ? (dirPath ? `${basePath}/${dirPath}/${req.file.originalname}` : `${basePath}/${req.file.originalname}`)
       : (dirPath ? `${dirPath}/${req.file.originalname}` : req.file.originalname)
@@ -333,7 +333,7 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = share.folder_path
+    const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const fullPath = basePath ? `${basePath}/${filePath}` : filePath
 
     // 上传新内容
