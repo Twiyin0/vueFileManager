@@ -11,7 +11,7 @@
 | 变量 | 浅色 | 暗色 | 用途 |
 |------|------|------|------|
 | `--bg-color` | #f8f9fa | #1a1b1e | 页面背景 |
-| `--surface-color` | #ffffff | #222326 | 导航栏、侧边栏 |
+| `--surface-color` | #ffffff | #222326 | 导航栏 |
 | `--card-color` | #ffffff | #2a2b2f | 卡片、对话框 |
 | `--border-color` | #e5e7eb | #3a3b3f | 边框 |
 | `--hover-color` | #f3f4f6 | #323337 | 悬浮背景 |
@@ -79,6 +79,15 @@
 
 - 加载 spinner（`animate-spin`）**不使用** Icon 组件，保留内联 SVG
 - 图标名必须与 `public/icon/iconlib/` 下的文件名一致，使用前确认文件存在
+
+## 布局系统
+
+`Layout.vue` 为全局布局组件，结构：
+- **Header** (`h-11`)：Logo（28×28px）+ 用户操作（ThemeToggle 放大图标、设置、退出）
+- **侧边栏**：功能导航（文件管理、收藏、分享、回收站、存储池、设置、API Keys、管理、访客），可收缩
+- **主内容区**：`<slot />` 填充
+
+所有认证页面（Home、StoragePools、Settings 等）通过 `<Layout>` 包裹。`Home.vue` 中的文件夹目录树已移除，存储池选择改为面包屑首位下拉菜单。
 
 ## 对话框规范
 
@@ -149,6 +158,18 @@
 
 - `filePath` 若以 `/api/` 开头则直接使用（分享预览），否则拼装 `/api/files/preview?path=...&poolId=...&token=...`
 - 分享页面 (`Share.vue`) 复用同一组件，传分享预览 URL
+- 预览对话框头部使用半透明毛玻璃样式：`backdrop-blur-md` + `color-mix(in srgb, var(--surface-color) 75%, transparent)`
+
+### 浮动 APlayer 音乐播放器
+
+`Home.vue` 中实现了一个浮动 APlayer 音乐播放器，位于页面左下角：
+
+- 点击音频文件直接触发（不走 FilePreview 预览对话框），自动将当前目录所有音频加入播放列表并播放点击的那首
+- 目录切换时自动刷新播放列表
+- 可收缩为圆形图标（40x40），展开为 288px 宽播放器
+- 收缩/展开用 `v-show` 保持 APlayer DOM 挂载，避免销毁重建
+- 暗色/亮色主题自动适配（`MutationObserver` 检测 `.dark` 类）
+- APlayer 样式覆盖在 `main.css` 中：`margin: 0; border-radius: 0; box-shadow: none`
 
 ### 第三方组件暗色模式适配
 

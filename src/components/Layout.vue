@@ -13,10 +13,10 @@ watch(sidebarCollapsed, (v) => localStorage.setItem('sidebarCollapsed', String(v
 <template>
   <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
     <!-- 顶部导航 -->
-    <header class="h-14 flex items-center justify-between px-4 border-b" style="background-color: var(--surface-color); border-color: var(--border-color)">
+    <header class="h-11 flex items-center justify-between px-4 border-b" style="background-color: var(--surface-color); border-color: var(--border-color)">
       <div class="flex items-center gap-3">
         <router-link to="/" class="flex items-center gap-2 font-bold text-lg">
-          <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 34px; height: 34px;" />
+          <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
           <span style="color: var(--text-color)">VueFileManager</span>
         </router-link>
       </div>
@@ -47,7 +47,7 @@ watch(sidebarCollapsed, (v) => localStorage.setItem('sidebarCollapsed', String(v
       <Sidebar v-if="authStore.isLoggedIn" :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
 
       <!-- 主内容区 -->
-      <main class="flex-1 overflow-auto p-4">
+      <main class="flex-1 overflow-auto">
         <slot />
       </main>
     </div>

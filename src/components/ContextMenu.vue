@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
@@ -19,6 +19,16 @@ const emit = defineEmits<{
 }>()
 
 const menuRef = ref<HTMLElement>()
+
+const menuStyle = computed(() => {
+  const maxHeight = window.innerHeight * 0.7
+  let top = props.y
+  // 如果底部会超出屏幕，向上调整
+  if (top + maxHeight > window.innerHeight) {
+    top = Math.max(8, window.innerHeight - maxHeight - 8)
+  }
+  return { left: props.x + 'px', top: top + 'px' }
+})
 
 function handleClickOutside(e: MouseEvent) {
   if (menuRef.value && !menuRef.value.contains(e.target as Node)) {
@@ -48,8 +58,8 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div v-if="visible" ref="menuRef"
-      class="fixed z-50 bg-white dark:bg-dark-card rounded-lg shadow-xl border dark:border-dark-border border-light-border py-1 min-w-[180px]"
-      :style="{ left: x + 'px', top: y + 'px' }">
+      class="fixed z-50 bg-white dark:bg-dark-card rounded-lg shadow-xl border dark:border-dark-border border-light-border py-1 min-w-[180px] max-h-[70vh] overflow-y-auto"
+      :style="menuStyle">
       <!-- 单文件操作 -->
       <template v-if="item">
         <button @click="handleAction('open')" v-if="item.type === 'folder'"
@@ -100,6 +110,33 @@ onUnmounted(() => {
           class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
           <Icon name="trash" class="w-4 h-4" /> 删除
         </button>
+        <!-- 批量操作（有选中项时显示） -->
+        <template v-if="selectedItems && selectedItems.length > 0">
+          <div class="border-t dark:border-dark-border border-light-border my-1"></div>
+          <div class="px-4 py-1.5 text-xs" style="color: var(--text-secondary-color)">
+            批量操作 ({{ selectedItems.length }} 项)
+          </div>
+          <button @click="handleAction('batch-copy')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="clipboard" class="w-4 h-4" /> 批量复制
+          </button>
+          <button @click="handleAction('batch-move')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 批量移动
+          </button>
+          <button @click="handleAction('batch-download')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="download" class="w-4 h-4" /> 打包下载
+          </button>
+          <button @click="handleAction('batch-delete')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
+            <Icon name="trash" class="w-4 h-4" /> 批量删除
+          </button>
+          <button @click="handleAction('clear-selection')"
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="xmark" class="w-4 h-4" /> 取消选择
+          </button>
+        </template>
         <div class="border-t dark:border-dark-border border-light-border my-1"></div>
         <button @click="handleAction('refresh')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">

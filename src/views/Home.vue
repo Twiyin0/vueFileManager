@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFilesStore, FileItem } from '@/stores/files'
 import { api } from '@/api'
@@ -11,12 +11,13 @@ import FilePreview from '@/components/FilePreview.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import FileDetailPanel from '@/components/FileDetailPanel.vue'
-import FolderTree from '@/components/FolderTree.vue'
 import SpotlightSearch from '@/components/SpotlightSearch.vue'
 import GuestShareDialog from '@/components/GuestShareDialog.vue'
 import Toast from '@/components/Toast.vue'
 import MoveDialog from '@/components/MoveDialog.vue'
 import Icon from '@/components/Icon.vue'
+import APlayer from 'aplayer'
+import 'aplayer/dist/APlayer.min.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -47,9 +48,9 @@ const showSearch = ref(false)
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
 
-// 批量选择
+// 批量选择（自动模式：勾选即进入批量）
 const selectedFiles = ref<Set<string>>(new Set())
-const isSelectMode = ref(false)
+const isSelectMode = computed(() => selectedFiles.value.size > 0)
 
 // 视图模式
 const viewMode = ref<'list' | 'grid'>((localStorage.getItem('viewMode') as 'list' | 'grid') || 'list')
@@ -58,10 +59,6 @@ watch(viewMode, (v) => localStorage.setItem('viewMode', v))
 // 文件详情面板
 const showDetailPanel = ref(false)
 const detailItem = ref<any>(null)
-
-// 文件夹树
-const folderTreeCollapsed = ref(localStorage.getItem('folderTreeCollapsed') === 'true')
-watch(folderTreeCollapsed, (v) => localStorage.setItem('folderTreeCollapsed', String(v)))
 
 // 远程上传
 const showRemoteUpload = ref(false)
@@ -94,6 +91,9 @@ const currentPoolId = computed(() => {
 })
 const pools = ref<{ id: number; name: string }[]>([])
 
+// 存储池下拉
+const showPoolDropdown = ref(false)
+
 const currentPath = computed(() => ((route.query.path as string) || '').replace(/\\/g, '/'))
 
 const pathSegments = computed(() => {
@@ -101,7 +101,20 @@ const pathSegments = computed(() => {
   return currentPath.value.split('/').filter(Boolean)
 })
 
+// APlayer
+const aplayerRef = ref<HTMLDivElement>()
+let aplayerInst: APlayer | null = null
+const showAplayer = ref(false)
+const aplayerCollapsed = ref(true)
+
+// 暗色模式检测
+const isDark = ref(document.documentElement.classList.contains('dark'))
+const themeObserver = new MutationObserver(() => {
+  isDark.value = document.documentElement.classList.contains('dark')
+})
+
 onMounted(async () => {
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
   // 加载存储池列表
   try {
     const res = await api.get<{ pools: any[] }>('/storage-pools')
@@ -110,12 +123,28 @@ onMounted(async () => {
   filesStore.fetchFiles(currentPath.value, currentPoolId.value)
 })
 
+onUnmounted(() => {
+  themeObserver.disconnect()
+  destroyAplayer()
+})
+
 watch([currentPath, currentPoolId], ([newPath]) => {
   filesStore.fetchFiles(newPath, currentPoolId.value)
   showSearch.value = false
   searchQuery.value = ''
   selectedFiles.value.clear()
-  isSelectMode.value = false
+})
+
+// 点击外部关闭存储池下拉
+function handlePoolDropdownOutside(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.pool-dropdown-trigger')) {
+    showPoolDropdown.value = false
+  }
+}
+
+watch(showPoolDropdown, (v) => {
+  if (v) document.addEventListener('click', handlePoolDropdownOutside, { once: true })
 })
 
 function navigateToPath(path: string, poolId?: number) {
@@ -125,16 +154,73 @@ function navigateToPath(path: string, poolId?: number) {
   router.push({ path: '/', query })
 }
 
+const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg']
+
+function isAudioFile(file: FileItem): boolean {
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  return audioExts.includes(ext)
+}
+
 function openFile(file: FileItem) {
   if (file.isPool && file.poolId) {
-    // 点击存储池虚拟文件夹，进入该池
     navigateToPath('', file.poolId)
   } else if (file.type === 'folder') {
     navigateToPath(file.path, currentPoolId.value)
+  } else if (isAudioFile(file)) {
+    // 音频文件：打开 APlayer 播放
+    openAplayerWithFile(file)
   } else {
     fileToPreview.value = file
     showPreview.value = true
   }
+}
+
+function openAplayerWithFile(targetFile: FileItem) {
+  const audioList = buildAudioList()
+  if (audioList.length === 0) return
+
+  // 找到目标文件在列表中的索引
+  const targetUrl = getFilePreviewUrl(targetFile)
+  const targetIndex = audioList.findIndex(a => a.url === targetUrl)
+
+  // 如果 APlayer 已在播放，更新列表并切换
+  if (aplayerInst && showAplayer.value) {
+    aplayerInst.list.clear()
+    audioList.forEach(a => aplayerInst!.list.add(a))
+    if (targetIndex >= 0) {
+      aplayerInst.list.switch(targetIndex)
+    }
+    aplayerInst.play()
+    return
+  }
+
+  // 否则初始化 APlayer
+  destroyAplayer()
+  showAplayer.value = true
+  aplayerCollapsed.value = false
+
+  nextTick(() => {
+    if (!aplayerRef.value) return
+    aplayerInst = new APlayer({
+      container: aplayerRef.value,
+      autoplay: true,
+      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+      audio: audioList,
+    })
+    // 播放目标文件
+    if (targetIndex > 0) {
+      aplayerInst.list.switch(targetIndex)
+    }
+  })
+}
+
+function getFilePreviewUrl(file: FileItem): string {
+  const params = new URLSearchParams({ path: file.path })
+  const poolId = file.poolId || currentPoolId.value
+  if (poolId) params.set('poolId', String(poolId))
+  const token = localStorage.getItem('token')
+  if (token) params.set('token', token)
+  return `/api/files/preview?${params.toString()}`
 }
 
 function goUp() {
@@ -142,21 +228,18 @@ function goUp() {
   segments.pop()
   const newPath = segments.join('/')
   if (!newPath && currentPoolId.value) {
-    // 在池根目录点上级，退回存储池列表
     goBackToPools()
   } else {
     navigateToPath(newPath, currentPoolId.value)
   }
 }
 
-// 返回存储池列表（从池内退回根目录）
 function goBackToPools() {
   router.push({ path: '/' })
 }
 
 // 上传（带进度）
 async function handleUpload(files: FileList, uploadPoolId?: number) {
-  // 过滤 macOS 系统文件（._*、.DS_Store 等）
   const junkPatterns = [/^\._/, /^\.DS_Store$/, /^Thumbs\.db$/, /^__MACOSX\//]
   const arr = Array.from(files).filter(f => !junkPatterns.some(p => p.test(f.name)))
   if (arr.length === 0) return
@@ -249,17 +332,14 @@ async function handleRemoteUpload() {
   }
 }
 
-// 批量选择
-function toggleSelectMode() {
-  isSelectMode.value = !isSelectMode.value
-  if (!isSelectMode.value) selectedFiles.value.clear()
-}
-
+// 批量选择（自动模式）
 function toggleSelectFile(path: string) {
   if (selectedFiles.value.has(path)) {
     selectedFiles.value.delete(path)
+    // 触发响应式更新
+    selectedFiles.value = new Set(selectedFiles.value)
   } else {
-    selectedFiles.value.add(path)
+    selectedFiles.value = new Set([...selectedFiles.value, path])
   }
 }
 
@@ -268,8 +348,12 @@ function selectAll() {
   if (selectedFiles.value.size === files.length) {
     selectedFiles.value.clear()
   } else {
-    files.forEach(f => selectedFiles.value.add(f.path))
+    selectedFiles.value = new Set(files.map(f => f.path))
   }
+}
+
+function clearSelection() {
+  selectedFiles.value.clear()
 }
 
 // 批量删除
@@ -279,7 +363,6 @@ async function handleBatchDelete() {
   try {
     await api.post('/files/batch-delete', { paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
     selectedFiles.value.clear()
-    isSelectMode.value = false
     await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
   } catch (err: any) {
     alert(err.message)
@@ -365,7 +448,6 @@ async function handlePaste() {
 
   try {
     if (clipboardMode.value === 'copy') {
-      // 同池复制
       if (!srcPoolId || srcPoolId === destPoolId) {
         for (const file of clipboardFiles.value) {
           const dest = destPath ? `${destPath}/${file.name}` : file.name
@@ -373,7 +455,6 @@ async function handlePaste() {
         }
         showToast(`已粘贴 ${clipboardFiles.value.length} 个项目`, 'success')
       } else {
-        // 跨池复制
         await api.post('/files/cross-copy', {
           srcPaths: clipboardFiles.value.map(f => f.path),
           names: clipboardFiles.value.map(f => f.name),
@@ -384,7 +465,6 @@ async function handlePaste() {
         showToast(`已跨池复制 ${clipboardFiles.value.length} 个项目`, 'success')
       }
     } else {
-      // 移动模式
       if (!srcPoolId || srcPoolId === destPoolId) {
         for (const file of clipboardFiles.value) {
           const dest = destPath ? `${destPath}/${file.name}` : file.name
@@ -532,6 +612,8 @@ function handleContextAction(action: string, item?: any) {
     case 'copy': if (item) handleCopy([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value }]); break
     case 'move': if (item) handleMove([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value }]); break
     case 'paste': handlePaste(); break
+    case 'select-all': selectAll(); break
+    case 'clear-selection': clearSelection(); break
     case 'batch-delete': handleBatchDelete(); break
     case 'batch-download': handleBatchDownload(); break
     case 'batch-copy': {
@@ -566,11 +648,6 @@ function handleSpotlightNavigate(path: string, poolId?: number) {
   navigateToPath(path, poolId || currentPoolId.value)
 }
 
-// 文件夹树导航
-function handleTreeNavigate(path: string, poolId?: number) {
-  navigateToPath(path, poolId || currentPoolId.value)
-}
-
 // 当前存储池名称
 const currentPoolName = computed(() => {
   if (!currentPoolId.value) return ''
@@ -586,6 +663,46 @@ function formatSize(bytes: number) {
   if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
 }
+
+// ============ APlayer 浮动播放器 ============
+
+/** 从当前文件列表中提取音频文件，构建 APlayer 列表 */
+function buildAudioList(): { name: string; url: string; artist: string }[] {
+  const files = filesStore.files
+  return files.filter(f => isAudioFile(f)).map(f => ({
+    name: f.name.replace(/\.[^.]+$/, ''),
+    url: getFilePreviewUrl(f),
+    artist: 'VueFileManager',
+  }))
+}
+
+function destroyAplayer() {
+  if (aplayerInst) {
+    try { aplayerInst.destroy() } catch {}
+    aplayerInst = null
+  }
+  showAplayer.value = false
+}
+
+function toggleAplayerCollapse() {
+  aplayerCollapsed.value = !aplayerCollapsed.value
+}
+
+// 目录变化时自动刷新 APlayer 列表
+watch([currentPath, currentPoolId], () => {
+  if (showAplayer.value) {
+    nextTick(() => {
+      const audioList = buildAudioList()
+      if (audioList.length > 0 && aplayerInst) {
+        // 更新播放列表
+        aplayerInst.list.clear()
+        audioList.forEach(a => aplayerInst!.list.add(a))
+      } else if (audioList.length === 0) {
+        destroyAplayer()
+      }
+    })
+  }
+})
 </script>
 
 <template>
@@ -601,41 +718,6 @@ function formatSize(bytes: number) {
     </div>
 
     <div class="flex h-full" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
-      <!-- 左侧文件夹树 -->
-      <div
-        class="border-r flex-shrink-0 hidden lg:flex flex-col transition-all duration-300 overflow-hidden"
-        :class="folderTreeCollapsed ? 'w-12' : 'w-56'"
-        style="border-color: var(--border-color)"
-      >
-        <!-- 收缩按钮 -->
-        <div class="flex items-center justify-between px-2 py-2" :class="folderTreeCollapsed ? 'justify-center' : ''">
-          <p v-if="!folderTreeCollapsed" class="text-xs font-semibold uppercase" style="color: var(--text-secondary-color)">目录</p>
-          <button
-            @click="folderTreeCollapsed = !folderTreeCollapsed"
-            class="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-            style="color: var(--text-secondary-color)"
-            :title="folderTreeCollapsed ? '展开目录' : '收缩目录'"
-          >
-            <Icon name="chevron-left" class="w-4 h-4 transition-transform duration-300" :class="folderTreeCollapsed ? 'rotate-180' : ''" />
-          </button>
-        </div>
-        <!-- 收起态：只显示文件夹图标提示 -->
-        <div v-if="folderTreeCollapsed" class="flex-1 flex flex-col items-center pt-2">
-          <button
-            @click="folderTreeCollapsed = false"
-            class="p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-            style="color: var(--text-secondary-color)"
-            title="展开目录"
-          >
-            <Icon name="folder" class="w-5 h-5" />
-          </button>
-        </div>
-        <!-- 展开态：完整目录树 -->
-        <div v-else class="flex-1 overflow-y-auto py-1">
-          <FolderTree :current-path="currentPath" :pool-id="currentPoolId" @navigate="handleTreeNavigate" />
-        </div>
-      </div>
-
       <!-- 主内容区 -->
       <div class="flex-1 min-w-0">
         <div class="max-w-6xl mx-auto p-4">
@@ -643,18 +725,37 @@ function formatSize(bytes: number) {
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <!-- 面包屑导航 -->
             <div class="flex items-center gap-1.5 text-sm flex-wrap">
-              <button @click="goBackToPools"
-                class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                :style="{ color: currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId ? 'normal' : '500' }">
-                全部存储池
-              </button>
-              <template v-if="currentPoolId">
-                <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                <button @click="navigateToPath('', currentPoolId)"
-                  class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                  :style="{ color: currentPath ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPath ? 'normal' : '500' }">
-                  {{ currentPoolName }}
+              <!-- 存储池选择器（下拉） -->
+              <div class="relative pool-dropdown-trigger">
+                <button @click.stop="showPoolDropdown = !showPoolDropdown"
+                  class="flex items-center gap-1 px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  :style="{ color: currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId ? 'normal' : '500' }">
+                  <Icon name="server" class="w-4 h-4" />
+                  <span>{{ currentPoolId ? currentPoolName : '全部存储池' }}</span>
+                  <Icon name="chevron-down" class="w-3 h-3" />
                 </button>
+                <!-- 下拉菜单 -->
+                <div v-if="showPoolDropdown"
+                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg shadow-xl border py-1"
+                  style="background-color: var(--card-color); border-color: var(--border-color)">
+                  <button @click="goBackToPools(); showPoolDropdown = false"
+                    class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                    :style="{ color: !currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: !currentPoolId ? '500' : 'normal' }">
+                    <Icon name="server" class="w-4 h-4" />
+                    全部存储池
+                  </button>
+                  <div v-for="pool in pools" :key="pool.id"
+                    class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                    :style="{ color: currentPoolId === pool.id ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId === pool.id ? '500' : 'normal' }"
+                    @click="navigateToPath('', pool.id); showPoolDropdown = false">
+                    <Icon name="folder" class="w-4 h-4" />
+                    {{ pool.name }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 路径面包屑 -->
+              <template v-if="currentPoolId && pathSegments.length > 0">
                 <template v-for="(segment, index) in pathSegments" :key="index">
                   <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
                   <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'), currentPoolId)"
@@ -698,13 +799,6 @@ function formatSize(bytes: number) {
                 </button>
               </div>
 
-              <!-- 批量选择模式 -->
-              <button @click="toggleSelectMode"
-                :class="isSelectMode ? 'btn-primary' : 'btn-secondary'" class="text-sm flex items-center gap-1">
-                <Icon name="check" class="w-4 h-4" />
-                {{ isSelectMode ? '退出选择' : '多选' }}
-              </button>
-
               <button @click="showCreateFolder = true" class="btn-secondary text-sm flex items-center gap-1">
                 <Icon name="folder-plus" class="w-4 h-4" />
                 新建
@@ -722,24 +816,18 @@ function formatSize(bytes: number) {
             </div>
           </div>
 
-          <!-- 批量操作栏 -->
-          <div v-if="isSelectMode" class="mb-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center justify-between">
+          <!-- 批量选择提示条 -->
+          <div v-if="isSelectMode" class="mb-3 p-2 rounded-lg flex items-center justify-between text-sm"
+            style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
             <div class="flex items-center gap-3">
-              <button @click="selectAll" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+              <button @click="selectAll" class="text-sm hover:underline" style="color: var(--accent-color)">
                 {{ selectedFiles.size === (showSearch ? searchResults : filesStore.files).length ? '取消全选' : '全选' }}
               </button>
-              <span class="text-sm text-gray-600 dark:text-gray-400">已选 {{ selectedFiles.size }} 项</span>
+              <span style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
             </div>
-            <div class="flex items-center gap-2">
-              <button v-if="selectedFiles.size > 0" @click="() => { const allFiles = showSearch ? searchResults : filesStore.files; handleCopy(Array.from(selectedFiles).map(p => { const f = allFiles.find((file: FileItem) => file.path === p); return { path: p, name: f?.name, poolId: currentPoolId } })) }"
-                class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="clipboard" class="w-4 h-4" /> 复制</button>
-              <button v-if="selectedFiles.size > 0" @click="() => { const allFiles = showSearch ? searchResults : filesStore.files; handleMove(Array.from(selectedFiles).map(p => { const f = allFiles.find((file: FileItem) => file.path === p); return { path: p, name: f?.name, poolId: currentPoolId } })) }"
-                class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 移动</button>
-              <button v-if="selectedFiles.size > 0" @click="handleBatchDownload"
-                class="btn-secondary text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="download" class="w-4 h-4" /> 打包下载</button>
-              <button v-if="selectedFiles.size > 0" @click="handleBatchDelete"
-                class="btn-danger text-sm px-3 py-1.5 flex items-center gap-1"><Icon name="trash" class="w-4 h-4" /> 批量删除</button>
-            </div>
+            <button @click="clearSelection" class="text-sm hover:underline" style="color: var(--text-secondary-color)">
+              取消选择
+            </button>
           </div>
 
           <!-- 剪贴板提示 -->
@@ -781,7 +869,7 @@ function formatSize(bytes: number) {
             :files="showSearch ? searchResults : filesStore.files"
             :loading="filesStore.loading || isSearching"
             :show-actions="true"
-            :select-mode="isSelectMode"
+            :select-mode="!!currentPoolId"
             :selected-files="selectedFiles"
             :view-mode="viewMode"
             :current-pool-id="currentPoolId"
@@ -919,5 +1007,34 @@ function formatSize(bytes: number) {
       :type="toast.type"
       @close="toast.show = false"
     />
+
+    <!-- APlayer 浮动播放器（左下角） -->
+    <Teleport to="body">
+      <div v-if="showAplayer" class="fixed bottom-4 left-4 z-40">
+        <!-- 收缩态：圆形图标 -->
+        <div v-if="aplayerCollapsed"
+          @click="toggleAplayerCollapse"
+          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all hover:scale-105"
+          style="background-color: var(--accent-color); color: white"
+          title="展开播放器">
+          <Icon name="music" class="w-4 h-4" />
+        </div>
+        <!-- 展开态：播放器（aplayerRef 始终存在） -->
+        <div v-show="!aplayerCollapsed" class="w-72 rounded-lg shadow-2xl overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+          <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
+            <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
+            <div class="flex items-center gap-0.5">
+              <button @click="toggleAplayerCollapse" class="p-0.5 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
+                <Icon name="chevron-down" class="w-3.5 h-3.5" />
+              </button>
+              <button @click="destroyAplayer" class="p-0.5 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
+                <Icon name="xmark" class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <div ref="aplayerRef" />
+        </div>
+      </div>
+    </Teleport>
   </Layout>
 </template>

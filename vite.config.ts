@@ -17,5 +17,15 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'monaco-editor': ['monaco-editor'],
+          'vue-vendor': ['vue', 'vue-router', 'pinia'],
+        }
+      }
+    }
   }
 })

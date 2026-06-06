@@ -485,8 +485,8 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
       <div class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
 
       <div :class="['relative w-full max-h-[90vh] flex flex-col rounded-xl overflow-hidden', fileType === 'video' ? 'max-w-7xl' : 'max-w-5xl']" style="background-color: var(--surface-color)">
-        <!-- Header -->
-        <div class="flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0" style="border-color: var(--border-color)">
+        <!-- Header: 半透明毛玻璃 -->
+        <div class="flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
           <h3 class="text-sm font-medium truncate flex-1 mr-3" style="color: var(--text-color)">{{ fileName }}</h3>
           <div class="flex items-center gap-1">
             <a :href="previewUrl" :download="fileName" class="p-1.5 rounded-md hover:opacity-80 transition-colors" title="下载">

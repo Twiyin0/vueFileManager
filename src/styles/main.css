@@ -209,9 +209,24 @@ select.input-field {
    ============================================= */
 
 /* ---- APlayer 暗色模式 ---- */
+.aplayer {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
 .dark .aplayer {
   background: var(--card-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: none !important;
+}
+/* 亮色模式 APlayer 文字颜色 */
+.aplayer .aplayer-info .aplayer-music .aplayer-title {
+  color: var(--text-color);
+}
+.aplayer .aplayer-info .aplayer-music .aplayer-author {
+  color: var(--text-secondary-color);
+}
+.aplayer .aplayer-info .aplayer-controller .aplayer-time {
+  color: var(--text-secondary-color);
 }
 
 /* 歌曲信息区 */

@@ -9,11 +9,10 @@
 - 📝 重命名、移动、复制（支持跨存储池）
 - 🔍 文件搜索（递归）
 - 📦 创建文件夹
-- 👁️ 文件预览 v3：视频 (ArtPlayer, 16:9 容器 + playsInline) / 音频 (APlayer, 暗色主题 CSS 全覆盖) / 图片 (ViewerJS 全屏画廊, 透明毛玻璃左右箭头, blob URL 防 iOS 系统预览抢占, 文件夹内前后翻页) / PDF (PDF.js CDN canvas 渲染, 工具栏含页码跳转/缩放) / 代码 (Monaco Editor 可编辑 + Ctrl+S 保存, Toast 保存提示)
-- 📋 批量选择、批量删除、批量移动、批量复制
-- 🖱️ 右键上下文菜单（含空白区域菜单）
+- 👁️ 文件预览 v3：视频 (ArtPlayer, 16:9 容器 + playsInline) / 音频 (APlayer, 浮动左下角播放器, 自动添加目录歌曲) / 图片 (ViewerJS 全屏画廊, 透明毛玻璃左右箭头, blob URL 防 iOS 系统预览抢占, 文件夹内前后翻页) / PDF (PDF.js CDN canvas 渲染, 工具栏含页码跳转/缩放) / 代码 (Monaco Editor 可编辑 + Ctrl+S 保存, Toast 保存提示)
+- ☑️ 常驻复选框 + 自动批量模式（勾选即进入批量，右键菜单含批量操作）
+- 🖱️ 右键上下文菜单（含批量操作：复制/移动/打包下载/删除）
 - 📊 文件详情面板
-- 🗂️ 文件夹导航树（可收缩）
 - ⌘ Spotlight 全局搜索 (Ctrl+K)
 - 📦 ZIP 打包下载
 - 📡 远程 URL 上传
@@ -79,9 +78,12 @@
 - 📱 响应式设计
 - 🎨 柔和的暗色模式配色
 - 🎯 统一图标库（1702 个 stroke 风格 SVG），通过 `<Icon>` 组件引入，自动适配暗色模式
-- 📂 侧边栏可收缩（主侧边栏 + 文件夹树）
+- 📂 侧边栏可收缩（功能导航）
+- 🗂️ 存储池下拉选择器（面包屑首位置）
+- 🎵 浮动 APlayer 音乐播放器（左下角，点击音频文件触发，自动添加目录歌曲，可收缩）
+- 📜 文件预览对话框半透明毛玻璃头部
 - 📜 所有对话框自适应滚动 (max-h-[90vh])，适配各种屏幕分辨率
-- 📏 紧凑标题栏 (py-1.5, 小图标)
+- 📏 紧凑标题栏 (h-11)
 - 🖼️ 画廊左右导航箭头 (透明毛玻璃样式)
 - 🔢 图片浮层编号计数器
 
@@ -216,21 +218,20 @@ vueFileManager/
 │   ├── api/                  # API 封装
 │   ├── components/           # 组件
 │   │   ├── Icon.vue          # 统一图标组件（加载 iconlib SVG）
-│   │   ├── Sidebar.vue       # 侧边栏
-│   │   ├── Layout.vue        # 布局
-│   │   ├── FileList.vue      # 文件列表
-│   │   ├── ContextMenu.vue   # 右键菜单
+│   │   ├── Sidebar.vue       # 侧边栏（功能导航）
+│   │   ├── Layout.vue        # 布局（Header + 侧边栏 + 主内容区）
+│   │   ├── FileList.vue      # 文件列表（常驻复选框）
+│   │   ├── ContextMenu.vue   # 右键菜单（含批量操作）
 │   │   ├── SpotlightSearch.vue # 全局搜索
 │   │   ├── FileDetailPanel.vue # 文件详情
-│   │   ├── FolderTree.vue    # 文件夹树
 │   │   ├── UploadDialog.vue  # 上传对话框
 │   │   ├── MoveDialog.vue    # 移动对话框
 │   │   ├── GuestShareDialog.vue # 访客分享对话框
 │   │   ├── ShareDialog.vue   # 分享链接对话框
-│   │   ├── FilePreview.vue   # 文件预览（ArtPlayer/APlayer/ViewerJS/Monaco）
+│   │   ├── FilePreview.vue   # 文件预览（毛玻璃头部, ArtPlayer/APlayer/ViewerJS/Monaco）
 │   │   ├── Toast.vue         # Toast 通知
 │   │   ├── ConfirmDialog.vue # 确认弹窗
-│   │   └── ThemeToggle.vue   # 主题切换
+│   │   └── ThemeToggle.vue   # 主题切换（放大图标）
 │   └── views/                # 页面
 │       ├── Home.vue          # 文件管理主页
 │       ├── StoragePools.vue  # 存储池管理

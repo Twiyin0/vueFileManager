@@ -32,7 +32,12 @@ declare module 'aplayer' {
     play(): void
     pause(): void
     destroy(): void
-    list: { audios: Array<{ name: string; artist: string; url: string; cover: string }> }
+    list: {
+      audios: Array<{ name: string; artist: string; url: string; cover: string }>
+      clear(): void
+      add(audio: { name: string; artist: string; url: string; cover?: string }): void
+      switch(index: number): void
+    }
   }
   export default APlayer
 }

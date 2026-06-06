@@ -146,7 +146,7 @@ function getPreviewUrl(file: FileItem): string {
             contextHighlighted === file.path ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''
           ]"
           style="background-color: var(--hover-color); touch-action: manipulation"
-          @click.prevent="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
+          @click.prevent="emit('open', file)"
           @contextmenu.prevent.stop="handleItemContext($event, file)"
           @touchstart.passive="handleTouchStart($event, file)"
           @touchend="handleTouchEnd"
@@ -178,11 +178,10 @@ function getPreviewUrl(file: FileItem): string {
     <div v-else>
       <!-- 表头 -->
       <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium border-b" style="color: var(--text-secondary-color); border-color: var(--border-color)">
-        <div v-if="selectMode" class="col-span-1"></div>
-        <div :class="selectMode ? 'col-span-5 sm:col-span-4' : 'col-span-6 sm:col-span-5'">名称</div>
-        <div class="col-span-3 sm:col-span-2 text-right hidden sm:block">大小</div>
+        <div class="col-span-8 sm:col-span-5">名称</div>
+        <div class="col-span-2 text-right hidden sm:block">大小</div>
         <div class="col-span-3 text-right hidden md:block">修改时间</div>
-        <div v-if="showActions" class="col-span-6 sm:col-span-2 text-right">操作</div>
+        <div v-if="showActions" class="col-span-4 sm:col-span-2 text-right">操作</div>
       </div>
 
       <!-- 文件行 -->
@@ -195,25 +194,22 @@ function getPreviewUrl(file: FileItem): string {
           contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : ''
         ]"
         style="border-color: var(--border-color); touch-action: manipulation"
-        @click.prevent="selectMode ? emit('toggleSelect', file.path) : emit('open', file)"
+        @click.prevent="emit('open', file)"
         @contextmenu.prevent.stop="handleItemContext($event, file)"
         @touchstart.passive="handleTouchStart($event, file)"
         @touchend="handleTouchEnd"
         @touchmove="handleTouchMove"
       >
-        <!-- 选择框 -->
-        <div v-if="selectMode" class="col-span-1 flex items-center" @click.stop>
-          <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)"
-            class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-        </div>
-        <!-- 名称 + 图标 -->
-        <div :class="selectMode ? 'col-span-5 sm:col-span-4' : 'col-span-6 sm:col-span-5'" class="flex items-center gap-2.5 min-w-0">
+        <!-- 名称 + 选择框 + 图标 -->
+        <div class="col-span-8 sm:col-span-5 flex items-center gap-1.5 min-w-0">
+          <input v-if="selectMode" type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)" @click.stop
+            class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0" />
           <Icon :name="getFileIconInfo(file).icon" :class="['w-5 h-5 flex-shrink-0', getFileIconInfo(file).color]" />
           <span class="truncate text-sm" style="color: var(--text-color)">{{ file.name }}</span>
         </div>
 
         <!-- 大小 -->
-        <div class="col-span-3 sm:col-span-2 text-right text-xs hidden sm:block" style="color: var(--text-secondary-color)">
+        <div class="col-span-2 text-right text-xs hidden sm:block" style="color: var(--text-secondary-color)">
           {{ file.type === 'folder' ? '-' : formatSize(file.size) }}
         </div>
 
@@ -223,7 +219,7 @@ function getPreviewUrl(file: FileItem): string {
         </div>
 
         <!-- 操作 -->
-        <div v-if="showActions" class="col-span-6 sm:col-span-2 flex items-center justify-end gap-1" @click.stop>
+        <div v-if="showActions" class="col-span-4 sm:col-span-2 flex items-center justify-end gap-1" @click.stop>
           <button
             @click="emit('detail', file)"
             class="p-1.5 rounded-md hover:opacity-80 transition-colors"
