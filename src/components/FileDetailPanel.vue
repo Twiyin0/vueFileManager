@@ -29,8 +29,8 @@ const iconInfo = computed(() => {
   if (props.item.type === 'folder') return fileIconMap.folder
   const ext = props.item.name.split('.').pop()?.toLowerCase() || ''
   if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return fileIconMap.image
-  if (['mp4', 'avi', 'mov', 'mkv'].includes(ext)) return fileIconMap.video
-  if (['mp3', 'wav', 'flac', 'aac'].includes(ext)) return fileIconMap.audio
+  if (['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi'].includes(ext)) return fileIconMap.video
+  if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg'].includes(ext)) return fileIconMap.audio
   if (['pdf'].includes(ext)) return fileIconMap.pdf
   if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return fileIconMap.archive
   if (['js', 'ts', 'py', 'java', 'go', 'rs', 'vue', 'html', 'css'].includes(ext)) return fileIconMap.code

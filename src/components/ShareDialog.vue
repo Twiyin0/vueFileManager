@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { api } from '@/api'
+import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
   show: boolean
@@ -109,8 +110,9 @@ function close() {
 
           <div class="flex justify-end gap-3">
             <button @click="close" class="btn-secondary text-sm">关闭</button>
-            <button @click="copyLink('sign')" class="btn-primary text-sm">
-              {{ copied && copyType === 'sign' ? '✓ 已复制' : '复制签名链接' }}
+            <button @click="copyLink('sign')" class="btn-primary text-sm flex items-center gap-1">
+              <Icon v-if="copied && copyType === 'sign'" name="circle-check" class="w-4 h-4" />
+              <span>{{ copied && copyType === 'sign' ? '已复制' : '复制签名链接' }}</span>
             </button>
           </div>
         </template>

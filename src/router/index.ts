@@ -94,7 +94,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAuth && !authStore.user) {
-    return { name: 'Login' }
+    return { name: 'GuestList' }
   }
 
   if (to.meta.requiresAdmin && authStore.user?.role !== 'admin') {

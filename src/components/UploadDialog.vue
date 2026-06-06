@@ -117,7 +117,7 @@ function openFilePicker() {
 
         <!-- macOS 系统文件拦截提示 -->
         <div v-if="skippedFiles.length" class="mt-3 px-3 py-2 rounded-lg text-xs" style="background: rgba(245,158,11,0.12); color: #d97706">
-          ⚠ 已自动跳过 {{ skippedFiles.length }} 个系统文件：{{ skippedFiles.join(', ') }}
+          <span class="flex items-center gap-1"><Icon name="triangle-exclamation" class="w-3.5 h-3.5 flex-shrink-0" /> 已自动跳过 {{ skippedFiles.length }} 个系统文件：{{ skippedFiles.join(', ') }}</span>
         </div>
 
         <div class="flex justify-end mt-4">

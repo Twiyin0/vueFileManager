@@ -63,9 +63,8 @@ function getImagePreviewUrl(file: { path: string; poolId?: number }): string {
 const fileType = computed(() => {
   const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
   if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext)) return 'image'
-  if (['mp4', 'webm', 'ogg', 'mov', 'mkv'].includes(ext)) return 'video'
-  if (['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) return 'audio'
-  if (ext === 'ogg') return 'audio'
+  if (['mp4', 'webm', 'mov', 'mkv'].includes(ext)) return 'video'
+  if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg'].includes(ext)) return 'audio'
   if (ext === 'pdf') return 'pdf'
   if (['md', 'markdown'].includes(ext)) return 'markdown'
   if (['txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'java', 'go', 'rs', 'vue', 'sh', 'sql', 'toml', 'ini', 'cfg', 'log', 'env', 'gitignore', 'dockerfile'].includes(ext)) return 'text'
@@ -577,9 +576,11 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             </div>
             <!-- Save toast: centered overlay with auto-dismiss -->
             <Transition name="toast">
-              <div v-if="saveMsg" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-lg shadow-lg text-sm font-medium"
+              <div v-if="saveMsg" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-lg shadow-lg text-sm font-medium flex items-center gap-1.5"
                 :style="{ background: saveMsg === '保存失败' ? 'rgba(220,38,38,0.9)' : 'rgba(34,197,94,0.9)', color: '#fff' }">
-                {{ saveMsg === '已保存' ? '✓ 已保存' : saveMsg === '保存失败' ? '✗ 保存失败' : saveMsg }}
+                <Icon v-if="saveMsg === '已保存'" name="circle-check" class="w-4 h-4" />
+                <Icon v-else-if="saveMsg === '保存失败'" name="circle-xmark" class="w-4 h-4" />
+                <span>{{ saveMsg }}</span>
               </div>
             </Transition>
           </div>

@@ -227,8 +227,8 @@ function getStorageLabel(type: string) {
                 <span v-else-if="pool.storageType === 'upyun'" class="ml-2 font-mono text-xs">
                   {{ pool.config.upyunBucket }}
                 </span>
-                <span v-if="pool.config.rootPath && pool.config.rootPath !== '/'" class="ml-1 font-mono text-xs text-blue-500">
-                  → {{ pool.config.rootPath }}
+                <span v-if="pool.config.rootPath && pool.config.rootPath !== '/'" class="ml-1 font-mono text-xs text-blue-500 flex items-center gap-0.5 inline-flex">
+                  <Icon name="arrow-right" class="w-3 h-3" />{{ pool.config.rootPath }}
                 </span>
               </p>
             </div>

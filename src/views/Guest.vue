@@ -553,7 +553,7 @@ const permLabels: Record<string, string> = {
       <!-- 拖拽上传覆盖层 -->
       <div v-if="isDragging" class="fixed inset-0 z-40 bg-blue-500/20 border-4 border-dashed border-blue-500 flex items-center justify-center">
         <div class="bg-white dark:bg-dark-card rounded-xl p-8 shadow-xl text-center">
-          <div class="text-5xl mb-3">📤</div>
+          <Icon name="upload" class="w-16 h-16 mb-3" style="color: var(--accent-color)" />
           <p class="text-lg font-semibold" style="color: var(--text-color)">拖放文件到此处上传</p>
         </div>
       </div>

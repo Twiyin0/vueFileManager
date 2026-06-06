@@ -141,7 +141,7 @@ function isMaxedOut(share: Share): boolean {
 
               <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-dark-text-secondary">
                 <span>下载次数：{{ share.download_count }}{{ share.max_downloads ? `/${share.max_downloads}` : '' }}</span>
-                <span v-if="share.password">🔒 有密码</span>
+                <span v-if="share.password" class="flex items-center gap-0.5"><Icon name="lock" class="w-3 h-3" /> 有密码</span>
                 <span v-if="share.expires_at">过期：{{ formatDate(share.expires_at) }}</span>
                 <span>创建：{{ formatDate(share.created_at) }}</span>
               </div>
