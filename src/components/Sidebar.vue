@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/Icon.vue'
@@ -13,6 +14,41 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const route = useRoute()
+
+// 侧边栏宽度（可拖拽调节）
+const sidebarWidth = ref(Number(localStorage.getItem('sidebarWidth')) || 224)
+const isDragging = ref(false)
+const MIN_WIDTH = 160
+const MAX_WIDTH = 400
+
+function onDragStart(e: MouseEvent) {
+  e.preventDefault()
+  isDragging.value = true
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onDragMove(e: MouseEvent) {
+  if (!isDragging.value) return
+  const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, e.clientX))
+  sidebarWidth.value = newWidth
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  localStorage.setItem('sidebarWidth', String(sidebarWidth.value))
+}
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+})
 
 const navItems = [
   { path: '/', label: '文件管理', icon: 'folder' },
@@ -35,11 +71,24 @@ function isActive(path: string) {
 
 <template>
   <aside
-    class="border-r flex flex-col py-3 flex-shrink-0 transition-all duration-300 overflow-hidden"
-    :class="collapsed ? 'w-16' : 'w-56'"
+    class="border-r flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden relative"
+    :class="collapsed ? 'w-16' : ''"
+    :style="collapsed ? '' : { width: sidebarWidth + 'px' }"
     style="background-color: var(--surface-color); border-color: var(--border-color)"
   >
-    <nav class="flex-1 px-2 space-y-1">
+    <!-- 收缩按钮（顶部） -->
+    <div class="px-2 pt-2 pb-1 border-b" style="border-color: var(--border-color)">
+      <button
+        @click="emit('toggle')"
+        class="w-full flex items-center justify-center p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+        style="color: var(--text-secondary-color)"
+        :title="collapsed ? '展开侧边栏' : '收缩侧边栏'"
+      >
+        <Icon name="chevron-left-double" class="w-4 h-4 transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''" />
+      </button>
+    </div>
+
+    <nav class="flex-1 px-2 py-2 space-y-1 overflow-y-auto">
       <router-link
         v-for="item in navItems"
         :key="item.path"
@@ -96,16 +145,17 @@ function isActive(path: string) {
       </div>
     </nav>
 
-    <!-- 收缩按钮 -->
-    <div class="px-2 pt-2 border-t" style="border-color: var(--border-color)">
-      <button
-        @click="emit('toggle')"
-        class="w-full flex items-center justify-center p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-        style="color: var(--text-secondary-color)"
-        :title="collapsed ? '展开侧边栏' : '收缩侧边栏'"
-      >
-        <Icon name="chevron-left-double" class="w-4 h-4 transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''" />
-      </button>
+    <!-- 底部留白（给 APlayer 收缩图标留空间） -->
+    <div class="h-12 flex-shrink-0" />
+
+    <!-- 拖拽调节条（展开时显示） -->
+    <div
+      v-if="!collapsed"
+      class="absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-10 group"
+      @mousedown="onDragStart"
+    >
+      <div class="absolute top-0 right-0 w-0.5 h-full transition-colors"
+        :class="isDragging ? 'bg-blue-500' : 'bg-transparent group-hover:bg-blue-400'" />
     </div>
   </aside>
 </template>

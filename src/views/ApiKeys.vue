@@ -98,9 +98,8 @@ function formatDate(dateStr: string): string {
 
 <template>
   <Layout>
-    <div class="max-w-3xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">API Keys</h1>
+    <div class="px-4 pt-4">
+      <div class="flex justify-end mb-4">
         <button @click="showCreate = true" class="btn-primary text-sm flex items-center gap-1">
           <Icon name="plus" class="w-4 h-4" />
           创建 Key

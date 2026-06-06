@@ -30,6 +30,10 @@ interface Config {
     jwt_secret: string
   }
   ip_list_mode: 'blacklist' | 'whitelist'
+  site: {
+    icp_beian: string
+    police_beian: string
+  }
   storage_pools: StoragePoolConfig[]
 }
 
@@ -44,6 +48,10 @@ const defaultConfig: Config = {
     jwt_secret: 'vue-file-manager-secret-key-2024'
   },
   ip_list_mode: 'blacklist',
+  site: {
+    icp_beian: '',
+    police_beian: ''
+  },
   storage_pools: [
     {
       name: '本地存储',
@@ -65,6 +73,7 @@ try {
       admin: { ...defaultConfig.admin, ...loaded.admin },
       server: { ...defaultConfig.server, ...loaded.server },
       ip_list_mode: loaded.ip_list_mode || defaultConfig.ip_list_mode,
+      site: { ...defaultConfig.site, ...loaded.site },
       storage_pools: loaded.storage_pools || defaultConfig.storage_pools
     }
     console.log('✅ 已加载配置文件 config.yml')

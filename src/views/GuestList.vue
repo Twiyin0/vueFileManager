@@ -27,20 +27,22 @@ onMounted(async () => {
 <template>
   <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
     <!-- 顶部导航 -->
-    <header class="h-14 flex items-center justify-between px-4 border-b dark:border-dark-border border-light-border" style="background-color: var(--surface-color)">
-      <router-link to="/" class="flex items-center gap-2 font-bold text-lg">
-        <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 34px; height: 34px;" />
-        <span class="dark:text-dark-text text-light-text">VueFileManager</span>
-      </router-link>
-      <div class="flex items-center gap-3">
+    <header class="h-11 flex items-center justify-between px-4 border-b flex-shrink-0" style="background-color: var(--surface-color); border-color: var(--border-color)">
+      <div class="flex items-center gap-3 min-w-0">
+        <router-link to="/" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
+          <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
+          <span style="color: var(--text-color)">VueFileManager</span>
+        </router-link>
+        <span class="text-sm font-medium truncate" style="color: var(--text-secondary-color)">/ 访客模式</span>
+      </div>
+      <div class="flex items-center gap-3 flex-shrink-0">
         <ThemeToggle />
         <router-link to="/login" class="btn-primary text-sm">登录</router-link>
       </div>
     </header>
 
-    <!-- 内容 -->
-    <main class="flex-1 p-4">
-      <div class="max-w-4xl mx-auto">
+    <main class="flex-1 overflow-auto flex flex-col">
+      <div class="px-4 pt-4 flex-1">
         <div class="mb-6">
           <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">访客模式</h1>
           <p class="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">浏览公开分享的文件</p>
@@ -84,6 +86,14 @@ onMounted(async () => {
           </router-link>
         </div>
       </div>
+      <footer class="px-4 py-3 text-center flex-shrink-0" style="color: var(--text-secondary-color)">
+        <p class="text-xs opacity-60" style="line-height: 1.4">
+          © {{ new Date().getFullYear() }}
+          <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity" style="color: var(--accent-color)">VueFileManager</a>
+          by <a href="https://github.com/Twiyin0" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity" style="color: var(--accent-color)">Twiyin0</a>
+          · MIT License
+        </p>
+      </footer>
     </main>
   </div>
 </template>

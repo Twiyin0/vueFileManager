@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import { FileItem } from '@/stores/files'
@@ -10,6 +10,8 @@ import ContextMenu from '@/components/ContextMenu.vue'
 import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
+import APlayer from 'aplayer'
+import 'aplayer/dist/APlayer.min.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -40,11 +42,15 @@ const detailItem = ref<any>(null)
 // 权限
 const sharePermissions = ref<string>('')
 
+// 批量选择
+const selectedFiles = ref<Set<string>>(new Set())
+const isSelectMode = computed(() => selectedFiles.value.size > 0)
+
 // 上传
-const showUpload = ref(false)
-const uploadFile = ref<File | null>(null)
 const uploading = ref(false)
 const uploadError = ref('')
+const showUploadProgress = ref(false)
+const uploadProgress = ref<{ file: string; percent: number }[]>([])
 
 // 删除确认
 const showDeleteConfirm = ref(false)
@@ -59,6 +65,24 @@ const newFileName = ref('')
 const showCreateFolder = ref(false)
 const newFolderName = ref('')
 
+// 搜索
+const searchQuery = ref('')
+const searchResults = ref<FileItem[]>([])
+const showSearch = ref(false)
+
+// 分享下拉
+const showShareDropdown = ref(false)
+
+// APlayer
+const aplayerRef = ref<HTMLDivElement>()
+let aplayerInst: APlayer | null = null
+const showAplayer = ref(false)
+const aplayerCollapsed = ref(true)
+const isDark = ref(document.documentElement.classList.contains('dark'))
+const themeObserver = new MutationObserver(() => {
+  isDark.value = document.documentElement.classList.contains('dark')
+})
+
 const username = computed(() => route.params.username as string)
 const shareId = computed(() => route.params.shareId as string)
 const currentPath = computed(() => ((route.query.path as string) || '').replace(/\\/g, '/'))
@@ -70,10 +94,12 @@ const pathSegments = computed(() => {
 
 const isFolderView = computed(() => !!shareId.value)
 
-// 权限别名映射
+const currentShare = computed(() => shares.value.find(s => String(s.id) === shareId.value))
+
+// 权限
 const permissionAliases: Record<string, string[]> = {
   read: ['preview', 'download'],
-  write: ['upload'],
+  write: ['upload', 'new-folder'],
   edit: ['rename'],
 }
 
@@ -148,6 +174,7 @@ async function fetchFiles() {
 }
 
 onMounted(() => {
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
   if (shareId.value) {
     fetchFiles()
   } else {
@@ -155,7 +182,15 @@ onMounted(() => {
   }
 })
 
+onUnmounted(() => {
+  themeObserver.disconnect()
+  destroyAplayer()
+})
+
 watch(shareId, () => {
+  selectedFiles.value.clear()
+  showSearch.value = false
+  searchQuery.value = ''
   if (shareId.value) {
     fetchFiles()
   } else {
@@ -164,6 +199,9 @@ watch(shareId, () => {
 })
 
 watch(currentPath, () => {
+  selectedFiles.value.clear()
+  showSearch.value = false
+  searchQuery.value = ''
   if (shareId.value) {
     fetchFiles()
   }
@@ -181,9 +219,86 @@ function goBackToShares() {
   router.push({ path: `/guest/${username.value}` })
 }
 
+// APlayer
+const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg']
+
+function isAudioFile(file: FileItem): boolean {
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  return audioExts.includes(ext)
+}
+
+function getFilePreviewUrl(file: FileItem): string {
+  return `/api/guest/${username.value}/${shareId.value}/preview?path=${encodeURIComponent(file.path)}`
+}
+
+function buildAudioList() {
+  return files.value.filter(f => isAudioFile(f)).map(f => ({
+    name: f.name.replace(/\.[^.]+$/, ''),
+    url: getFilePreviewUrl(f),
+    artist: `${owner.value} 的文件`,
+  }))
+}
+
+function destroyAplayer() {
+  if (aplayerInst) { try { aplayerInst.destroy() } catch {} aplayerInst = null }
+  showAplayer.value = false
+}
+
+function openAplayerWithFile(targetFile: FileItem) {
+  const audioList = buildAudioList()
+  if (audioList.length === 0) return
+
+  const targetUrl = getFilePreviewUrl(targetFile)
+  const targetIndex = audioList.findIndex(a => a.url === targetUrl)
+
+  if (aplayerInst && showAplayer.value) {
+    aplayerInst.list.clear()
+    audioList.forEach(a => aplayerInst!.list.add(a))
+    if (targetIndex >= 0) aplayerInst.list.switch(targetIndex)
+    aplayerInst.play()
+    return
+  }
+
+  destroyAplayer()
+  showAplayer.value = true
+  aplayerCollapsed.value = false
+
+  nextTick(() => {
+    if (!aplayerRef.value) return
+    aplayerInst = new APlayer({
+      container: aplayerRef.value,
+      autoplay: true,
+      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+      audio: audioList,
+    })
+    if (targetIndex > 0) aplayerInst.list.switch(targetIndex)
+  })
+}
+
+function toggleAplayerCollapse() {
+  aplayerCollapsed.value = !aplayerCollapsed.value
+}
+
+// 目录变化时刷新 APlayer
+watch(currentPath, () => {
+  if (showAplayer.value) {
+    nextTick(() => {
+      const audioList = buildAudioList()
+      if (audioList.length > 0 && aplayerInst) {
+        aplayerInst.list.clear()
+        audioList.forEach(a => aplayerInst!.list.add(a))
+      } else if (audioList.length === 0) {
+        destroyAplayer()
+      }
+    })
+  }
+})
+
 function openFile(file: FileItem) {
   if (file.type === 'folder') {
     navigateToPath(file.path)
+  } else if (isAudioFile(file)) {
+    openAplayerWithFile(file)
   } else if (hasPermission('preview')) {
     fileToPreview.value = file
     showPreview.value = true
@@ -209,8 +324,43 @@ async function handleDownload(file: FileItem) {
   URL.revokeObjectURL(a.href)
 }
 
+// 搜索（前端过滤）
+function handleSearch() {
+  if (!searchQuery.value.trim()) {
+    showSearch.value = false
+    return
+  }
+  const q = searchQuery.value.toLowerCase()
+  searchResults.value = files.value.filter(f => f.name.toLowerCase().includes(q))
+  showSearch.value = true
+}
+
+// 批量选择
+function toggleSelectFile(path: string) {
+  if (selectedFiles.value.has(path)) {
+    selectedFiles.value.delete(path)
+    selectedFiles.value = new Set(selectedFiles.value)
+  } else {
+    selectedFiles.value = new Set([...selectedFiles.value, path])
+  }
+}
+
+function selectAll() {
+  const list = showSearch.value ? searchResults.value : files.value
+  if (selectedFiles.value.size === list.length) {
+    selectedFiles.value.clear()
+  } else {
+    selectedFiles.value = new Set(list.map(f => f.path))
+  }
+}
+
+function clearSelection() {
+  selectedFiles.value.clear()
+}
+
 // 右键菜单
 function handleContextMenu(e: MouseEvent, file?: FileItem) {
+  e.preventDefault()
   contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, item: file || null }
 }
 
@@ -238,17 +388,16 @@ function handleContextAction(action: string, item?: any) {
       newFolderName.value = ''
       showCreateFolder.value = true
       break
-    case 'refresh':
-      fetchFiles()
-      break
+    case 'select-all': selectAll(); break
+    case 'clear-selection': clearSelection(); break
+    case 'refresh': fetchFiles(); break
   }
 }
 
 async function handleDelete() {
   if (!fileToDelete.value) return
   try {
-    const url = `/api/guest/${username.value}/${shareId.value}/delete`
-    const res = await fetch(url, {
+    const res = await fetch(`/api/guest/${username.value}/${shareId.value}/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fileToDelete.value.path })
@@ -268,8 +417,7 @@ async function handleDelete() {
 async function handleRename() {
   if (!fileToRename.value || !newFileName.value.trim()) return
   try {
-    const url = `/api/guest/${username.value}/${shareId.value}/rename`
-    const res = await fetch(url, {
+    const res = await fetch(`/api/guest/${username.value}/${shareId.value}/rename`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fileToRename.value.path, newName: newFileName.value.trim() })
@@ -302,38 +450,65 @@ async function handleCreateFolder() {
 }
 
 // 上传
-function triggerUpload() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.onchange = (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (file) handleUpload(file)
+async function handleUpload(fileList: FileList) {
+  const arr = Array.from(fileList)
+  if (arr.length === 0) return
+  showUploadProgress.value = true
+  uploadProgress.value = arr.map(f => ({ file: f.name, percent: 0 }))
+
+  for (let i = 0; i < arr.length; i++) {
+    const file = arr[i]
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (currentPath.value) formData.append('dirPath', currentPath.value)
+
+      const xhr = new XMLHttpRequest()
+      await new Promise<void>((resolve, reject) => {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            uploadProgress.value[i].percent = Math.round((e.loaded / e.total) * 100)
+          }
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            uploadProgress.value[i].percent = 100
+            resolve()
+          } else reject(new Error(xhr.statusText))
+        }
+        xhr.onerror = () => reject(new Error('上传失败'))
+        xhr.open('POST', `/api/guest/${username.value}/${shareId.value}/upload`)
+        xhr.send(formData)
+      })
+    } catch (err: any) {
+      uploadError.value = err.message
+    }
   }
-  input.click()
+
+  await fetchFiles()
+  setTimeout(() => { showUploadProgress.value = false }, 2000)
 }
 
-async function handleUpload(file: File) {
-  uploading.value = true
-  uploadError.value = ''
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    if (currentPath.value) formData.append('dirPath', currentPath.value)
+// 拖拽上传
+const isDragging = ref(false)
+let dragCounter = 0
 
-    const res = await fetch(`/api/guest/${username.value}/${shareId.value}/upload`, {
-      method: 'POST',
-      body: formData
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || '上传失败')
-    }
-    await fetchFiles()
-  } catch (err: any) {
-    uploadError.value = err.message
-  } finally {
-    uploading.value = false
-  }
+function handleDragEnter(e: DragEvent) {
+  e.preventDefault()
+  dragCounter++
+  isDragging.value = true
+}
+function handleDragLeave(e: DragEvent) {
+  e.preventDefault()
+  dragCounter--
+  if (dragCounter === 0) isDragging.value = false
+}
+function handleDragOver(e: DragEvent) { e.preventDefault() }
+function handleDrop(e: DragEvent) {
+  e.preventDefault()
+  dragCounter = 0
+  isDragging.value = false
+  if (e.dataTransfer?.files.length) handleUpload(e.dataTransfer.files)
 }
 
 function formatDate(dateStr: string): string {
@@ -345,7 +520,6 @@ const permLabels: Record<string, string> = {
   write: '写入',
   delete: '删除',
   edit: '文件编辑',
-  // 兼容旧格式
   preview: '预览',
   download: '下载',
   upload: '上传'
@@ -353,49 +527,57 @@ const permLabels: Record<string, string> = {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
-    <!-- 顶部导航 -->
-    <header class="h-14 flex items-center justify-between px-4 border-b dark:border-dark-border border-light-border" style="background-color: var(--surface-color)">
-      <router-link to="/guest" class="flex items-center gap-2 text-sm text-blue-500 dark:text-blue-400">
-        <Icon name="chevron-left" class="w-4 h-4" />
-        返回访客列表
-      </router-link>
-      <div class="flex items-center gap-3">
+  <div class="h-screen flex flex-col overflow-hidden" style="background-color: var(--bg-color)">
+    <!-- Header -->
+    <header class="h-11 flex items-center justify-between px-4 border-b flex-shrink-0" style="background-color: var(--surface-color); border-color: var(--border-color)">
+      <div class="flex items-center gap-3 min-w-0">
+        <router-link to="/guest" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
+          <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
+          <span style="color: var(--text-color)">VueFileManager</span>
+        </router-link>
+        <span v-if="isFolderView" class="text-sm font-medium truncate" style="color: var(--text-secondary-color)">
+          / {{ owner }} 的文件
+        </span>
+        <span v-else class="text-sm font-medium truncate" style="color: var(--text-secondary-color)">
+          / 访客模式
+        </span>
+      </div>
+      <div class="flex items-center gap-3 flex-shrink-0">
         <ThemeToggle />
         <router-link to="/login" class="btn-primary text-sm">登录</router-link>
       </div>
     </header>
 
-    <!-- 内容 -->
-    <main class="flex-1 p-4">
-      <div class="max-w-6xl mx-auto">
-        <!-- 标题 -->
-        <div class="mb-4">
-          <h1 class="text-xl font-bold dark:text-dark-text text-light-text">
-            {{ owner }} 的公开文件
-          </h1>
-          <p class="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">
-            访客模式
-          </p>
+    <!-- 内容区 -->
+    <main class="flex-1 overflow-auto" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
+      <!-- 拖拽上传覆盖层 -->
+      <div v-if="isDragging" class="fixed inset-0 z-40 bg-blue-500/20 border-4 border-dashed border-blue-500 flex items-center justify-center">
+        <div class="bg-white dark:bg-dark-card rounded-xl p-8 shadow-xl text-center">
+          <div class="text-5xl mb-3">📤</div>
+          <p class="text-lg font-semibold" style="color: var(--text-color)">拖放文件到此处上传</p>
         </div>
+      </div>
 
-        <!-- 加载中 -->
-        <div v-if="loadingShares || loading" class="flex items-center justify-center py-20">
-          <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-          </svg>
-        </div>
+      <!-- 加载中 -->
+      <div v-if="loadingShares || loading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </div>
 
-        <!-- 错误提示 -->
-        <div v-else-if="error" class="card p-6 text-center">
+      <!-- 错误提示 -->
+      <div v-else-if="error" class="px-4 pt-4">
+        <div class="card p-6 text-center">
           <Icon name="exclamation" class="w-16 h-16 mx-auto mb-3 text-red-400" />
-          <p class="text-red-500 dark:text-red-400">{{ error }}</p>
+          <p class="text-red-500">{{ error }}</p>
         </div>
+      </div>
 
-        <!-- 文件夹列表视图（无 shareId） -->
-        <template v-else-if="!isFolderView">
-          <div v-if="shares.length === 0" class="card flex flex-col items-center justify-center py-20 text-gray-400 dark:text-dark-text-secondary">
+      <!-- 文件夹列表视图（无 shareId） -->
+      <template v-else-if="!isFolderView">
+        <div class="px-4 pt-4">
+          <div v-if="shares.length === 0" class="card flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
             <Icon name="folder" class="w-16 h-16 mb-3" />
             <p>暂无分享的文件夹</p>
           </div>
@@ -407,17 +589,16 @@ const permLabels: Record<string, string> = {
               @click="navigateToShare(share.id)"
               class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group"
             >
-              <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-dark-accent-soft flex items-center justify-center flex-shrink-0">
-                <Icon name="folder" class="w-6 h-6 text-blue-500 dark:text-dark-accent" />
+              <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: var(--accent-soft-color)">
+                <Icon name="folder" class="w-6 h-6" style="color: var(--accent-color)" />
               </div>
               <div class="flex-1 min-w-0">
-                <h3 class="font-medium dark:text-dark-text text-light-text group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
+                <h3 class="font-medium truncate transition-colors" style="color: var(--text-color)">
                   {{ share.label || share.folder_path }}
                 </h3>
-                <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
+                <p class="text-xs" style="color: var(--text-secondary-color)">
                   {{ share.pool_name }} · {{ formatDate(share.created_at) }}
                 </p>
-                <!-- 权限标签 -->
                 <div v-if="share.permissions" class="flex gap-1 mt-1.5 flex-wrap">
                   <span v-for="p in share.permissions.split(',')" :key="p"
                     class="px-1.5 py-0.5 text-xs rounded"
@@ -426,80 +607,70 @@ const permLabels: Record<string, string> = {
                   </span>
                 </div>
               </div>
-              <Icon name="chevron-right" class="w-5 h-5 text-gray-400 dark:text-dark-text-secondary group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors flex-shrink-0" />
+              <Icon name="chevron-right" class="w-5 h-5 flex-shrink-0 transition-colors" style="color: var(--text-secondary-color)" />
             </div>
           </div>
-        </template>
+        </div>
+      </template>
 
-        <!-- 文件浏览视图（有 shareId） -->
-        <template v-else>
-          <!-- 返回文件夹列表 + 路径导航 + 视图切换 -->
-          <div class="flex items-center justify-between mb-4">
+      <!-- 文件浏览视图（有 shareId） -->
+      <template v-else>
+        <div class="px-4 pt-4">
+          <!-- 顶部操作栏 -->
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <!-- 面包屑：分享文件夹下拉 + 路径 -->
             <div class="flex items-center gap-1.5 text-sm flex-wrap">
-              <button
-                @click="goBackToShares()"
-                class="px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                style="color: var(--accent-color)"
-              >
-                {{ shareLabel || '返回文件夹列表' }}
-              </button>
+              <div class="relative">
+                <button @click.stop="showShareDropdown = !showShareDropdown"
+                  class="flex items-center gap-1 px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  style="color: var(--accent-color)">
+                  <Icon name="folder" class="w-4 h-4" />
+                  <span>{{ currentShare?.label || shareLabel || '文件夹' }}</span>
+                  <Icon name="chevron-down" class="w-3 h-3" />
+                </button>
+                <div v-if="showShareDropdown"
+                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg shadow-xl border py-1"
+                  style="background-color: var(--card-color); border-color: var(--border-color)">
+                  <div v-for="s in shares" :key="s.id"
+                    class="px-4 py-2 text-sm flex items-center gap-2 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                    :style="{ color: String(s.id) === shareId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: String(s.id) === shareId ? '500' : 'normal' }"
+                    @click="navigateToShare(s.id); showShareDropdown = false">
+                    <Icon name="folder" class="w-4 h-4" />
+                    {{ s.label || s.folder_path }}
+                  </div>
+                </div>
+              </div>
               <template v-for="(segment, index) in pathSegments" :key="index">
                 <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                <button
-                  @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'))"
-                  class="px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                  :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }"
-                >
+                <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'))"
+                  class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }">
                   {{ segment }}
                 </button>
               </template>
             </div>
 
-            <!-- 工具栏 -->
-            <div class="flex items-center gap-1.5">
-              <!-- 新建文件夹 -->
-              <button
-                v-if="hasPermission('upload')"
-                @click="showCreateFolder = true"
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                title="新建文件夹"
-              >
-                <Icon name="folder-plus" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+            <!-- 操作按钮 -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- 搜索 -->
+              <div class="flex items-center gap-1">
+                <input v-model="searchQuery" type="text" class="input-field text-sm w-32" placeholder="搜索..."
+                  @keyup.enter="handleSearch" @input="!searchQuery && (showSearch = false)" />
+                <button @click="handleSearch" class="btn-secondary text-sm p-1.5" title="搜索">
+                  <Icon name="search" class="w-4 h-4" />
+                </button>
+              </div>
+
+              <button @click="fetchFiles" class="btn-secondary text-sm p-1.5" title="刷新">
+                <Icon name="refresh-cw" class="w-4 h-4" />
               </button>
 
-              <!-- 上传按钮 -->
-              <button
-                v-if="hasPermission('upload')"
-                @click="triggerUpload"
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                title="上传文件"
-                :disabled="uploading"
-              >
-                <Icon v-if="uploading" name="loader" class="w-4 h-4 animate-spin" style="color: var(--text-secondary-color)" />
-                <Icon v-else name="upload" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-              </button>
-
-              <!-- 返回上级 -->
-              <button
-                v-if="currentPath"
-                @click="goUp"
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                title="上级目录"
-              >
-                <Icon name="arrow-up" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-              </button>
-
-              <!-- 刷新 -->
-              <button
-                @click="fetchFiles"
-                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-hover transition-colors"
-                title="刷新"
-              >
-                <Icon name="refresh-cw" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              <button v-if="currentPath" @click="goUp" class="btn-secondary text-sm p-1.5" title="上级目录">
+                <Icon name="arrow-up" class="w-4 h-4" />
               </button>
 
               <!-- 视图切换 -->
-              <div class="flex border rounded-md overflow-hidden" style="border-color: var(--border-color)">
+              <div class="flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
                 <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :style="viewMode === 'list' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'">
                   <Icon name="list" class="w-4 h-4" />
                 </button>
@@ -507,30 +678,88 @@ const permLabels: Record<string, string> = {
                   <Icon name="grid" class="w-4 h-4" />
                 </button>
               </div>
+
+              <button v-if="hasPermission('upload')" @click="showCreateFolder = true" class="btn-secondary text-sm flex items-center gap-1">
+                <Icon name="folder-plus" class="w-4 h-4" />
+                新建
+              </button>
+
+              <label v-if="hasPermission('upload')" class="btn-primary text-sm flex items-center gap-1 cursor-pointer">
+                <Icon name="upload" class="w-4 h-4" />
+                上传
+                <input type="file" class="hidden" multiple @change="handleUpload(($event.target as HTMLInputElement).files!)" />
+              </label>
             </div>
           </div>
 
-          <!-- 上传错误提示 -->
+          <!-- 批量选择提示 -->
+          <div v-if="isSelectMode" class="mb-3 p-2 rounded-lg flex items-center justify-between text-sm"
+            style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
+            <div class="flex items-center gap-3">
+              <button @click="selectAll" class="text-sm hover:underline" style="color: var(--accent-color)">
+                {{ selectedFiles.size === (showSearch ? searchResults : files).length ? '取消全选' : '全选' }}
+              </button>
+              <span style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
+            </div>
+            <button @click="clearSelection" class="text-sm hover:underline" style="color: var(--text-secondary-color)">取消选择</button>
+          </div>
+
+          <!-- 搜索结果 -->
+          <div v-if="showSearch" class="mb-3">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm" style="color: var(--text-color)">搜索结果：{{ searchResults.length }} 个</span>
+              <button @click="showSearch = false; searchQuery = ''" class="text-xs hover:underline" style="color: var(--accent-color)">清除</button>
+            </div>
+          </div>
+
+          <!-- 上传错误 -->
           <div v-if="uploadError" class="mb-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
             <span>{{ uploadError }}</span>
             <button @click="uploadError = ''" class="text-red-400 hover:text-red-600">
-              <Icon name="x" class="w-4 h-4" />
+              <Icon name="xmark" class="w-4 h-4" />
             </button>
+          </div>
+
+          <!-- 上传进度 -->
+          <div v-if="showUploadProgress" class="mb-3 p-3 rounded-lg border" style="background-color: var(--card-color); border-color: var(--border-color)">
+            <div v-for="(item, index) in uploadProgress" :key="index" class="mb-2 last:mb-0">
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="truncate max-w-[200px]" style="color: var(--text-color)">{{ item.file }}</span>
+                <span style="color: var(--text-secondary-color)">{{ item.percent }}%</span>
+              </div>
+              <div class="w-full rounded-full h-2" style="background-color: var(--hover-color)">
+                <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
+              </div>
+            </div>
           </div>
 
           <!-- 文件列表 -->
           <FileList
-            :files="files"
+            :files="showSearch ? searchResults : files"
             :loading="loading"
             :show-actions="false"
+            :select-mode="!!shareId"
+            :selected-files="selectedFiles"
             :view-mode="viewMode"
             :guest-base-url="guestBaseUrl"
             @open="openFile"
             @download="handleDownload"
             @contextmenu="handleContextMenu"
+            @toggle-select="toggleSelectFile"
+            @detail="(f) => { detailItem = f; showDetailPanel = true }"
           />
-        </template>
-      </div>
+        </div>
+      </template>
+
+      <!-- Footer -->
+      <footer class="px-4 py-3 text-center" style="color: var(--text-secondary-color)">
+        <p class="text-xs opacity-60" style="line-height: 1.4">
+          © {{ new Date().getFullYear() }}
+          <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity" style="color: var(--accent-color)">VueFileManager</a>
+          by <a href="https://github.com/Twiyin0" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity" style="color: var(--accent-color)">Twiyin0</a>
+          · MIT License
+        </p>
+      </footer>
     </main>
 
     <!-- 右键菜单 -->
@@ -539,7 +768,7 @@ const permLabels: Record<string, string> = {
       :x="contextMenu.x"
       :y="contextMenu.y"
       :item="contextMenu.item"
-      :read-only="false"
+      :selected-items="isSelectMode ? Array.from(selectedFiles) : []"
       :allowed-actions="allowedContextMenuActions"
       @close="contextMenu.visible = false"
       @action="handleContextAction"
@@ -576,7 +805,7 @@ const permLabels: Record<string, string> = {
       @cancel="showDeleteConfirm = false; fileToDelete = null"
     />
 
-    <!-- 新建文件夹对话框 -->
+    <!-- 新建文件夹 -->
     <Teleport to="body">
       <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false"/>
@@ -591,7 +820,7 @@ const permLabels: Record<string, string> = {
       </div>
     </Teleport>
 
-    <!-- 重命名对话框 -->
+    <!-- 重命名 -->
     <Teleport to="body">
       <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false"/>
@@ -602,6 +831,33 @@ const permLabels: Record<string, string> = {
             <button @click="showRename = false" class="btn-secondary text-sm">取消</button>
             <button @click="handleRename" class="btn-primary text-sm">确认</button>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- APlayer 浮动播放器 -->
+    <Teleport to="body">
+      <div v-if="showAplayer" class="fixed bottom-4 left-4 z-40">
+        <div v-if="aplayerCollapsed"
+          @click="toggleAplayerCollapse"
+          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all hover:scale-105"
+          style="background-color: var(--accent-color); color: white"
+          title="展开播放器">
+          <Icon name="music" class="w-4 h-4" />
+        </div>
+        <div v-show="!aplayerCollapsed" class="w-72 rounded-lg shadow-2xl overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+          <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
+            <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
+            <div class="flex items-center gap-0.5">
+              <button @click="toggleAplayerCollapse" class="p-0.5 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
+                <Icon name="chevron-down" class="w-3.5 h-3.5" />
+              </button>
+              <button @click="destroyAplayer" class="p-0.5 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
+                <Icon name="xmark" class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <div ref="aplayerRef" />
         </div>
       </div>
     </Teleport>

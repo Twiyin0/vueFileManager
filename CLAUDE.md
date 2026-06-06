@@ -83,11 +83,16 @@
 ## 布局系统
 
 `Layout.vue` 为全局布局组件，结构：
-- **Header** (`h-11`)：Logo（28×28px）+ 用户操作（ThemeToggle 放大图标、设置、退出）
-- **侧边栏**：功能导航（文件管理、收藏、分享、回收站、存储池、设置、API Keys、管理、访客），可收缩
+- **Header** (`h-11`)：Logo（28×28px）+ 页面标题（带切换动效）+ 用户操作（ThemeToggle、设置、退出）
+- **侧边栏**：功能导航（文件管理、收藏、分享、回收站、存储池、设置、API Keys、管理、访客），可收缩可拖拽调节宽度
 - **主内容区**：`<slot />` 填充
+- **Footer**：版权信息 + 备案号（config.yml 可配置），内容区底部随内容滚动
 
 所有认证页面（Home、StoragePools、Settings 等）通过 `<Layout>` 包裹。`Home.vue` 中的文件夹目录树已移除，存储池选择改为面包屑首位下拉菜单。
+
+### 复选框样式
+
+全局自绘复选框（`main.css`），排除 `sr-only` 类（toggle 开关使用）。暗色模式自动适配。
 
 ## 对话框规范
 
@@ -196,7 +201,8 @@
 ## 访客模式
 
 - 路由：`/guest`（用户列表）、`/guest/:username`（文件夹列表）、`/guest/:username/:shareId`（文件浏览）
-- 访客页左上角使用 `logo.svg`（34×34px），与用户界面一致
+- 访客页 Header 与用户模式一致（h-11, logo 28×28px）
+- 访客文件浏览页 UI 与用户模式对齐：分享文件夹下拉选择器（面包屑首位）、复选框批量操作、搜索、APlayer 音乐播放
 
 ### 访客权限系统
 
@@ -212,8 +218,8 @@
 默认权限：`preview,download`（只读）。创建/编辑分享时可自定义。
 
 前端实现：
-- `Guest.vue`：根据权限显示/隐藏预览、下载、上传功能
-- `ContextMenu.vue`：`readOnly` 模式 + `allowedActions` prop 控制菜单项
+- `Guest.vue`：与用户 Home.vue 对齐的 UI（分享下拉、复选框、搜索、APlayer、拖拽上传、上传进度条）
+- `ContextMenu.vue`：`allowedActions` prop 控制菜单项，支持批量操作
 - `GuestShareDialog.vue`：创建/编辑分享时的权限复选框
 - `FilePreview.vue`：`guestBaseUrl` prop 支持访客预览 URL，`guestSaveUrl` + `editable` prop 支持访客编辑
 - `FileList.vue`：`guestBaseUrl` prop 支持网格模式缩略图

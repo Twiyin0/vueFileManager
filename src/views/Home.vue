@@ -717,10 +717,10 @@ watch([currentPath, currentPoolId], () => {
       </div>
     </div>
 
-    <div class="flex h-full" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
+    <div class="flex" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
       <!-- 主内容区 -->
       <div class="flex-1 min-w-0">
-        <div class="max-w-6xl mx-auto p-4">
+        <div class="px-4 pt-4">
           <!-- 顶部操作栏 -->
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <!-- 面包屑导航 -->
@@ -769,17 +769,17 @@ watch([currentPath, currentPoolId], () => {
 
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2 flex-wrap">
-              <!-- 刷新 -->
-              <button @click="filesStore.fetchFiles(currentPath, currentPoolId)"
-                class="btn-secondary text-sm flex items-center gap-1" title="刷新">
-                <Icon name="refresh-cw" class="w-4 h-4" />
-              </button>
-
               <!-- Spotlight搜索触发 -->
               <button @click="triggerSpotlight"
                 class="btn-secondary text-sm flex items-center gap-1" title="Ctrl+K 搜索">
                 <Icon name="search" class="w-4 h-4" />
                 搜索
+              </button>
+
+              <!-- 刷新 -->
+              <button @click="filesStore.fetchFiles(currentPath, currentPoolId)"
+                class="btn-secondary text-sm flex items-center gap-1" title="刷新">
+                <Icon name="refresh-cw" class="w-4 h-4" />
               </button>
 
               <button v-if="currentPath || currentPoolId" @click="goUp" class="btn-secondary text-sm flex items-center gap-1">

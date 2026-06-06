@@ -123,9 +123,7 @@ function formatDate(dateStr: string): string {
 
 <template>
   <Layout>
-    <div class="max-w-3xl mx-auto">
-      <h1 class="text-2xl font-bold mb-6 dark:text-dark-text text-light-text">设置</h1>
-
+    <div class="px-4 pt-4">
       <!-- 提示消息 -->
       <div v-if="message" class="mb-4 p-3 rounded-lg text-sm"
         :class="messageType === 'success'

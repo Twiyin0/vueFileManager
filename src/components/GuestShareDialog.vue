@@ -116,7 +116,7 @@ async function handleSubmit() {
               <label class="flex items-center gap-2.5 cursor-pointer">
                 <input type="checkbox" v-model="perms.write" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span class="text-sm" style="color: var(--text-color)">写入</span>
-                <span class="text-xs" style="color: var(--text-secondary-color)">（上传文件）</span>
+                <span class="text-xs" style="color: var(--text-secondary-color)">（上传文件、创建文件夹）</span>
               </label>
               <label class="flex items-center gap-2.5 cursor-pointer">
                 <input type="checkbox" v-model="perms.delete" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />

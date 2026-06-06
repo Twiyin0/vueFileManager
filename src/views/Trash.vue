@@ -93,10 +93,9 @@ function formatDate(date: string) {
 
 <template>
   <Layout>
-    <div class="max-w-4xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">回收站</h1>
-        <button v-if="items.length > 0" @click="emptyTrash" class="btn-danger text-sm">清空回收站</button>
+    <div class="px-4 pt-4">
+      <div v-if="items.length > 0" class="flex justify-end mb-4">
+        <button @click="emptyTrash" class="btn-danger text-sm">清空回收站</button>
       </div>
 
       <div v-if="message" class="mb-4 p-3 rounded-lg text-sm"

@@ -176,9 +176,8 @@ function getStorageLabel(type: string) {
 
 <template>
   <Layout>
-    <div class="max-w-4xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">存储池管理</h1>
+    <div class="px-4 pt-4">
+      <div class="flex justify-end mb-4">
         <button @click="openAddDialog" class="btn-primary flex items-center gap-2">
           <Icon name="plus" class="w-5 h-5" />
           添加存储池

@@ -156,8 +156,7 @@ function getPreviewUrl(file: FileItem): string {
           <div class="thumb-container relative">
             <!-- 选择框 -->
             <div v-if="selectMode" class="absolute top-1.5 left-1.5 z-10" @click.stop>
-              <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)"
-                class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)" />
             </div>
             <!-- 图片缩略图 -->
             <img v-if="getFileIcon(file) === 'image'" :src="getPreviewUrl(file)" :alt="file.name" class="thumb-img" loading="lazy" draggable="false" />
@@ -202,8 +201,7 @@ function getPreviewUrl(file: FileItem): string {
       >
         <!-- 名称 + 选择框 + 图标 -->
         <div class="col-span-8 sm:col-span-5 flex items-center gap-1.5 min-w-0">
-          <input v-if="selectMode" type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)" @click.stop
-            class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0" />
+          <input v-if="selectMode" type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)" @click.stop />
           <Icon :name="getFileIconInfo(file).icon" :class="['w-5 h-5 flex-shrink-0', getFileIconInfo(file).color]" />
           <span class="truncate text-sm" style="color: var(--text-color)">{{ file.name }}</span>
         </div>

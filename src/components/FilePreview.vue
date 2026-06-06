@@ -486,14 +486,14 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 
       <div :class="['relative w-full max-h-[90vh] flex flex-col rounded-xl overflow-hidden', fileType === 'video' ? 'max-w-7xl' : 'max-w-5xl']" style="background-color: var(--surface-color)">
         <!-- Header: 半透明毛玻璃 -->
-        <div class="flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
-          <h3 class="text-sm font-medium truncate flex-1 mr-3" style="color: var(--text-color)">{{ fileName }}</h3>
-          <div class="flex items-center gap-1">
-            <a :href="previewUrl" :download="fileName" class="p-1.5 rounded-md hover:opacity-80 transition-colors" title="下载">
-              <Icon name="download" class="w-4 h-4" style="color: var(--text-color)" />
+        <div class="flex items-center justify-between px-2.5 py-1 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
+          <h3 class="text-xs font-medium truncate flex-1 mr-2" style="color: var(--text-color)">{{ fileName }}</h3>
+          <div class="flex items-center gap-0.5">
+            <a :href="previewUrl" :download="fileName" class="p-1 rounded hover:opacity-80 transition-colors" title="下载">
+              <Icon name="download" class="w-3.5 h-3.5" style="color: var(--text-color)" />
             </a>
-            <button @click="emit('close')" class="p-1.5 rounded-md hover:opacity-80 transition-colors">
-              <Icon name="xmark" class="w-4 h-4" style="color: var(--text-color)" />
+            <button @click="emit('close')" class="p-1 rounded hover:opacity-80 transition-colors">
+              <Icon name="xmark" class="w-3.5 h-3.5" style="color: var(--text-color)" />
             </button>
           </div>
         </div>
@@ -520,7 +520,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
           <!-- PDF: PDF.js CDN canvas + toolbar -->
           <div v-if="!loading && fileType === 'pdf'" class="flex flex-col h-full" style="min-height: 70vh">
             <!-- PDF Toolbar -->
-            <div class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0 flex-wrap"
+            <div class="flex items-center gap-1.5 px-2.5 py-1 border-b flex-shrink-0 flex-wrap"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
               <button @click="pdfPrevPage" :disabled="pdfPageNum <= 1" class="toolbar-btn" title="上一页">
                 <Icon name="chevron-left" class="w-4 h-4" />

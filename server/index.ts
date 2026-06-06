@@ -52,6 +52,14 @@ app.use('/api/favourites', favouritesRoutes)
 // 公开访问路由（无需认证）
 app.use('/f', publicRoutes)
 
+// 站点配置（公开，无需认证）
+app.get('/api/site-config', (_req, res) => {
+  res.json({
+    icp_beian: config.site?.icp_beian || '',
+    police_beian: config.site?.police_beian || '',
+  })
+})
+
 // SPA fallback（生产模式）
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {

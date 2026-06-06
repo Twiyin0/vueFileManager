@@ -305,9 +305,8 @@ onMounted(() => {
 
 <template>
   <Layout>
-    <div class="max-w-6xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold dark:text-dark-text text-light-text">管理面板</h1>
+    <div class="px-4 pt-4">
+      <div class="flex justify-end mb-4">
         <button @click="openCreateDialog" class="btn-primary text-sm flex items-center gap-1.5">
           <Icon name="plus" class="w-4 h-4" />
           创建用户
@@ -335,12 +334,10 @@ onMounted(() => {
       </div>
 
       <!-- 搜索 -->
-      <div class="mb-4">
-        <div class="relative">
-          <Icon name="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input v-model="search" type="text" placeholder="搜索用户名、IP、角色..."
-            class="input-field pl-10 text-sm" />
-        </div>
+      <div class="mb-4 flex items-center gap-2">
+        <Icon name="search" class="w-4 h-4 flex-shrink-0" style="color: var(--text-secondary-color)" />
+        <input v-model="search" type="text" placeholder="搜索用户名、IP、角色..."
+          class="input-field text-sm" />
       </div>
 
       <!-- 用户列表 -->

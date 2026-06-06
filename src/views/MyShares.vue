@@ -84,9 +84,7 @@ function isMaxedOut(share: Share): boolean {
 
 <template>
   <Layout>
-    <div class="max-w-4xl mx-auto">
-      <h1 class="text-2xl font-bold mb-6 dark:text-dark-text text-light-text">我的分享</h1>
-
+    <div class="px-4 pt-4">
       <!-- 加载状态 -->
       <div v-if="loading" class="flex items-center justify-center py-20">
         <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
