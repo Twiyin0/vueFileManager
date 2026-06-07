@@ -58,7 +58,6 @@ const navItems = [
   { path: '/storage-pools', label: '存储池', icon: 'server' },
   { path: '/settings', label: '设置', icon: 'gear' },
   { path: '/apikeys', label: 'API Keys', icon: 'key' },
-  { path: '/api-docs', label: 'API 文档', icon: 'file-lines' },
 ]
 
 const adminItems = [
