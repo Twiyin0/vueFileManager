@@ -7,7 +7,7 @@ import Icon from '@/components/Icon.vue'
 interface StoragePool {
   id: number
   name: string
-  storageType: 'local' | 'upyun' | 'ftp'
+  storageType: 'local' | 'upyun' | 'ftp' | 's3'
   isDefault: boolean
   config: any
   createdAt: string
@@ -26,7 +26,7 @@ const editingPool = ref<StoragePool | null>(null)
 // 新建/编辑表单
 const form = ref({
   name: '',
-  storageType: 'local' as 'local' | 'upyun' | 'ftp',
+  storageType: 'local' as 'local' | 'upyun' | 'ftp' | 's3',
   config: {
     localPath: './uploads',
     upyunOperator: '',
@@ -38,6 +38,13 @@ const form = ref({
     ftpUser: '',
     ftpPassword: '',
     ftpRemotePath: '/',
+    s3Endpoint: '',
+    s3Region: 'us-east-1',
+    s3AccessKeyId: '',
+    s3SecretAccessKey: '',
+    s3Bucket: '',
+    s3Prefix: '',
+    s3ForcePathStyle: true,
     rootPath: '/'
   }
 })
@@ -80,6 +87,13 @@ function openAddDialog() {
       ftpUser: '',
       ftpPassword: '',
       ftpRemotePath: '/',
+      s3Endpoint: '',
+      s3Region: 'us-east-1',
+      s3AccessKeyId: '',
+      s3SecretAccessKey: '',
+      s3Bucket: '',
+      s3Prefix: '',
+      s3ForcePathStyle: true,
       rootPath: '/'
     }
   }
@@ -102,6 +116,13 @@ function openEditDialog(pool: StoragePool) {
       ftpUser: pool.config.ftpUser || '',
       ftpPassword: '',
       ftpRemotePath: pool.config.ftpRemotePath || '/',
+      s3Endpoint: pool.config.s3Endpoint || '',
+      s3Region: pool.config.s3Region || 'us-east-1',
+      s3AccessKeyId: pool.config.s3AccessKeyId || '',
+      s3SecretAccessKey: '',
+      s3Bucket: pool.config.s3Bucket || '',
+      s3Prefix: pool.config.s3Prefix || '',
+      s3ForcePathStyle: pool.config.s3ForcePathStyle ?? true,
       rootPath: pool.config.rootPath || '/'
     }
   }
@@ -183,12 +204,14 @@ async function testConnection(pool: StoragePool) {
 function getStorageIconName(type: string) {
   if (type === 'local') return 'hard-drive'
   if (type === 'ftp') return 'server'
+  if (type === 's3') return 'cloud'
   return 'cloud'
 }
 
 function getStorageLabel(type: string) {
   if (type === 'local') return '本地存储'
   if (type === 'ftp') return 'FTP'
+  if (type === 's3') return 'S3/OSS'
   return '又拍云'
 }
 </script>
@@ -358,6 +381,21 @@ function getStorageLabel(type: string) {
                       <p class="text-sm mt-1 dark:text-dark-text text-light-text">FTP</p>
                     </div>
                   </label>
+                  <label class="flex-1 cursor-pointer">
+                    <input
+                      v-model="form.storageType"
+                      type="radio"
+                      value="s3"
+                      class="hidden peer"
+                      :disabled="!!editingPool"
+                    />
+                    <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
+                      :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
+                    >
+                      <Icon name="cloud" class="w-7 h-7 mx-auto text-blue-500" />
+                      <p class="text-sm mt-1 dark:text-dark-text text-light-text">S3/OSS</p>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -433,6 +471,43 @@ function getStorageLabel(type: string) {
                   <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
                   <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
                   <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">映射到 FTP 目录内的子目录，/ 表示根目录</p>
+                </div>
+              </div>
+
+              <!-- S3/OSS 配置 -->
+              <div v-if="form.storageType === 's3'" class="space-y-3">
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">Endpoint</label>
+                  <input v-model="form.config.s3Endpoint" type="text" class="input-field" placeholder="https://s3.amazonaws.com 或 https://oss-cn-hangzhou.aliyuncs.com" />
+                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">S3 兼容服务端点（AWS 留空，阿里云 OSS / MinIO 等填对应端点）</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">Region</label>
+                  <input v-model="form.config.s3Region" type="text" class="input-field" placeholder="us-east-1" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">Access Key ID</label>
+                  <input v-model="form.config.s3AccessKeyId" type="text" class="input-field" placeholder="AKIAIOSFODNN7EXAMPLE" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">
+                    Secret Access Key
+                    <span v-if="editingPool" class="text-xs text-gray-400">(留空则不修改)</span>
+                  </label>
+                  <input v-model="form.config.s3SecretAccessKey" type="password" class="input-field" placeholder="••••••" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">Bucket</label>
+                  <input v-model="form.config.s3Bucket" type="text" class="input-field" placeholder="my-bucket" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">前缀（Prefix）</label>
+                  <input v-model="form.config.s3Prefix" type="text" class="input-field" placeholder="uploads/" />
+                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">可选，限定在 Bucket 内的子目录</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
+                  <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
                 </div>
               </div>
 

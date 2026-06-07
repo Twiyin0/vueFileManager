@@ -48,7 +48,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
     }
 
     // 验证存储类型
-    if (!['local', 'upyun', 'ftp'].includes(storageType)) {
+    if (!['local', 'upyun', 'ftp', 's3'].includes(storageType)) {
       return res.status(400).json({ error: '不支持的存储类型' })
     }
 
@@ -66,6 +66,15 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
     if (storageType === 'ftp') {
       if (!config.ftpHost) {
         return res.status(400).json({ error: 'FTP 存储需要填写主机地址' })
+      }
+    }
+
+    if (storageType === 's3') {
+      if (!config.s3Bucket) {
+        return res.status(400).json({ error: 'S3 存储需要填写 Bucket 名称' })
+      }
+      if (!config.s3AccessKeyId || !config.s3SecretAccessKey) {
+        return res.status(400).json({ error: 'S3 存储需要填写 Access Key' })
       }
     }
 

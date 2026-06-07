@@ -8,6 +8,7 @@ import Icon from '@/components/Icon.vue'
 interface AdminUser {
   id: number
   username: string
+  email: string | null
   role: string
   banned: number
   register_ip: string
@@ -77,6 +78,7 @@ const filteredUsers = computed(() => {
   const q = search.value.toLowerCase()
   return users.value.filter(u =>
     u.username.toLowerCase().includes(q) ||
+    (u.email && u.email.toLowerCase().includes(q)) ||
     u.role.includes(q) ||
     (u.register_ip && u.register_ip.includes(q)) ||
     (u.last_login_ip && u.last_login_ip.includes(q))
@@ -355,14 +357,15 @@ onMounted(() => {
 
         <div v-else>
           <!-- 表头 -->
-          <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-dark-text-secondary border-b dark:border-dark-border border-light-border">
+          <div class="grid grid-cols-14 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-dark-text-secondary border-b dark:border-dark-border border-light-border">
             <div class="col-span-2">用户名</div>
+            <div class="col-span-2 hidden sm:block">邮箱</div>
             <div class="col-span-1">角色</div>
             <div class="col-span-1 text-center">状态</div>
-            <div class="col-span-1 hidden sm:block">注册 IP</div>
-            <div class="col-span-1 hidden md:block">最后登录 IP</div>
-            <div class="col-span-2 hidden lg:block">注册时间</div>
-            <div class="col-span-2 hidden xl:block">上次登录时间</div>
+            <div class="col-span-1 hidden md:block">注册 IP</div>
+            <div class="col-span-1 hidden lg:block">登录 IP</div>
+            <div class="col-span-2 hidden xl:block">注册时间</div>
+            <div class="col-span-2 hidden 2xl:block">上次登录</div>
             <div class="col-span-2 text-right">操作</div>
           </div>
 
@@ -370,7 +373,7 @@ onMounted(() => {
           <div
             v-for="user in filteredUsers"
             :key="user.id"
-            class="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b dark:border-dark-border/50 border-light-border/50 last:border-0 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+            class="grid grid-cols-14 gap-2 px-4 py-3 items-center border-b dark:border-dark-border/50 border-light-border/50 last:border-0 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
             :class="{ 'opacity-50': user.banned }"
           >
             <div class="col-span-2 flex items-center gap-2 min-w-0">
@@ -380,6 +383,9 @@ onMounted(() => {
                 {{ user.username[0].toUpperCase() }}
               </div>
               <span class="truncate text-sm dark:text-dark-text text-light-text">{{ user.username }}</span>
+            </div>
+            <div class="col-span-2 hidden sm:block text-xs truncate" style="color: var(--text-secondary-color)">
+              {{ user.email || '-' }}
             </div>
             <div class="col-span-1">
               <span class="px-2 py-0.5 rounded text-xs font-medium"

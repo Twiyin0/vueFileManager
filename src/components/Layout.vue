@@ -21,6 +21,7 @@ const pageTitleMap: Record<string, string> = {
   '/apikeys': 'API Keys',
   '/admin': '管理面板',
   '/api-docs': 'API 文档',
+  '/plugins': '插件管理',
 }
 
 const pageTitle = ref('')

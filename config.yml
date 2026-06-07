@@ -77,11 +77,23 @@ storage_pools:
   #   type: ftp
   #   default: false
   #   config:
-  #     host: ftp.example.com
-  #     port: 21
-  #     user: admin
-  #     password: your-password
-  #     remotePath: /uploads
+  #     ftpHost: ftp.example.com
+  #     ftpPort: 21
+  #     ftpUser: admin
+  #     ftpPassword: your-password
+  #     ftpRemotePath: /uploads
+
+  # S3/OSS 示例
+  # - name: S3 存储
+  #   type: s3
+  #   default: false
+  #   config:
+  #     s3Endpoint: https://s3.amazonaws.com
+  #     s3Region: us-east-1
+  #     s3AccessKeyId: your-access-key
+  #     s3SecretAccessKey: your-secret-key
+  #     s3Bucket: your-bucket
+  #     s3Prefix: uploads/
 
 # ============================================================
 # SMTP 邮箱配置（用于注册验证码）

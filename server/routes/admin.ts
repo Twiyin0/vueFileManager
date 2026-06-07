@@ -10,7 +10,7 @@ const router = Router()
 router.get('/users', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const users = db.prepare(`
-      SELECT u.id, u.username, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
+      SELECT u.id, u.username, u.email, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
              s.guest_enabled
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
@@ -27,7 +27,7 @@ router.get('/users/:id', authMiddleware, adminMiddleware, (req: AuthRequest, res
   try {
     const userId = parseInt(req.params.id as string)
     const user = db.prepare(`
-      SELECT u.id, u.username, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
+      SELECT u.id, u.username, u.email, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
              s.guest_enabled, s.guest_path, s.theme
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id

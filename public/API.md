@@ -18,10 +18,23 @@ X-API-Key: <your-api-key>
 
 ## 认证 API `/api/auth`
 
-### POST `/api/auth/register` — 注册
+### POST `/api/auth/send-code` — 发送注册验证码（SMTP 启用时可用）
 ```json
 // Request Body
-{ "username": "string", "password": "string" }
+{ "email": "user@example.com" }
+// Response
+{ "message": "验证码已发送" }
+// 错误
+400 { "error": "SMTP 未启用" }
+409 { "error": "该邮箱已被注册" }
+```
+
+### POST `/api/auth/register` — 注册
+```json
+// Request Body（SMTP 启用时需传 email + code）
+{ "username": "string", "password": "string", "email": "user@example.com", "code": "123456" }
+// Request Body（SMTP 未启用时 email 可选）
+{ "username": "string", "password": "string", "email": "user@example.com" }
 // Response
 { "message": "注册成功", "token": "jwt-token", "user": { "id": 1, "username": "test", "role": "user" } }
 ```

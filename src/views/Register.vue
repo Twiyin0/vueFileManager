@@ -115,16 +115,20 @@ async function handleRegister() {
           <input v-model="username" type="text" class="input-field" placeholder="3-20 个字符" required minlength="3" maxlength="20" />
         </div>
 
-        <!-- 邮箱（SMTP 启用时显示） -->
-        <div v-if="smtpEnabled">
-          <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">邮箱</label>
-          <div class="flex gap-2">
+        <!-- 邮箱 -->
+        <div>
+          <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">
+            邮箱
+            <span v-if="!smtpEnabled" class="text-xs font-normal" style="color: var(--text-secondary-color)">（可选）</span>
+          </label>
+          <div v-if="smtpEnabled" class="flex gap-2">
             <input v-model="email" type="email" class="input-field flex-1" placeholder="your@email.com" required />
             <button type="button" @click="sendCode" :disabled="codeSending || codeCountdown > 0"
               class="btn-secondary text-sm whitespace-nowrap px-3">
               {{ codeCountdown > 0 ? `${codeCountdown}s` : codeSending ? '发送中...' : '发送验证码' }}
             </button>
           </div>
+          <input v-else v-model="email" type="email" class="input-field" placeholder="your@email.com" />
         </div>
 
         <!-- 验证码（SMTP 启用时显示） -->

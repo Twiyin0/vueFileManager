@@ -14,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1063.0",
     "@guolao/vue-monaco-editor": "^1.6.0",
     "@types/js-yaml": "^4.0.9",
     "aplayer": "^1.10.1",

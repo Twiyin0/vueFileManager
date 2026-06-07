@@ -86,6 +86,12 @@ const router = createRouter({
       path: '/api-docs',
       name: 'ApiDocs',
       component: () => import('@/views/ApiDocs.vue')
+    },
+    {
+      path: '/plugins',
+      name: 'Plugins',
+      component: () => import('@/views/Plugins.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })
