@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import db, { syncStoragePoolsFromConfig } from '../db'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth'
 import { clearStorageCache } from '../services/factory'
+import { getUserQuota } from '../services/quota'
 
 const router = Router()
 
@@ -10,13 +11,20 @@ const router = Router()
 router.get('/users', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const users = db.prepare(`
-      SELECT u.id, u.username, u.email, u.role, u.banned, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
+      SELECT u.id, u.username, u.email, u.verified, u.role, u.banned, u.storage_quota, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
              s.guest_enabled
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
       ORDER BY u.created_at DESC
-    `).all()
-    res.json({ users })
+    `).all() as any[]
+
+    // 计算每个用户的存储用量
+    const usersWithUsage = users.map(u => {
+      const quota = getUserQuota(u.id)
+      return { ...u, storage_used: quota.used }
+    })
+
+    res.json({ users: usersWithUsage })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -58,12 +66,17 @@ router.get('/users/:id', authMiddleware, adminMiddleware, (req: AuthRequest, res
     const shareCount = (db.prepare('SELECT COUNT(*) as c FROM shares WHERE user_id = ?').get(userId) as any).c
     const apiKeyCount = (db.prepare('SELECT COUNT(*) as c FROM api_keys WHERE user_id = ?').get(userId) as any).c
 
+    // 存储配额
+    const quota = getUserQuota(userId)
+
     res.json({
       user: {
         id: user.id,
         username: user.username,
+        email: user.email,
         role: user.role,
         banned: !!user.banned,
+        verified: !!user.verified,
         registerIp: user.register_ip,
         lastLoginIp: user.last_login_ip,
         lastLoginAt: user.last_login_at,
@@ -74,7 +87,8 @@ router.get('/users/:id', authMiddleware, adminMiddleware, (req: AuthRequest, res
           theme: user.theme
         },
         pools,
-        stats: { trashCount, favCount, shareCount, apiKeyCount }
+        stats: { trashCount, favCount, shareCount, apiKeyCount },
+        storage: { quota: quota.quota, used: quota.used, remaining: quota.remaining }
       }
     })
   } catch (err: any) {
@@ -205,6 +219,46 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, (req: AuthRequest, 
     clearStorageCache(userId)
 
     res.json({ message: '用户已删除' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============ 用户验证 ============
+
+// 调整用户存储配额
+router.put('/users/:id/quota', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const userId = parseInt(req.params.id as string)
+    const { quota } = req.body // 字节数
+
+    if (typeof quota !== 'number' || quota < 0) {
+      return res.status(400).json({ error: '配额值无效' })
+    }
+
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    db.prepare('UPDATE users SET storage_quota = ? WHERE id = ?').run(quota, userId)
+    res.json({ message: '配额已更新', quota })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 手动验证用户（SMTP 无法收取验证码时管理员手动验证）
+router.put('/users/:id/verify', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const userId = parseInt(req.params.id as string)
+    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    db.prepare('UPDATE users SET verified = 1 WHERE id = ?').run(userId)
+    res.json({ message: '用户已验证' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

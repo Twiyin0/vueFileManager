@@ -60,8 +60,8 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await api.get<{ user: User }>('/auth/me')
       user.value = res.user
-      // 应用用户主题设置
-      if (res.user.settings?.theme) {
+      // 仅在用户未设置本地主题时，应用服务端主题
+      if (!localStorage.getItem('theme') && res.user.settings?.theme) {
         applyTheme(res.user.settings.theme)
       }
     } catch {

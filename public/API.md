@@ -890,6 +890,30 @@ Response: 文件流（Content-Disposition: inline，带 Cache-Control: 86400s）
 
 ---
 
+## 主题 API `/api/themes`（公开/需认证）
+
+### GET `/api/themes/styles` — 获取已启用主题的 CSS 路径（公开）
+```json
+// Response
+{ "styles": [{ "name": "example-theme", "cssPath": "/plugins/example-theme/style.css" }] }
+```
+
+### GET `/api/themes/list` — 获取所有主题列表（公开）
+```json
+// Response
+{ "themes": [{ "name": "example-theme", "version": "1.0.0", "description": "示例主题", "enabled": true }] }
+```
+
+### PUT `/api/themes/:name/toggle` — 切换主题启用/禁用（需认证）
+```json
+// Request Body
+{ "enabled": false }
+// Response
+{ "message": "主题已禁用（重启后生效）" }
+```
+
+---
+
 ## API Key 权限
 
 | 权限 | 说明 |

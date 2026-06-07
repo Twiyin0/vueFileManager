@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { clearStorageCache } from '../services/factory'
+import { getUserQuota, formatBytes } from '../services/quota'
 
 const router = Router()
 
@@ -56,7 +57,11 @@ router.get('/info', authMiddleware, (req: AuthRequest, res: Response) => {
           isDefault: !!p.is_default,
           createdAt: p.created_at
         })),
-        stats: { trashCount, favCount, shareCount, apiKeyCount, guestShareCount }
+        stats: { trashCount, favCount, shareCount, apiKeyCount, guestShareCount },
+        storage: (() => {
+          const q = getUserQuota(req.userId!)
+          return { quota: q.quota, used: q.used, remaining: q.remaining, quotaFormatted: formatBytes(q.quota), usedFormatted: formatBytes(q.used) }
+        })()
       }
     })
   } catch (err: any) {

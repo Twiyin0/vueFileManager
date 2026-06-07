@@ -25,15 +25,15 @@ self.MonacoEnvironment = {
 
 loader.config({ monaco })
 
-// 加载插件主题样式
-fetch('/api/plugins/styles')
+// 加载主题样式
+fetch('/api/themes/styles')
   .then(res => res.json())
   .then(data => {
     for (const style of data.styles || []) {
       const link = document.createElement('link')
       link.rel = 'stylesheet'
       link.href = style.cssPath
-      link.dataset.plugin = style.name
+      link.dataset.theme = style.name
       document.head.appendChild(link)
     }
   })

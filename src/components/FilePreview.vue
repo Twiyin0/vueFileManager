@@ -342,6 +342,7 @@ function initVideoPlayer() {
       fullscreen: true,
       playbackRate: true,
       aspectRatio: true,
+      volume: 0.3,
       theme: isDark.value ? '#6b7cff' : '#4f6ef7',
       hotkey: true,
       airplay: true,
@@ -358,6 +359,7 @@ function initAudioPlayer() {
     aplayerInst = new APlayer({
       container: audioContainer.value,
       autoplay: false,
+      volume: 0.3,
       theme: isDark.value ? '#6b7cff' : '#4f6ef7',
       audio: [{ name: props.fileName, url: previewUrl.value, artist: 'VueFileManager', cover: '' }],
     })

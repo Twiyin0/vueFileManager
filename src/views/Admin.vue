@@ -9,8 +9,11 @@ interface AdminUser {
   id: number
   username: string
   email: string | null
+  verified: number
   role: string
   banned: number
+  storage_quota: number
+  storage_used: number
   register_ip: string
   last_login_ip: string
   last_login_at: string
@@ -57,6 +60,23 @@ const resetPwdError = ref('')
 const confirmAction = ref<{ show: boolean; title: string; message: string; confirmText: string; danger: boolean; onConfirm: () => void }>({
   show: false, title: '', message: '', confirmText: '确认', danger: false, onConfirm: () => {}
 })
+
+// 配额调整对话框
+const quotaDialog = ref({ show: false, userId: 0, username: '', quotaMB: 0 })
+
+function openQuotaDialog(user: AdminUser) {
+  quotaDialog.value = { show: true, userId: user.id, username: user.username, quotaMB: Math.round(user.storage_quota / 1024 / 1024) }
+}
+
+async function saveQuota() {
+  try {
+    await api.put(`/admin/users/${quotaDialog.value.userId}/quota`, { quota: quotaDialog.value.quotaMB * 1024 * 1024 })
+    quotaDialog.value.show = false
+    await fetchUsers()
+  } catch (err: any) {
+    alert(err.message)
+  }
+}
 
 // IP 黑名单
 interface IpBlacklistEntry {
@@ -105,6 +125,13 @@ async function fetchUsers() {
 }
 
 onMounted(fetchUsers)
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
+}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
@@ -234,6 +261,25 @@ function handleConfirm() {
   confirmAction.value.show = false
 }
 
+// ---- 用户验证 ----
+function adjustQuota(user: AdminUser) {
+  openQuotaDialog(user)
+}
+
+async function verifyUser(user: AdminUser) {
+  confirmAction.value = {
+    show: true,
+    title: '手动验证',
+    message: `确定要手动验证「${user.username}」吗？这将允许该用户无需邮箱验证码即可登录。`,
+    confirmText: '验证',
+    danger: false,
+    onConfirm: async () => {
+      await api.put(`/admin/users/${user.id}/verify`)
+      await fetchUsers()
+    }
+  }
+}
+
 // ---- IP 黑名单 ----
 async function fetchIpBlacklist() {
   try {
@@ -357,62 +403,79 @@ onMounted(() => {
 
         <div v-else>
           <!-- 表头 -->
-          <div class="grid grid-cols-14 gap-2 px-4 py-2 text-xs font-medium text-gray-500 dark:text-dark-text-secondary border-b dark:border-dark-border border-light-border">
-            <div class="col-span-2">用户名</div>
-            <div class="col-span-2 hidden sm:block">邮箱</div>
-            <div class="col-span-1">角色</div>
-            <div class="col-span-1 text-center">状态</div>
-            <div class="col-span-1 hidden md:block">注册 IP</div>
-            <div class="col-span-1 hidden lg:block">登录 IP</div>
-            <div class="col-span-2 hidden xl:block">注册时间</div>
-            <div class="col-span-2 hidden 2xl:block">上次登录</div>
-            <div class="col-span-2 text-right">操作</div>
+          <div class="flex items-center px-4 py-2 text-xs font-medium border-b gap-3" style="color: var(--text-secondary-color); border-color: var(--border-color)">
+            <div class="w-40">用户名</div>
+            <div class="w-36 hidden sm:block">邮箱</div>
+            <div class="w-16 text-center">角色</div>
+            <div class="w-14 text-center">状态</div>
+            <div class="flex-1 hidden md:block min-w-[140px]">存储用量</div>
+            <div class="w-24 hidden lg:block">登录 IP</div>
+            <div class="w-32 hidden xl:block">注册时间</div>
+            <div class="w-32 hidden 2xl:block">上次登录</div>
+            <div class="w-28 text-right">操作</div>
           </div>
 
           <!-- 用户行 -->
           <div
             v-for="user in filteredUsers"
             :key="user.id"
-            class="grid grid-cols-14 gap-2 px-4 py-3 items-center border-b dark:border-dark-border/50 border-light-border/50 last:border-0 hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors"
+            class="flex items-center px-4 py-2.5 border-b gap-3 transition-colors"
             :class="{ 'opacity-50': user.banned }"
+            style="border-color: var(--border-color)"
+            @mouseenter="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', 'var(--hover-color)')"
+            @mouseleave="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', '')"
           >
-            <div class="col-span-2 flex items-center gap-2 min-w-0">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0"
-                :class="user.banned ? 'bg-red-400' : user.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'"
-              >
+            <!-- 用户名 -->
+            <div class="w-40 flex items-center gap-2 min-w-0">
+              <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
+                :class="user.banned ? 'bg-red-400' : user.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'">
                 {{ user.username[0].toUpperCase() }}
               </div>
-              <span class="truncate text-sm dark:text-dark-text text-light-text">{{ user.username }}</span>
+              <span class="truncate text-sm" style="color: var(--text-color)">{{ user.username }}</span>
             </div>
-            <div class="col-span-2 hidden sm:block text-xs truncate" style="color: var(--text-secondary-color)">
-              {{ user.email || '-' }}
-            </div>
-            <div class="col-span-1">
-              <span class="px-2 py-0.5 rounded text-xs font-medium"
-                :class="user.role === 'admin'
-                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                  : 'bg-gray-100 text-gray-700 dark:bg-dark-surface dark:text-dark-text-secondary'"
-              >
-                {{ user.role === 'admin' ? '管理员' : '用户' }}
+            <!-- 邮箱 -->
+            <div class="w-36 hidden sm:block text-xs truncate" style="color: var(--text-secondary-color)">{{ user.email || '-' }}</div>
+            <!-- 角色 -->
+            <div class="w-16 text-center">
+              <span class="px-1.5 py-0.5 rounded text-xs" :style="user.role === 'admin' ? 'background: var(--accent-soft-color); color: var(--accent-color)' : 'background: var(--hover-color); color: var(--text-secondary-color)'">
+                {{ user.role === 'admin' ? '管理' : '用户' }}
               </span>
             </div>
-            <div class="col-span-1 flex justify-center">
-              <span v-if="user.banned" class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">封禁</span>
-              <span v-else class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+            <!-- 状态 -->
+            <div class="w-14 flex justify-center">
+              <span v-if="user.banned" class="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">封禁</span>
+              <template v-else>
+                <span v-if="!user.verified" class="px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">未验证</span>
+                <span v-else class="w-2 h-2 rounded-full bg-green-500"></span>
+              </template>
             </div>
-            <div class="col-span-1 hidden sm:block text-xs font-mono text-gray-500 dark:text-dark-text-secondary truncate">
-              {{ user.register_ip || '-' }}
+            <!-- 存储用量 -->
+            <div class="flex-1 hidden md:block min-w-[140px]">
+              <button @click="adjustQuota(user)" class="w-full text-left group" title="点击修改配额">
+                <div class="flex items-center gap-1.5">
+                  <div class="flex-1 h-1.5 rounded-full min-w-[40px]" style="background: var(--hover-color)">
+                    <div class="h-1.5 rounded-full transition-all"
+                      :class="(user.storage_quota > 0 && (user.storage_used || 0) / user.storage_quota > 0.9) ? 'bg-red-500' : ((user.storage_used || 0) / user.storage_quota > 0.7 ? 'bg-yellow-500' : 'bg-green-500')"
+                      :style="{ width: (user.storage_quota > 0 ? Math.min(Math.round((user.storage_used || 0) / user.storage_quota * 100), 100) : 0) + '%' }" />
+                  </div>
+                  <span class="text-xs whitespace-nowrap group-hover:underline" style="color: var(--text-secondary-color)">{{ formatBytes(user.storage_used || 0) }}/{{ formatBytes(user.storage_quota) }}</span>
+                </div>
+              </button>
             </div>
-            <div class="col-span-1 hidden md:block text-xs font-mono text-gray-500 dark:text-dark-text-secondary truncate">
-              {{ user.last_login_ip || '-' }}
-            </div>
-            <div class="col-span-2 hidden lg:block text-xs text-gray-500 dark:text-dark-text-secondary">
-              {{ formatDate(user.created_at) }}
-            </div>
-            <div class="col-span-2 hidden xl:block text-xs text-gray-500 dark:text-dark-text-secondary">
-              {{ formatDate(user.last_login_at) }}
-            </div>
-            <div class="col-span-2 flex items-center justify-end gap-0.5 flex-wrap">
+            <!-- 登录 IP -->
+            <div class="w-24 hidden lg:block text-xs font-mono truncate" style="color: var(--text-secondary-color)">{{ user.last_login_ip || '-' }}</div>
+            <!-- 注册时间 -->
+            <div class="w-32 hidden xl:block text-xs" style="color: var(--text-secondary-color)">{{ formatDate(user.created_at) }}</div>
+            <!-- 上次登录 -->
+            <div class="w-32 hidden 2xl:block text-xs" style="color: var(--text-secondary-color)">{{ formatDate(user.last_login_at) }}</div>
+            <!-- 操作 -->
+            <div class="w-28 flex items-center justify-end gap-0.5 flex-wrap">
+              <button v-if="!user.verified" @click="verifyUser(user)" class="p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="手动验证">
+                <Icon name="badge-check" class="w-4 h-4 text-green-500" />
+              </button>
+              <button @click="adjustQuota(user)" class="p-1.5 rounded hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors" :title="`存储配额: ${formatBytes(user.storage_quota)}`">
+                <Icon name="database" class="w-4 h-4 text-cyan-500" />
+              </button>
               <button @click="viewDetail(user)" class="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="查看详情">
                 <Icon name="eye" class="w-4 h-4 text-blue-500" />
               </button>
@@ -707,5 +770,25 @@ onMounted(() => {
       @confirm="handleConfirm"
       @cancel="confirmAction.show = false"
     />
+
+    <!-- 配额调整对话框 -->
+    <Teleport to="body">
+      <div v-if="quotaDialog.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="quotaDialog.show = false"/>
+        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+          <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">调整存储配额</h3>
+          <p class="text-sm mb-4" style="color: var(--text-secondary-color)">用户：<span class="font-medium" style="color: var(--text-color)">{{ quotaDialog.username }}</span></p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">配额 (MB)</label>
+            <input v-model.number="quotaDialog.quotaMB" type="number" class="input-field" min="0" placeholder="10240" />
+            <p class="text-xs mt-1" style="color: var(--text-secondary-color)">当前：{{ quotaDialog.quotaMB }} MB ({{ formatBytes(quotaDialog.quotaMB * 1024 * 1024) }})</p>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button @click="quotaDialog.show = false" class="btn-secondary text-sm">取消</button>
+            <button @click="saveQuota" class="btn-primary text-sm">保存</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </Layout>
 </template>

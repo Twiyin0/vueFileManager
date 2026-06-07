@@ -1,10 +1,8 @@
 {
   "name": "example-theme",
   "version": "1.0.0",
-  "description": "示例主题插件 - 修改强调色为紫色",
+  "description": "示例主题 - 将强调色改为紫色",
   "author": "VueFileManager",
-  "type": "theme",
-  "entry": {
-    "style": "style.css"
-  }
+  "enabled": true,
+  "style": "style.css"
 }

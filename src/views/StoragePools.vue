@@ -10,6 +10,7 @@ interface StoragePool {
   storageType: 'local' | 'upyun' | 'ftp' | 's3'
   isDefault: boolean
   config: any
+  resolvedPath: string
   createdAt: string
 }
 
@@ -23,12 +24,28 @@ const pools = ref<StoragePool[]>([])
 const showAddDialog = ref(false)
 const editingPool = ref<StoragePool | null>(null)
 
+// 存储配额
+const storageInfo = ref({ quota: 0, used: 0, remaining: 0, quotaFormatted: '0 B', usedFormatted: '0 B' })
+
+async function loadStorageInfo() {
+  try {
+    const res = await api.get<any>('/user/info')
+    if (res.user?.storage) storageInfo.value = res.user.storage
+  } catch {}
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
+}
+
 // 新建/编辑表单
 const form = ref({
   name: '',
   storageType: 'local' as 'local' | 'upyun' | 'ftp' | 's3',
   config: {
-    localPath: './uploads',
     upyunOperator: '',
     upyunPassword: '',
     upyunBucket: '',
@@ -51,6 +68,7 @@ const form = ref({
 
 onMounted(async () => {
   await loadPools()
+  await loadStorageInfo()
 })
 
 async function loadPools() {
@@ -77,7 +95,6 @@ function openAddDialog() {
     name: '',
     storageType: 'local',
     config: {
-      localPath: './uploads',
       upyunOperator: '',
       upyunPassword: '',
       upyunBucket: '',
@@ -106,7 +123,6 @@ function openEditDialog(pool: StoragePool) {
     name: pool.name,
     storageType: pool.storageType,
     config: {
-      localPath: pool.config.localPath || './uploads',
       upyunOperator: pool.config.upyunOperator || '',
       upyunPassword: '',
       upyunBucket: pool.config.upyunBucket || '',
@@ -219,6 +235,20 @@ function getStorageLabel(type: string) {
 <template>
   <Layout>
     <div class="px-4 pt-4">
+      <!-- 存储配额概览 -->
+      <div class="card mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium" style="color: var(--text-color)">本地存储用量</span>
+          <span class="text-sm" style="color: var(--text-secondary-color)">{{ storageInfo.usedFormatted }} / {{ storageInfo.quotaFormatted }}</span>
+        </div>
+        <div class="w-full h-2 rounded-full" style="background: var(--hover-color)">
+          <div class="h-2 rounded-full transition-all"
+            :class="storageInfo.quota > 0 && storageInfo.used / storageInfo.quota > 0.9 ? 'bg-red-500' : storageInfo.used / storageInfo.quota > 0.7 ? 'bg-yellow-500' : 'bg-green-500'"
+            :style="{ width: (storageInfo.quota > 0 ? Math.min(Math.round(storageInfo.used / storageInfo.quota * 100), 100) : 0) + '%' }" />
+        </div>
+        <p class="text-xs mt-1" style="color: var(--text-secondary-color)">剩余 {{ formatBytes(storageInfo.remaining) }}</p>
+      </div>
+
       <div class="flex justify-end mb-4">
         <button @click="openAddDialog" class="btn-primary flex items-center gap-2">
           <Icon name="plus" class="w-5 h-5" />
@@ -261,16 +291,16 @@ function getStorageLabel(type: string) {
                   默认
                 </span>
               </div>
-              <p class="text-sm text-gray-500 dark:text-dark-text-secondary">
+              <p class="text-sm" style="color: var(--text-secondary-color)">
                 {{ getStorageLabel(pool.storageType) }}
-                <span v-if="pool.storageType === 'local'" class="ml-2 font-mono text-xs">
-                  {{ pool.config.localPath }}
+                <span v-if="pool.storageType === 'local' && pool.resolvedPath" class="ml-2 font-mono text-xs">
+                  {{ pool.resolvedPath }}
                 </span>
-                <span v-else-if="pool.storageType === 'upyun'" class="ml-2 font-mono text-xs">
+                <span v-if="pool.storageType === 'upyun'" class="ml-2 font-mono text-xs">
                   {{ pool.config.upyunBucket }}
                 </span>
-                <span v-if="pool.config.rootPath && pool.config.rootPath !== '/'" class="ml-1 font-mono text-xs text-blue-500 flex items-center gap-0.5 inline-flex">
-                  <Icon name="arrow-right" class="w-3 h-3" />{{ pool.config.rootPath }}
+                <span v-if="pool.config.rootPath && pool.config.rootPath !== '/'" class="ml-1 font-mono text-xs" style="color: var(--accent-color)">
+                  /{{ pool.config.rootPath.replace(/^\//, '') }}
                 </span>
               </p>
             </div>
@@ -334,82 +364,27 @@ function getStorageLabel(type: string) {
 
               <!-- 存储类型 -->
               <div>
-                <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">存储类型</label>
-                <div class="flex gap-3">
-                  <label class="flex-1 cursor-pointer">
-                    <input
-                      v-model="form.storageType"
-                      type="radio"
-                      value="local"
-                      class="hidden peer"
-                      :disabled="!!editingPool"
-                    />
-                    <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
-                      :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
-                    >
-                      <Icon name="hard-drive" class="w-7 h-7 mx-auto text-blue-500" />
-                      <p class="text-sm mt-1 dark:text-dark-text text-light-text">本地存储</p>
-                    </div>
-                  </label>
-                  <label class="flex-1 cursor-pointer">
-                    <input
-                      v-model="form.storageType"
-                      type="radio"
-                      value="upyun"
-                      class="hidden peer"
-                      :disabled="!!editingPool"
-                    />
-                    <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
-                      :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
-                    >
-                      <Icon name="cloud" class="w-7 h-7 mx-auto text-blue-500" />
-                      <p class="text-sm mt-1 dark:text-dark-text text-light-text">又拍云</p>
-                    </div>
-                  </label>
-                  <label class="flex-1 cursor-pointer">
-                    <input
-                      v-model="form.storageType"
-                      type="radio"
-                      value="ftp"
-                      class="hidden peer"
-                      :disabled="!!editingPool"
-                    />
-                    <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
-                      :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
-                    >
-                      <Icon name="server" class="w-7 h-7 mx-auto text-blue-500" />
-                      <p class="text-sm mt-1 dark:text-dark-text text-light-text">FTP</p>
-                    </div>
-                  </label>
-                  <label class="flex-1 cursor-pointer">
-                    <input
-                      v-model="form.storageType"
-                      type="radio"
-                      value="s3"
-                      class="hidden peer"
-                      :disabled="!!editingPool"
-                    />
-                    <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
-                      :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
-                    >
-                      <Icon name="cloud" class="w-7 h-7 mx-auto text-blue-500" />
-                      <p class="text-sm mt-1 dark:text-dark-text text-light-text">S3/OSS</p>
-                    </div>
-                  </label>
-                </div>
+                <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">存储类型</label>
+                <select v-model="form.storageType" class="input-field" :disabled="!!editingPool">
+                  <option value="local">本地存储</option>
+                  <option value="upyun">又拍云 (Upyun)</option>
+                  <option value="ftp">FTP</option>
+                  <option value="s3">S3 / OSS (兼容 AWS S3)</option>
+                </select>
+                <p v-if="form.storageType === 'local'" class="text-xs mt-1" style="color: var(--text-secondary-color)">
+                  文件将存储在服务器本地磁盘，剩余配额 {{ formatBytes(storageInfo.remaining) }}
+                </p>
               </div>
 
               <!-- 本地存储配置 -->
               <div v-if="form.storageType === 'local'" class="space-y-3">
-                <div>
-                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">存储路径</label>
-                  <input v-model="form.config.localPath" type="text" class="input-field" placeholder="./uploads" />
-                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">服务器上的本地目录路径</p>
+                <div class="p-3 rounded-lg text-sm" style="background: var(--hover-color); color: var(--text-secondary-color)">
+                  文件将存储在服务器本地磁盘，路径自动按用户名隔离，无需手动配置。
                 </div>
                 <div>
-                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
+                  <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">根路径映射</label>
                   <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
-                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">存储池映射到的子目录，/ 表示根目录</p>
+                  <p class="text-xs mt-1" style="color: var(--text-secondary-color)">存储池映射到的子目录，/ 表示根目录</p>
                 </div>
               </div>
 

@@ -225,20 +225,30 @@
 - `FilePreview.vue`：`guestBaseUrl` prop 支持访客预览 URL，`guestSaveUrl` + `editable` prop 支持访客编辑
 - `FileList.vue`：`guestBaseUrl` prop 支持网格模式缩略图
 
-## 插件系统
+## 主题系统
 
-插件目录：`plugins/`（可在 `config.yml` 的 `plugins.dir` 配置）
+主题目录：`plugins/`（可在 `config.yml` 的 `plugins.dir` 配置）
 
-每个插件包含 `manifest.json`，支持三种类型：
+每个主题包含 `manifest.json` + `style.css`：
 
-| type | 说明 | entry 字段 |
-|------|------|-----------|
-| `theme` | 自定义 CSS 样式 | `style` → 自动注入 `<head>` |
-| `hook` | Express 后端扩展 | `hooks` → 导出 `onLoad(app)` |
-| `storage` | 自定义存储驱动 | `driver` → 实现 `StorageProvider` |
+```json
+{
+  "name": "my-theme",
+  "version": "1.0.0",
+  "description": "自定义主题",
+  "enabled": true,
+  "style": "style.css"
+}
+```
 
-前端 `main.ts` 启动时 fetch `/api/plugins/styles` 加载主题 CSS。
+前端 `main.ts` 启动时 fetch `/api/themes/styles` 加载主题 CSS。
 服务端 `server/plugins/loader.ts` 负责扫描和加载。
+`/themes` 页面管理主题开关，`/theme-docs` 查看开发文档。
+
+API：
+- `GET /api/themes/styles` — 已启用主题的 CSS 路径
+- `GET /api/themes/list` — 所有主题列表
+- `PUT /api/themes/:name/toggle` — 切换启用/禁用
 
 ## SMTP 邮箱注册
 

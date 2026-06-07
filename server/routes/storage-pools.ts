@@ -1,5 +1,7 @@
 import { Router, Response } from 'express'
+import path from 'path'
 import db from '../db'
+import config from '../config'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { clearStorageCache } from '../services/factory'
 
@@ -15,19 +17,34 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
       ORDER BY is_default DESC, created_at ASC
     `).all(req.userId!)
 
+    // 获取用户名
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
+    const username = user?.username || ''
+
     // 解析config JSON，但不返回密码
     const safePools = pools.map((pool: any) => {
-      const config = JSON.parse(pool.config)
+      const cfg = JSON.parse(pool.config)
       // 移除敏感信息
-      if (config.upyunPassword) {
-        config.upyunPassword = '••••••'
+      if (cfg.upyunPassword) cfg.upyunPassword = '••••••'
+      if (cfg.ftpPassword) cfg.ftpPassword = '••••••'
+      if (cfg.s3SecretAccessKey) cfg.s3SecretAccessKey = '••••••'
+
+      // 本地存储：返回实际路径
+      let resolvedPath = ''
+      if (pool.storage_type === 'local') {
+        const base = path.resolve(config.storage_root || './uploads', username)
+        resolvedPath = cfg.rootPath && cfg.rootPath !== '/'
+          ? path.join(base, cfg.rootPath)
+          : base
       }
+
       return {
         id: pool.id,
         name: pool.name,
         storageType: pool.storage_type,
         isDefault: !!pool.is_default,
-        config,
+        config: cfg,
+        resolvedPath,
         createdAt: pool.created_at
       }
     })
@@ -52,10 +69,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '不支持的存储类型' })
     }
 
-    // 验证配置
-    if (storageType === 'local' && !config.localPath) {
-      return res.status(400).json({ error: '本地存储需要指定路径' })
-    }
+    // 本地存储无需验证路径（自动使用 storage_root/username）
 
     if (storageType === 'upyun') {
       if (!config.upyunOperator || !config.upyunPassword || !config.upyunBucket) {
@@ -121,11 +135,6 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
     const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
-    }
-
-    // 验证配置
-    if (storageType === 'local' && config && !config.localPath) {
-      return res.status(400).json({ error: '本地存储需要指定路径' })
     }
 
     if (storageType === 'upyun' && config) {
@@ -234,11 +243,13 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
     // 根据存储类型测试连接
     if (pool.storage_type === 'local') {
       const fs = await import('fs/promises')
+      const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
+      const localPath = path.resolve(config.storage_root || './uploads', user?.username || '')
       try {
-        await fs.access(config.localPath)
-        res.json({ success: true, message: '本地路径可访问' })
+        await fs.access(localPath)
+        res.json({ success: true, message: `本地路径可访问: ${localPath}` })
       } catch {
-        res.json({ success: false, message: '本地路径不可访问' })
+        res.json({ success: false, message: `本地路径不可访问: ${localPath}` })
       }
     } else if (pool.storage_type === 'upyun') {
       // 测试又拍云连接

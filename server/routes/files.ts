@@ -122,15 +122,23 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
 router.post('/upload', flexibleAuth, requirePermission('write'), uploadSingle('file'), async (req: ApiKeyRequest, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ error: '没有文件' })
+
+    // 配额检查（仅本地存储）
+    const poolId = req.query.poolId as string || req.body.poolId as string
+    const resolvedPoolId = poolId ? parseInt(poolId) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+    if (pool?.storage_type === 'local') {
+      const { checkQuota } = await import('../services/quota')
+      const quotaCheck = checkQuota(req.userId!, req.file.size)
+      if (!quotaCheck.allowed) {
+        return res.status(400).json({ error: quotaCheck.message })
+      }
+    }
+
     const storage = getStorageForRequest(req)
     const dirPath = (req.query.path as string) || ''
     const filePath = dirPath ? `${dirPath}/${req.file.originalname}` : req.file.originalname
     await storage.upload(filePath, req.file.buffer)
-
-    // 获取存储池信息
-    const poolId = req.query.poolId as string || req.body.poolId as string
-    const resolvedPoolId = poolId ? parseInt(poolId) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
-    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
 
     res.json({ message: '上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {
@@ -205,16 +213,25 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
 
     // 读取临时文件并上传到存储池
     const buffer = await fs.readFile(tempPath)
+
+    // 配额检查（仅本地存储）
+    const resolvedPoolId = poolIdStr ? parseInt(poolIdStr) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+    if (pool?.storage_type === 'local') {
+      const { checkQuota } = await import('../services/quota')
+      const quotaCheck = checkQuota(req.userId!, buffer.length)
+      if (!quotaCheck.allowed) {
+        await fs.unlink(tempPath).catch(() => {})
+        return res.status(400).json({ error: quotaCheck.message })
+      }
+    }
+
     const storage = poolIdStr ? getStorageByPoolId(req.userId!, parseInt(poolIdStr)) : getStorageForRequest(req)
     const filePath = dirPath ? `${dirPath}/${fileName}` : fileName
     await storage.upload(filePath, buffer)
 
     // 清理临时文件
     await fs.unlink(tempPath).catch(() => {})
-
-    // 获取存储池信息
-    const resolvedPoolId = poolIdStr ? parseInt(poolIdStr) : (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
-    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
 
     res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {
@@ -382,6 +399,18 @@ router.post('/upload/:uploadId/complete', flexibleAuth, requirePermission('write
     }
     const finalBuffer = Buffer.concat(buffers)
 
+    // 配额检查（仅本地存储）
+    const resolvedPoolId = meta.poolId || (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+    if (pool?.storage_type === 'local') {
+      const { checkQuota } = await import('../services/quota')
+      const quotaCheck = checkQuota(req.userId!, finalBuffer.length)
+      if (!quotaCheck.allowed) {
+        await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})
+        return res.status(400).json({ error: quotaCheck.message })
+      }
+    }
+
     // 上传到存储池
     const storage = meta.poolId ? getStorageByPoolId(req.userId!, meta.poolId) : getStorage(req.userId!)
     const filePath = meta.dirPath ? `${meta.dirPath}/${meta.fileName}` : meta.fileName
@@ -389,10 +418,6 @@ router.post('/upload/:uploadId/complete', flexibleAuth, requirePermission('write
 
     // 清理临时文件
     await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})
-
-    // 获取存储池信息
-    const resolvedPoolId = meta.poolId || (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
-    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
 
     res.json({ message: '分片上传完成', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {
@@ -761,6 +786,17 @@ router.post('/remote-upload', flexibleAuth, requirePermission('write'), async (r
     const arrayBuffer = await response.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
+    // 配额检查（仅本地存储）
+    const resolvedPoolId = poolId || (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+    if (pool?.storage_type === 'local') {
+      const { checkQuota } = await import('../services/quota')
+      const quotaCheck = checkQuota(req.userId!, buffer.length)
+      if (!quotaCheck.allowed) {
+        return res.status(400).json({ error: quotaCheck.message })
+      }
+    }
+
     // 从URL提取文件名
     const urlObj = new URL(url)
     let fileName = urlObj.pathname.split('/').pop() || 'remote-file'
@@ -769,10 +805,6 @@ router.post('/remote-upload', flexibleAuth, requirePermission('write'), async (r
 
     const filePath = dirPath ? `${dirPath}/${fileName}` : fileName
     await storage.upload(filePath, buffer)
-
-    // 获取存储池信息
-    const resolvedPoolId = poolId || (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any)?.id
-    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
 
     res.json({ message: '远程上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {

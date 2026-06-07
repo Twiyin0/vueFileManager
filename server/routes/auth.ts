@@ -84,10 +84,12 @@ router.post('/register', async (req: Request, res: Response) => {
     // 使用 MD5 哈希密码
     const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
     const ip = getClientIp(req)
+    // SMTP 启用且有验证码时已验证，否则默认已验证（SMTP 未启用不需要验证）
+    const verified = (config.smtp.enabled && email && code) ? 1 : (config.smtp.enabled ? 0 : 1)
 
     const result = db.prepare(
-      'INSERT INTO users (username, password, email, register_ip, last_login_ip) VALUES (?, ?, ?, ?, ?)'
-    ).run(username, hashedPassword, email || null, ip, ip)
+      'INSERT INTO users (username, password, email, verified, register_ip, last_login_ip) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(username, hashedPassword, email || null, verified, ip, ip)
 
     // 创建默认设置
     const userId = result.lastInsertRowid as number
@@ -135,6 +137,11 @@ router.post('/login', (req: Request, res: Response) => {
     // 检查账号是否被封禁
     if (user.banned) {
       return res.status(403).json({ error: '账号已被封禁' })
+    }
+
+    // 检查邮箱验证状态
+    if (config.smtp.enabled && !user.verified) {
+      return res.status(403).json({ error: '账号未验证，请等待管理员验证或检查邮箱验证码' })
     }
 
     // 更新最后登录 IP 和时间

@@ -204,6 +204,7 @@ function openAplayerWithFile(targetFile: FileItem) {
     aplayerInst = new APlayer({
       container: aplayerRef.value,
       autoplay: true,
+      volume: 0.3,
       theme: isDark.value ? '#6b7cff' : '#4f6ef7',
       audio: audioList,
     })
@@ -985,7 +986,7 @@ watch([currentPath, currentPoolId], () => {
       :show="showGuestShare"
       :folder-path="fileToGuestShare.path"
       :folder-name="fileToGuestShare.name"
-      :pool-id="currentPoolId"
+      :pool-id="fileToGuestShare.poolId || currentPoolId"
       @close="showGuestShare = false"
       @done="filesStore.fetchFiles(currentPath, currentPoolId)"
     />

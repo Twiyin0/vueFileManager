@@ -466,7 +466,7 @@ if (!adminExists) {
   ).run(userId)
 
   // 从 config.yml 读取存储池配置
-  const pools = config.storage_pools || [{ name: '本地存储', type: 'local', default: true, config: { localPath: './uploads' } }]
+  const pools = config.storage_pools || [{ name: '本地存储', type: 'local', default: true, config: {} }]
   for (const pool of pools) {
     db.prepare(`
       INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
@@ -533,5 +533,57 @@ function migrateUserEmail() {
   }
 }
 migrateUserEmail()
+
+// 迁移：给 users 表加 verified 列
+function migrateUserVerified() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all() as any[]
+    const hasVerified = cols.some((c: any) => c.name === 'verified')
+    if (!hasVerified) {
+      db.exec("ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 1")
+      console.log('✅ 已给 users 表添加 verified 列')
+    }
+  } catch (err) {
+    console.error('⚠️ users verified 迁移失败:', err)
+  }
+}
+migrateUserVerified()
+
+// 迁移：给 users 表加 storage_quota 列（默认 10GB）
+function migrateStorageQuota() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all() as any[]
+    const hasQuota = cols.some((c: any) => c.name === 'storage_quota')
+    if (!hasQuota) {
+      db.exec("ALTER TABLE users ADD COLUMN storage_quota INTEGER DEFAULT 10737418240")
+      console.log('✅ 已给 users 表添加 storage_quota 列（默认 10GB）')
+    }
+  } catch (err) {
+    console.error('⚠️ users storage_quota 迁移失败:', err)
+  }
+}
+migrateStorageQuota()
+
+// 迁移：清理存储池配置中的 localPath（已改用 config.storage_root 自动隔离）
+function migrateCleanLocalPath() {
+  try {
+    const pools = db.prepare("SELECT id, config FROM storage_pools WHERE storage_type = 'local'").all() as any[]
+    let cleaned = 0
+    for (const pool of pools) {
+      try {
+        const cfg = JSON.parse(pool.config)
+        if (cfg.localPath) {
+          delete cfg.localPath
+          db.prepare('UPDATE storage_pools SET config = ? WHERE id = ?').run(JSON.stringify(cfg), pool.id)
+          cleaned++
+        }
+      } catch {}
+    }
+    if (cleaned > 0) console.log(`✅ 已清理 ${cleaned} 个存储池的 localPath 配置`)
+  } catch (err) {
+    console.error('⚠️ 清理 localPath 迁移失败:', err)
+  }
+}
+migrateCleanLocalPath()
 
 export default db

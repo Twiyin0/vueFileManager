@@ -4,13 +4,14 @@ import { FtpStorage } from './ftp'
 import { S3Storage } from './s3'
 import { PrefixStorage } from './prefix'
 import { StorageProvider } from './storage'
+import config from '../config'
 import db from '../db'
 
 // 缓存存储实例 (key: userId-poolId)
 const storageCache = new Map<string, StorageProvider>()
 
 // 创建存储实例
-function createStorageInstance(pool: any): StorageProvider {
+function createStorageInstance(pool: any, username?: string): StorageProvider {
   const config = JSON.parse(pool.config)
 
   let storage: StorageProvider
@@ -26,11 +27,15 @@ function createStorageInstance(pool: any): StorageProvider {
   } else if (pool.storage_type === 's3') {
     storage = new S3Storage(config)
   } else {
-    storage = new LocalStorage(config.localPath || './uploads')
+    storage = new LocalStorage(config.storage_root || './uploads', username)
   }
 
-  // 如果配置了 rootPath，用 PrefixStorage 包装
+  // 如果配置了 rootPath，用 PrefixStorage 包装，并确保目录存在
   if (config.rootPath && config.rootPath !== '/' && config.rootPath !== '') {
+    // 本地存储需要确保映射目录存在
+    if (storage instanceof LocalStorage) {
+      storage.ensureSubdir(config.rootPath)
+    }
     storage = new PrefixStorage(storage, config.rootPath)
   }
 
@@ -51,7 +56,11 @@ export function getStorageByPoolId(userId: number, poolId: number): StorageProvi
     throw new Error('存储池不存在')
   }
 
-  const storage = createStorageInstance(pool)
+  // 获取用户名（用于本地存储目录隔离）
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  const username = user?.username || `user_${userId}`
+
+  const storage = createStorageInstance(pool, username)
   storageCache.set(cacheKey, storage)
   return storage
 }
@@ -78,7 +87,7 @@ export function getStorage(userId: number): StorageProvider {
   const result = db.prepare(`
     INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
     VALUES (?, ?, ?, 1, ?)
-  `).run(userId, '默认存储', 'local', JSON.stringify({ localPath: './uploads' }))
+  `).run(userId, '默认存储', 'local', JSON.stringify({}))
 
   return getStorageByPoolId(userId, result.lastInsertRowid as number)
 }

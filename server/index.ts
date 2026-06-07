@@ -8,8 +8,8 @@ import config from './config'
 // 初始化数据库（确保建表和默认管理员）
 import './db'
 
-// 加载插件
-import { loadPlugins, getPluginStyles, initHookPlugins, getLoadedPlugins } from './plugins/loader'
+// 加载主题插件
+import { loadPlugins, getThemeStyles, getAllThemes, toggleTheme } from './plugins/loader'
 loadPlugins()
 
 import authRoutes from './routes/auth'
@@ -40,6 +40,16 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 // IP 黑名单检查（在所有路由之前）
 app.use('/api', ipBlacklistMiddleware)
 
+// 拦截敏感文件访问
+const SENSITIVE_FILES = ['.env', '.env.example', 'config.yml', 'package.json', 'tsconfig.json', '.gitignore']
+app.use((req, res, next) => {
+  const filename = req.path.split('/').pop() || ''
+  if (SENSITIVE_FILES.includes(filename) || filename.startsWith('.env') || filename.startsWith('._')) {
+    return res.status(403).json({ error: '禁止访问' })
+  }
+  next()
+})
+
 // 静态文件服务（生产模式）
 app.use(express.static(path.join(__dirname, '..', 'dist')))
 
@@ -69,49 +79,74 @@ app.get('/api/site-config', (_req, res) => {
     icp_beian: config.site?.icp_beian || '',
     police_beian: config.site?.police_beian || '',
     smtp_enabled: config.smtp?.enabled || false,
-    plugins_enabled: config.plugins?.enabled || false,
+    themes_enabled: config.plugins?.enabled || false,
   })
 })
 
-// 插件样式列表（公开）
-app.get('/api/plugins/styles', (_req, res) => {
-  res.json({ styles: getPluginStyles() })
+// 主题样式列表（公开）
+app.get('/api/themes/styles', (_req, res) => {
+  res.json({ styles: getThemeStyles() })
 })
 
-// 插件列表（公开）
-app.get('/api/plugins/list', (_req, res) => {
-  res.json({ plugins: getLoadedPlugins() })
+// 主题列表（公开）
+app.get('/api/themes/list', (_req, res) => {
+  res.json({ themes: getAllThemes() })
 })
 
-// 初始化 hook 插件（异步）
-initHookPlugins(app).catch(err => console.error('插件初始化失败:', err))
-
-// SPA fallback（生产模式）
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'))
+// 切换主题启用/禁用（需认证）
+import jwt from 'jsonwebtoken'
+app.put('/api/themes/:name/toggle', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) return res.status(401).json({ error: '未登录' })
+  try {
+    jwt.verify(token, config.server.jwt_secret)
+  } catch {
+    return res.status(401).json({ error: 'Token 无效' })
   }
+
+  const { name } = req.params
+  const { enabled } = req.body
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled 必须为布尔值' })
+  }
+
+  const success = toggleTheme(name, enabled)
+  if (!success) return res.status(404).json({ error: '主题不存在' })
+
+  res.json({ message: enabled ? '主题已启用（重启后生效）' : '主题已禁用（重启后生效）' })
 })
 
-const server = app.listen(PORT, HOST, () => {
-  const displayHost = HOST === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : HOST
-  console.log(`\n🚀 VueFileManager 服务器已启动`)
-  console.log(`📡 生产环境: http://${displayHost}:${PORT}`)
-  console.log(`📡 API: http://${HOST}:${PORT}/api`)
-  console.log(`🌐 开发环境: http://localhost:5173\n`)
-})
-
-// 优雅关闭
-function shutdown() {
-  console.log('\n🛑 正在关闭服务器...')
-  server.close(() => {
-    console.log('✅ 服务器已关闭')
-    process.exit(0)
+// 启动服务
+async function startServer() {
+  // SPA fallback
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    }
   })
-  setTimeout(() => process.exit(1), 3000)
+
+  const server = app.listen(PORT, HOST, () => {
+    const displayHost = HOST === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : HOST
+    console.log(`\n🚀 VueFileManager 服务器已启动`)
+    console.log(`📡 生产环境: http://${displayHost}:${PORT}`)
+    console.log(`📡 API: http://${HOST}:${PORT}/api`)
+    console.log(`🌐 开发环境: http://localhost:5173\n`)
+  })
+
+  // 优雅关闭
+  function shutdown() {
+    console.log('\n🛑 正在关闭服务器...')
+    server.close(() => {
+      console.log('✅ 服务器已关闭')
+      process.exit(0)
+    })
+    setTimeout(() => process.exit(1), 3000)
+  }
+
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
 }
 
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+startServer()
 
 export default app

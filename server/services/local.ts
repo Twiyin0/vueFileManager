@@ -6,16 +6,33 @@ import { StorageProvider, FileInfo } from './storage'
 export class LocalStorage implements StorageProvider {
   private basePath: string
 
-  constructor(basePath: string) {
-    this.basePath = path.resolve(basePath)
+  constructor(basePath: string, userPrefix?: string) {
+    // 如果提供了 userPrefix，将 basePath 设为 basePath/userPrefix/（用户隔离）
+    this.basePath = userPrefix
+      ? path.resolve(basePath, userPrefix)
+      : path.resolve(basePath)
     // 确保基础目录存在
     fsSync.mkdirSync(this.basePath, { recursive: true })
   }
 
+  /** 确保子目录存在（供 PrefixStorage rootPath 使用） */
+  ensureSubdir(subdir: string): void {
+    // 去掉开头的 /，避免 path.resolve 当成绝对路径
+    const clean = subdir.replace(/^\/+/, '')
+    if (!clean) return
+    const full = path.resolve(this.basePath, clean)
+    if (full.startsWith(this.basePath)) {
+      fsSync.mkdirSync(full, { recursive: true })
+    }
+  }
+
   private fullPath(filePath: string): string {
-    const resolved = path.resolve(this.basePath, filePath)
+    // 去掉开头的 /，避免 path.resolve 当成绝对路径
+    const clean = filePath.replace(/^\/+/, '')
+    const resolved = path.resolve(this.basePath, clean)
     // 安全检查：防止路径遍历
-    if (!resolved.startsWith(this.basePath)) {
+    const baseWithSlash = this.basePath.endsWith(path.sep) ? this.basePath : this.basePath + path.sep
+    if (resolved !== this.basePath && !resolved.startsWith(baseWithSlash)) {
       throw new Error('路径越界')
     }
     return resolved
