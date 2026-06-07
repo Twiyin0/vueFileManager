@@ -8,6 +8,7 @@ const props = defineProps<{
   filePath: string
   fileName: string
   poolId?: number
+  fileType?: 'file' | 'folder'
 }>()
 
 const emit = defineEmits<{
@@ -39,7 +40,7 @@ async function createShare() {
   try {
     const res = await api.post<{ shareCode: string; url: string; signUrl: string; signKey: string }>('/share/create', {
       filePath: props.filePath,
-      fileType: 'file',
+      fileType: props.fileType || 'file',
       storagePoolId: props.poolId,
       password: usePassword.value ? password.value : undefined,
       expiresIn: expiresIn.value || undefined,
@@ -59,9 +60,23 @@ async function copyLink(type: 'link' | 'sign') {
   const url = type === 'sign'
     ? `${origin}${shareResult.value.signUrl}`
     : `${origin}${shareResult.value.url}`
-  await navigator.clipboard.writeText(url)
+  try {
+    await navigator.clipboard.writeText(url)
+  } catch {
+    // HTTP 环境 fallback
+    const ta = document.createElement('textarea')
+    ta.value = url
+    ta.style.cssText = 'position:fixed;left:-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
   copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
+  setTimeout(() => {
+    copied.value = false
+    close()
+  }, 800)
 }
 
 function close() {
@@ -109,7 +124,10 @@ function close() {
           </div>
 
           <div class="flex justify-end gap-3">
-            <button @click="close" class="btn-secondary text-sm">关闭</button>
+            <button @click="copyLink('link')" class="btn-secondary text-sm flex items-center gap-1">
+              <Icon v-if="copied && copyType === 'link'" name="circle-check" class="w-4 h-4" />
+              <span>{{ copied && copyType === 'link' ? '已复制' : '复制链接' }}</span>
+            </button>
             <button @click="copyLink('sign')" class="btn-primary text-sm flex items-center gap-1">
               <Icon v-if="copied && copyType === 'sign'" name="circle-check" class="w-4 h-4" />
               <span>{{ copied && copyType === 'sign' ? '已复制' : '复制签名链接' }}</span>

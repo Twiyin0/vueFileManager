@@ -1,13 +1,14 @@
 import fs from 'fs'
 import path from 'path'
 import db from '../db'
+import config from '../config'
 
 /** 计算用户本地存储目录的实际使用量（字节） */
 export function calculateUserStorageUsage(userId: number): number {
   const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
   if (!user) return 0
 
-  const userDir = path.resolve('./uploads', user.username)
+  const userDir = path.resolve(config.storage_root || './uploads', user.username)
   if (!fs.existsSync(userDir)) return 0
 
   return getDirSize(userDir)

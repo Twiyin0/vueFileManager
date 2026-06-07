@@ -978,7 +978,7 @@ watch([currentPath, currentPoolId], () => {
     <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" :pool-id="fileToPreview.poolId || currentPoolId" :file-list="filesStore.files" @close="showPreview = false; fileToPreview = null" />
 
     <!-- 分享对话框 -->
-    <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" :pool-id="fileToShare.poolId || currentPoolId" @close="showShare = false" />
+    <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" :pool-id="fileToShare.poolId || currentPoolId" :file-type="fileToShare.type" @close="showShare = false" />
 
     <!-- 访客分享对话框 -->
     <GuestShareDialog

@@ -4,7 +4,7 @@ import { FtpStorage } from './ftp'
 import { S3Storage } from './s3'
 import { PrefixStorage } from './prefix'
 import { StorageProvider } from './storage'
-import config from '../config'
+import appConfig from '../config'
 import db from '../db'
 
 // 缓存存储实例 (key: userId-poolId)
@@ -27,7 +27,8 @@ function createStorageInstance(pool: any, username?: string): StorageProvider {
   } else if (pool.storage_type === 's3') {
     storage = new S3Storage(config)
   } else {
-    storage = new LocalStorage(config.storage_root || './uploads', username)
+    // 使用全局配置的 storage_root，不是池配置
+    storage = new LocalStorage(appConfig.storage_root || './uploads', username)
   }
 
   // 如果配置了 rootPath，用 PrefixStorage 包装，并确保目录存在

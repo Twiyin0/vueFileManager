@@ -159,6 +159,42 @@ router.get('/s/:code', (req: Request, res: Response) => {
   }
 })
 
+// 获取分享文件夹内容列表（公开，需签名验证）
+router.get('/list/:code', async (req: Request, res: Response) => {
+  try {
+    const share = db.prepare(`
+      SELECT s.*, u.username FROM shares s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.share_code = ?
+    `).get(req.params.code) as any
+
+    if (!share) return res.status(404).json({ error: '分享链接不存在' })
+    if (share.file_type !== 'folder') return res.status(400).json({ error: '不是文件夹分享' })
+    if (share.expires_at && new Date(share.expires_at) < new Date()) return res.status(410).json({ error: '分享链接已过期' })
+
+    // 验证签名
+    const sign = req.query.sign as string
+    const timestamp = parseInt(req.query.t as string)
+    if (!sign || !timestamp) return res.status(403).json({ error: '缺少签名参数' })
+    if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) return res.status(403).json({ error: '签名验证失败' })
+
+    // 验证密码
+    if (share.password) {
+      const providedPassword = req.query.password as string
+      if (!providedPassword || providedPassword !== share.password) return res.status(403).json({ error: '密码错误' })
+    }
+
+    const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
+    const subPath = (req.query.path as string) || ''
+    const fullPath = share.file_path ? (subPath ? `${share.file_path}/${subPath}` : share.file_path) : subPath
+
+    const files = await storage.list(fullPath)
+    res.json({ files, sharePath: share.file_path, subPath })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // 下载分享的文件（需要 signToken 验证）
 router.get('/download/:code', async (req: Request, res: Response) => {
   try {
@@ -203,10 +239,12 @@ router.get('/download/:code', async (req: Request, res: Response) => {
       return res.status(403).json({ error: '签名验证失败' })
     }
 
-    // 下载文件
+    // 下载文件（支持文件夹内文件：path 参数指定子路径）
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const data = await storage.download(share.file_path)
-    const fileName = share.file_path.split('/').pop() || 'download'
+    const subPath = req.query.path as string
+    const downloadPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
+    const data = await storage.download(downloadPath)
+    const fileName = downloadPath.split('/').pop() || 'download'
 
     // 增加下载计数
     db.prepare('UPDATE shares SET download_count = download_count + 1 WHERE id = ?').run(share.id)
@@ -256,8 +294,11 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const data = await storage.download(share.file_path)
-    const ext = share.file_path.split('.').pop()?.toLowerCase() || ''
+    // 支持文件夹内文件预览：path 参数指定子路径
+    const subPath = req.query.path as string
+    const previewPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
+    const data = await storage.download(previewPath)
+    const ext = previewPath.split('.').pop()?.toLowerCase() || ''
     const mimeTypes: Record<string, string> = {
       'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
       'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
