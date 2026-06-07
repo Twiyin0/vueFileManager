@@ -37,8 +37,8 @@ router.post('/:id/restore', authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(400).json({ error: '原路径已存在同名文件，无法恢复' })
     }
 
-    // 从回收站临时目录恢复文件
-    const trashPath = `/.trash/${item.file_name}`
+    // 从回收站临时目录恢复文件（使用 ID 前缀避免同名冲突）
+    const trashPath = `/.trash/${item.id}_${item.file_name}`
     try {
       const data = await storage.download(trashPath)
       await storage.upload(item.original_path, data)
@@ -64,7 +64,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 
     // 删除回收站中的文件
     const storage = getStorageByPoolId(req.userId!, item.storage_pool_id)
-    const trashPath = `/.trash/${item.file_name}`
+    const trashPath = `/.trash/${item.id}_${item.file_name}`
     try {
       await storage.remove(trashPath)
     } catch { /* 忽略 */ }
@@ -83,7 +83,7 @@ router.delete('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     for (const item of items) {
       const storage = getStorageByPoolId(req.userId!, item.storage_pool_id)
-      const trashPath = `/.trash/${item.file_name}`
+      const trashPath = `/.trash/${item.id}_${item.file_name}`
       try {
         await storage.remove(trashPath)
       } catch { /* 忽略 */ }

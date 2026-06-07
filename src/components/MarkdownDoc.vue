@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import Layout from '@/components/Layout.vue'
 import Icon from '@/components/Icon.vue'
 
@@ -48,7 +49,8 @@ onMounted(async () => {
       return `<h${depth}>${text}</h${depth}>`
     }
 
-    html.value = await marked(md, { renderer })
+    const rawHtml = await marked(md, { renderer })
+    html.value = DOMPurify.sanitize(rawHtml)
     toc.value = headings
 
     await nextTick()

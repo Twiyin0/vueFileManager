@@ -1,5 +1,77 @@
 # VueFileManager 项目指南
 
+## 项目架构脑图
+
+```
+VueFileManager v1.0.0-beta.10
+├── 🏗️ 技术栈
+│   ├── 前端：Vue 3 + TypeScript + Tailwind CSS 4 + Pinia
+│   ├── 后端：Express + TypeScript (tsx) + better-sqlite3
+│   ├── 存储：Local / Upyun / FTP / S3-OSS
+│   └── 认证：JWT + API Key
+│
+├── 📁 文件管理
+│   ├── 浏览/上传/下载/删除/重命名/移动/复制
+│   ├── 搜索（递归）/ ZIP 打包下载
+│   ├── 流式上传 + 断点续传
+│   ├── 远程 URL 上传 / 拖拽上传
+│   ├── 回收站（恢复/永久删除/清空）
+│   ├── 收藏系统
+│   └── 分享系统（密码/过期/下载限制/signToken）
+│
+├── 💾 存储池系统
+│   ├── 多存储池管理（CRUD/切换默认/连接测试）
+│   ├── 本地存储（用户目录自动隔离 storage_root/username）
+│   ├── Upyun 云存储（keepalive + retry）
+│   ├── FTP（basic-ftp）
+│   ├── S3/OSS（@aws-sdk/client-s3，兼容 MinIO/阿里云）
+│   └── 用户配额管理（默认 10GB，管理员可调）
+│
+├── 👤 用户系统
+│   ├── 注册/登录（SMTP 邮箱验证码可选）
+│   ├── JWT + API Key 双认证
+│   ├── 管理员/普通用户角色
+│   ├── 用户封禁/解封（3 入口统一检查）
+│   └── 用户详情（存储配额/用量/统计）
+│
+├── 🔒 权限与安全
+│   ├── API Key 权限（read/write/delete）
+│   ├── 访客模式（四级权限：读取/写入/删除/编辑）
+│   ├── IP 黑名单/白名单（精确 IP + CIDR）
+│   ├── 路径越权防护（fullPath 安全检查）
+│   └── 敏感文件拦截（.env/config.yml 等 403）
+│
+├── 🎨 主题系统
+│   ├── plugins/ 目录，manifest.json + style.css
+│   ├── CSS 变量覆盖（亮/暗模式分别定义）
+│   ├── /themes 页面管理开关
+│   └── /theme-docs 开发文档
+│
+├── 🖥️ 前端架构
+│   ├── Layout.vue（Header + 侧边栏 + 主内容区 + Footer）
+│   ├── Header：Logo + 页面标题 + API文档/主题开发链接 + 主题切换 + 用户操作
+│   ├── Sidebar：可收缩可拖拽（160-400px），localStorage 持久化
+│   ├── FileList：常驻复选框，自动批量模式，右键菜单含批量操作
+│   ├── FilePreview：ArtPlayer/APlayer/ViewerJS/Monaco/PDF.js
+│   ├── APlayer：浮动左下角，点击音频触发，自动添加目录歌曲
+│   └── 通用组件：Toast/ConfirmDialog/MoveDialog/ShareDialog/SpotlightSearch
+│
+├── 🗄️ 数据库（SQLite）
+│   ├── users（含 email/verified/storage_quota）
+│   ├── user_settings / storage_pools / api_keys
+│   ├── shares / trash / favourites / guest_shares
+│   ├── verification_codes（SMTP 验证码）
+│   └── ip_blacklist / ip_whitelist / ip_list_config
+│
+├── 🧪 测试（test/workflows.ts）
+│   └── 104 项全流程测试覆盖所有 API
+│
+└── 🚀 部署
+    ├── 构建：NODE_OPTIONS='--max-old-space-size=3072' yarn build
+    ├── 2G 内存服务器需 4G swap
+    └── Monaco Editor manualChunks 分包优化
+```
+
 ## 暗色模式样式规范
 
 本项目使用 Tailwind CSS v4，暗色模式通过 `.dark` 类触发。修改前端代码时**必须**保持暗色模式样式统一。

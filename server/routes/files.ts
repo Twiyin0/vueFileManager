@@ -176,6 +176,7 @@ router.post('/write', flexibleAuth, requirePermission('write'), async (req: ApiK
 
 // 流式上传（支持 chunked transfer encoding）
 router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  let tempPath: string | null = null
   try {
     const fileName = req.headers['x-file-name'] as string
     const dirPath = (req.headers['x-dir-path'] as string) || ''
@@ -190,17 +191,17 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
 
     // 写入临时文件
     const tempId = crypto.randomBytes(16).toString('hex')
-    const tempPath = path.join(UPLOAD_TEMP_DIR, tempId)
+    tempPath = path.join(UPLOAD_TEMP_DIR, tempId)
     await fs.mkdir(UPLOAD_TEMP_DIR, { recursive: true })
 
-    const writeStream = await fs.open(tempPath, 'w')
+    const fileHandle = await fs.open(tempPath, 'w')
     let totalBytes = 0
 
     await new Promise<void>((resolve, reject) => {
       req.on('data', async (chunk: Buffer) => {
         totalBytes += chunk.length
         try {
-          await writeStream.write(chunk)
+          await fileHandle.write(chunk)
         } catch (err) {
           reject(err)
         }
@@ -209,7 +210,7 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
       req.on('error', (err) => reject(err))
     })
 
-    await writeStream.close()
+    await fileHandle.close()
 
     // 读取临时文件并上传到存储池
     const buffer = await fs.readFile(tempPath)
@@ -236,6 +237,9 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
     res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
+  } finally {
+    // 确保临时文件被清理
+    if (tempPath) await fs.unlink(tempPath).catch(() => {})
   }
 })
 
@@ -458,18 +462,11 @@ const handleDelete = async (req: ApiKeyRequest, res: Response) => {
     if (permanent) {
       await storage.remove(filePath)
     } else {
-      // 移到回收站：复制到 .trash 目录，然后删除原文件
+      // 移到回收站：用唯一 ID 避免同名文件覆盖
       const fileName = filePath.split('/').pop() || ''
-      const trashPath = `/.trash/${fileName}`
-      try {
-        const data = await storage.download(filePath)
-        await storage.upload(trashPath, data)
-      } catch {
-        // 如果是文件夹，直接记录
-      }
 
-      // 获取当前存储池ID
-      const poolId = req.query.poolId as string
+      // 获取当前存储池ID（支持 body 和 query）
+      const poolId = (req.body?.poolId as string) || (req.query.poolId as string)
       let storagePoolId: number
       if (poolId) {
         storagePoolId = parseInt(poolId)
@@ -479,8 +476,17 @@ const handleDelete = async (req: ApiKeyRequest, res: Response) => {
       }
 
       const stat = await storage.info(filePath).catch(() => ({ type: 'file' as const }))
-      db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
+      const result = db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
         .run(req.userId!, filePath, fileName, stat.type, storagePoolId)
+
+      // 用行 ID 作为回收站文件名，避免同名冲突
+      const trashPath = `/.trash/${result.lastInsertRowid}_${fileName}`
+      try {
+        const data = await storage.download(filePath)
+        await storage.upload(trashPath, data)
+      } catch {
+        // 如果是文件夹，直接记录
+      }
 
       await storage.remove(filePath)
     }
