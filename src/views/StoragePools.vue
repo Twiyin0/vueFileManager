@@ -7,7 +7,7 @@ import Icon from '@/components/Icon.vue'
 interface StoragePool {
   id: number
   name: string
-  storageType: 'local' | 'upyun'
+  storageType: 'local' | 'upyun' | 'ftp'
   isDefault: boolean
   config: any
   createdAt: string
@@ -26,13 +26,18 @@ const editingPool = ref<StoragePool | null>(null)
 // 新建/编辑表单
 const form = ref({
   name: '',
-  storageType: 'local' as 'local' | 'upyun',
+  storageType: 'local' as 'local' | 'upyun' | 'ftp',
   config: {
     localPath: './uploads',
     upyunOperator: '',
     upyunPassword: '',
     upyunBucket: '',
     upyunEndpoint: 'v0.api.upyun.com',
+    ftpHost: '',
+    ftpPort: 21,
+    ftpUser: '',
+    ftpPassword: '',
+    ftpRemotePath: '/',
     rootPath: '/'
   }
 })
@@ -70,6 +75,11 @@ function openAddDialog() {
       upyunPassword: '',
       upyunBucket: '',
       upyunEndpoint: 'v0.api.upyun.com',
+      ftpHost: '',
+      ftpPort: 21,
+      ftpUser: '',
+      ftpPassword: '',
+      ftpRemotePath: '/',
       rootPath: '/'
     }
   }
@@ -84,9 +94,14 @@ function openEditDialog(pool: StoragePool) {
     config: {
       localPath: pool.config.localPath || './uploads',
       upyunOperator: pool.config.upyunOperator || '',
-      upyunPassword: '', // 不显示密码
+      upyunPassword: '',
       upyunBucket: pool.config.upyunBucket || '',
       upyunEndpoint: pool.config.upyunEndpoint || 'v0.api.upyun.com',
+      ftpHost: pool.config.ftpHost || '',
+      ftpPort: pool.config.ftpPort || 21,
+      ftpUser: pool.config.ftpUser || '',
+      ftpPassword: '',
+      ftpRemotePath: pool.config.ftpRemotePath || '/',
       rootPath: pool.config.rootPath || '/'
     }
   }
@@ -166,11 +181,15 @@ async function testConnection(pool: StoragePool) {
 }
 
 function getStorageIconName(type: string) {
-  return type === 'local' ? 'hard-drive' : 'cloud'
+  if (type === 'local') return 'hard-drive'
+  if (type === 'ftp') return 'server'
+  return 'cloud'
 }
 
 function getStorageLabel(type: string) {
-  return type === 'local' ? '本地存储' : '又拍云'
+  if (type === 'local') return '本地存储'
+  if (type === 'ftp') return 'FTP'
+  return '又拍云'
 }
 </script>
 
@@ -324,6 +343,21 @@ function getStorageLabel(type: string) {
                       <p class="text-sm mt-1 dark:text-dark-text text-light-text">又拍云</p>
                     </div>
                   </label>
+                  <label class="flex-1 cursor-pointer">
+                    <input
+                      v-model="form.storageType"
+                      type="radio"
+                      value="ftp"
+                      class="hidden peer"
+                      :disabled="!!editingPool"
+                    />
+                    <div class="p-3 rounded-lg border-2 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 dark:border-dark-border border-light-border"
+                      :class="editingPool ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300 dark:hover:border-blue-600'"
+                    >
+                      <Icon name="server" class="w-7 h-7 mx-auto text-blue-500" />
+                      <p class="text-sm mt-1 dark:text-dark-text text-light-text">FTP</p>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -366,6 +400,39 @@ function getStorageLabel(type: string) {
                   <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
                   <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
                   <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">映射到 Bucket 内的子目录，/ 表示 Bucket 根目录</p>
+                </div>
+              </div>
+
+              <!-- FTP 配置 -->
+              <div v-if="form.storageType === 'ftp'" class="space-y-3">
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">主机地址</label>
+                  <input v-model="form.config.ftpHost" type="text" class="input-field" placeholder="ftp.example.com" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">端口</label>
+                  <input v-model.number="form.config.ftpPort" type="number" class="input-field" placeholder="21" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">用户名</label>
+                  <input v-model="form.config.ftpUser" type="text" class="input-field" placeholder="anonymous" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">
+                    密码
+                    <span v-if="editingPool" class="text-xs text-gray-400">(留空则不修改)</span>
+                  </label>
+                  <input v-model="form.config.ftpPassword" type="password" class="input-field" placeholder="••••••" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">远程路径</label>
+                  <input v-model="form.config.ftpRemotePath" type="text" class="input-field" placeholder="/" />
+                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">FTP 服务器上的根目录路径</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">根路径映射</label>
+                  <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
+                  <p class="text-xs text-gray-500 dark:text-dark-text-secondary mt-1">映射到 FTP 目录内的子目录，/ 表示根目录</p>
                 </div>
               </div>
 

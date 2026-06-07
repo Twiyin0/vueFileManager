@@ -8,21 +8,30 @@ const configPath = path.join(__dirname, '..', 'config.yml')
 
 interface StoragePoolConfig {
   name: string
-  type: 'local' | 'upyun'
+  type: string
   default: boolean
-  config: {
-    localPath?: string
-    upyunOperator?: string
-    upyunPassword?: string
-    upyunBucket?: string
-    upyunEndpoint?: string
-  }
+  config: Record<string, any>
+}
+
+interface SmtpConfig {
+  enabled: boolean
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  pass: string
+  from: string
+}
+
+interface PluginsConfig {
+  enabled: boolean
+  dir: string
 }
 
 interface Config {
   admin: {
     username: string
-    password: string // MD5
+    password: string
   }
   server: {
     port: number
@@ -35,12 +44,14 @@ interface Config {
     police_beian: string
   }
   storage_pools: StoragePoolConfig[]
+  smtp: SmtpConfig
+  plugins: PluginsConfig
 }
 
 const defaultConfig: Config = {
   admin: {
     username: 'admin',
-    password: '21232f297a57a5a743894a0e4a801fc3' // MD5("admin")
+    password: '21232f297a57a5a743894a0e4a801fc3'
   },
   server: {
     port: 3000,
@@ -59,7 +70,20 @@ const defaultConfig: Config = {
       default: true,
       config: { localPath: './uploads' }
     }
-  ]
+  ],
+  smtp: {
+    enabled: false,
+    host: '',
+    port: 465,
+    secure: true,
+    user: '',
+    pass: '',
+    from: ''
+  },
+  plugins: {
+    enabled: true,
+    dir: './plugins'
+  }
 }
 
 let config: Config = defaultConfig
@@ -74,7 +98,9 @@ try {
       server: { ...defaultConfig.server, ...loaded.server },
       ip_list_mode: loaded.ip_list_mode || defaultConfig.ip_list_mode,
       site: { ...defaultConfig.site, ...loaded.site },
-      storage_pools: loaded.storage_pools || defaultConfig.storage_pools
+      storage_pools: loaded.storage_pools || defaultConfig.storage_pools,
+      smtp: { ...defaultConfig.smtp, ...loaded.smtp },
+      plugins: { ...defaultConfig.plugins, ...loaded.plugins }
     }
     console.log('✅ 已加载配置文件 config.yml')
   } else {
@@ -85,4 +111,4 @@ try {
 }
 
 export default config
-export type { Config, StoragePoolConfig }
+export type { Config, StoragePoolConfig, SmtpConfig, PluginsConfig }

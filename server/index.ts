@@ -1,11 +1,16 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import config from './config'
 
 // 初始化数据库（确保建表和默认管理员）
 import './db'
+
+// 加载插件
+import { loadPlugins, getPluginStyles, initHookPlugins, getLoadedPlugins } from './plugins/loader'
+loadPlugins()
 
 import authRoutes from './routes/auth'
 import filesRoutes from './routes/files'
@@ -38,6 +43,12 @@ app.use('/api', ipBlacklistMiddleware)
 // 静态文件服务（生产模式）
 app.use(express.static(path.join(__dirname, '..', 'dist')))
 
+// 插件静态文件
+const pluginsDir = path.resolve(config.plugins?.dir || './plugins')
+if (config.plugins?.enabled && fs.existsSync(pluginsDir)) {
+  app.use('/plugins', express.static(pluginsDir))
+}
+
 // API 路由
 app.use('/api/auth', authRoutes)
 app.use('/api/files', filesRoutes)
@@ -57,8 +68,23 @@ app.get('/api/site-config', (_req, res) => {
   res.json({
     icp_beian: config.site?.icp_beian || '',
     police_beian: config.site?.police_beian || '',
+    smtp_enabled: config.smtp?.enabled || false,
+    plugins_enabled: config.plugins?.enabled || false,
   })
 })
+
+// 插件样式列表（公开）
+app.get('/api/plugins/styles', (_req, res) => {
+  res.json({ styles: getPluginStyles() })
+})
+
+// 插件列表（公开）
+app.get('/api/plugins/list', (_req, res) => {
+  res.json({ plugins: getLoadedPlugins() })
+})
+
+// 初始化 hook 插件（异步）
+initHookPlugins(app).catch(err => console.error('插件初始化失败:', err))
 
 // SPA fallback（生产模式）
 app.get('*', (req, res) => {

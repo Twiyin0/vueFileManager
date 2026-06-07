@@ -495,4 +495,43 @@ export function syncStoragePoolsFromConfig(userId: number) {
   }
 }
 
+// 迁移：添加 verification_codes 表（SMTP 邮箱验证码）
+function migrateVerificationCodes() {
+  try {
+    const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verification_codes'").get()
+    if (!hasTable) {
+      db.exec(`
+        CREATE TABLE verification_codes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT NOT NULL,
+          code TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'register',
+          expires_at TEXT NOT NULL,
+          used INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+      console.log('✅ 已创建 verification_codes 表')
+    }
+  } catch (err) {
+    console.error('⚠️ verification_codes 表迁移失败:', err)
+  }
+}
+migrateVerificationCodes()
+
+// 迁移：给 users 表加 email 列
+function migrateUserEmail() {
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all() as any[]
+    const hasEmail = cols.some((c: any) => c.name === 'email')
+    if (!hasEmail) {
+      db.exec("ALTER TABLE users ADD COLUMN email TEXT")
+      console.log('✅ 已给 users 表添加 email 列')
+    }
+  } catch (err) {
+    console.error('⚠️ users email 迁移失败:', err)
+  }
+}
+migrateUserEmail()
+
 export default db

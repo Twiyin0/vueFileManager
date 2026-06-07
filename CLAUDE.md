@@ -225,6 +225,36 @@
 - `FilePreview.vue`：`guestBaseUrl` prop 支持访客预览 URL，`guestSaveUrl` + `editable` prop 支持访客编辑
 - `FileList.vue`：`guestBaseUrl` prop 支持网格模式缩略图
 
+## 插件系统
+
+插件目录：`plugins/`（可在 `config.yml` 的 `plugins.dir` 配置）
+
+每个插件包含 `manifest.json`，支持三种类型：
+
+| type | 说明 | entry 字段 |
+|------|------|-----------|
+| `theme` | 自定义 CSS 样式 | `style` → 自动注入 `<head>` |
+| `hook` | Express 后端扩展 | `hooks` → 导出 `onLoad(app)` |
+| `storage` | 自定义存储驱动 | `driver` → 实现 `StorageProvider` |
+
+前端 `main.ts` 启动时 fetch `/api/plugins/styles` 加载主题 CSS。
+服务端 `server/plugins/loader.ts` 负责扫描和加载。
+
+## SMTP 邮箱注册
+
+`config.yml` 中 `smtp.enabled: true` 启用。注册页面自动显示邮箱和验证码字段。
+
+API：
+- `POST /api/auth/send-code` — 发送验证码 `{ email }`
+- `POST /api/auth/register` — 注册 `{ username, password, email, code }`
+
+数据库：`verification_codes` 表（验证码 5 分钟过期）
+
+## FTP 存储驱动
+
+`server/services/ftp.ts` 实现 `StorageProvider` 接口，使用 `basic-ftp` 包。
+`config.yml` 存储池类型 `type: ftp`，配置项：`ftpHost`、`ftpPort`、`ftpUser`、`ftpPassword`、`ftpRemotePath`。
+
 ## 用户封禁系统
 
 用户封禁字段 `users.banned`（INTEGER, 0/1），需在 **3 个认证入口** 同时检查：

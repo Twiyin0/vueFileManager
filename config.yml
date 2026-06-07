@@ -71,3 +71,33 @@ storage_pools:
   #     upyunPassword: your-password
   #     upyunBucket: your-bucket
   #     upyunEndpoint: v0.api.upyun.com
+
+  # FTP 示例
+  # - name: FTP 存储
+  #   type: ftp
+  #   default: false
+  #   config:
+  #     host: ftp.example.com
+  #     port: 21
+  #     user: admin
+  #     password: your-password
+  #     remotePath: /uploads
+
+# ============================================================
+# SMTP 邮箱配置（用于注册验证码）
+# ============================================================
+smtp:
+  enabled: false
+  host: smtp.example.com
+  port: 465
+  secure: true
+  user: noreply@example.com
+  pass: your-password
+  from: VueFileManager <noreply@example.com>
+
+# ============================================================
+# 插件系统
+# ============================================================
+plugins:
+  enabled: true
+  dir: ./plugins

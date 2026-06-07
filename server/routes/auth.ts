@@ -4,15 +4,46 @@ import jwt from 'jsonwebtoken'
 import db, { syncStoragePoolsFromConfig } from '../db'
 import config from '../config'
 import { generateToken, AuthRequest, getClientIp } from '../middleware/auth'
+import { sendVerificationCode, verifyCode } from '../services/mail'
 
 const JWT_SECRET = config.server.jwt_secret
 
 const router = Router()
 
-// 注册
-router.post('/register', (req: Request, res: Response) => {
+// 发送注册验证码
+router.post('/send-code', async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body
+    if (!config.smtp.enabled) {
+      return res.status(400).json({ error: '邮箱注册未启用' })
+    }
+
+    const { email } = req.body
+    if (!email) {
+      return res.status(400).json({ error: '邮箱不能为空' })
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: '邮箱格式不正确' })
+    }
+
+    // 检查邮箱是否已被注册
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+    if (existing) {
+      return res.status(409).json({ error: '该邮箱已被注册' })
+    }
+
+    await sendVerificationCode(email)
+    res.json({ message: '验证码已发送' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// 注册
+router.post('/register', async (req: Request, res: Response) => {
+  try {
+    const { username, password, email, code } = req.body
 
     if (!username || !password) {
       return res.status(400).json({ error: '用户名和密码不能为空' })
@@ -26,10 +57,28 @@ router.post('/register', (req: Request, res: Response) => {
       return res.status(400).json({ error: '密码长度不能少于 6 位' })
     }
 
+    // SMTP 启用时必须验证邮箱
+    if (config.smtp.enabled) {
+      if (!email || !code) {
+        return res.status(400).json({ error: '请输入邮箱和验证码' })
+      }
+      if (!verifyCode(email, code)) {
+        return res.status(400).json({ error: '验证码无效或已过期' })
+      }
+    }
+
     // 检查用户名是否已存在
     const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username)
     if (existing) {
       return res.status(409).json({ error: '用户名已存在' })
+    }
+
+    // 检查邮箱是否已被注册
+    if (email) {
+      const emailExists = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+      if (emailExists) {
+        return res.status(409).json({ error: '该邮箱已被注册' })
+      }
     }
 
     // 使用 MD5 哈希密码
@@ -37,8 +86,8 @@ router.post('/register', (req: Request, res: Response) => {
     const ip = getClientIp(req)
 
     const result = db.prepare(
-      'INSERT INTO users (username, password, register_ip, last_login_ip) VALUES (?, ?, ?, ?)'
-    ).run(username, hashedPassword, ip, ip)
+      'INSERT INTO users (username, password, email, register_ip, last_login_ip) VALUES (?, ?, ?, ?, ?)'
+    ).run(username, hashedPassword, email || null, ip, ip)
 
     // 创建默认设置
     const userId = result.lastInsertRowid as number

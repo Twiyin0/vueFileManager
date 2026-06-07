@@ -1,0 +1,14 @@
+/*
+ * 示例主题插件 - 将强调色改为紫色
+ * 删除此文件可恢复默认主题
+ */
+
+:root {
+  --accent-color: #8b5cf6;
+  --accent-soft-color: #ede9fe;
+}
+
+.dark {
+  --accent-color: #a78bfa;
+  --accent-soft-color: #4c1d95;
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import Icon from '@/components/Icon.vue'
@@ -10,8 +10,55 @@ const authStore = useAuthStore()
 const username = ref('')
 const password = ref('')
 const confirmPassword = ref('')
+const email = ref('')
+const code = ref('')
 const error = ref('')
 const loading = ref(false)
+const smtpEnabled = ref(false)
+const codeSending = ref(false)
+const codeCountdown = ref(0)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/site-config')
+    if (res.ok) {
+      const data = await res.json()
+      smtpEnabled.value = data.smtp_enabled
+    }
+  } catch {}
+})
+
+async function sendCode() {
+  if (!email.value.trim()) {
+    error.value = '请输入邮箱'
+    return
+  }
+  error.value = ''
+  codeSending.value = true
+  try {
+    const res = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value.trim() })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    // 60 秒倒计时
+    codeCountdown.value = 60
+    countdownTimer = setInterval(() => {
+      codeCountdown.value--
+      if (codeCountdown.value <= 0 && countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
+      }
+    }, 1000)
+  } catch (err: any) {
+    error.value = err.message
+  } finally {
+    codeSending.value = false
+  }
+}
 
 async function handleRegister() {
   error.value = ''
@@ -23,7 +70,20 @@ async function handleRegister() {
 
   loading.value = true
   try {
-    await authStore.register(username.value, password.value)
+    const body: any = { username: username.value, password: password.value }
+    if (smtpEnabled.value) {
+      body.email = email.value.trim()
+      body.code = code.value.trim()
+    }
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    localStorage.setItem('token', data.token)
+    await authStore.fetchUser()
     router.push('/')
   } catch (err: any) {
     error.value = err.message
@@ -52,42 +112,36 @@ async function handleRegister() {
       <form @submit.prevent="handleRegister" class="space-y-4">
         <div>
           <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">用户名</label>
-          <input
-            v-model="username"
-            type="text"
-            class="input-field"
-            placeholder="3-20 个字符"
-            required
-            minlength="3"
-            maxlength="20"
-          />
+          <input v-model="username" type="text" class="input-field" placeholder="3-20 个字符" required minlength="3" maxlength="20" />
         </div>
+
+        <!-- 邮箱（SMTP 启用时显示） -->
+        <div v-if="smtpEnabled">
+          <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">邮箱</label>
+          <div class="flex gap-2">
+            <input v-model="email" type="email" class="input-field flex-1" placeholder="your@email.com" required />
+            <button type="button" @click="sendCode" :disabled="codeSending || codeCountdown > 0"
+              class="btn-secondary text-sm whitespace-nowrap px-3">
+              {{ codeCountdown > 0 ? `${codeCountdown}s` : codeSending ? '发送中...' : '发送验证码' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 验证码（SMTP 启用时显示） -->
+        <div v-if="smtpEnabled">
+          <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">验证码</label>
+          <input v-model="code" type="text" class="input-field" placeholder="6 位验证码" required maxlength="6" />
+        </div>
+
         <div>
           <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">密码</label>
-          <input
-            v-model="password"
-            type="password"
-            class="input-field"
-            placeholder="至少 6 位"
-            required
-            minlength="6"
-          />
+          <input v-model="password" type="password" class="input-field" placeholder="至少 6 位" required minlength="6" />
         </div>
         <div>
           <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">确认密码</label>
-          <input
-            v-model="confirmPassword"
-            type="password"
-            class="input-field"
-            placeholder="再次输入密码"
-            required
-          />
+          <input v-model="confirmPassword" type="password" class="input-field" placeholder="再次输入密码" required />
         </div>
-        <button
-          type="submit"
-          class="btn-primary w-full py-2.5"
-          :disabled="loading"
-        >
+        <button type="submit" class="btn-primary w-full py-2.5" :disabled="loading">
           <span v-if="loading" class="flex items-center justify-center gap-2">
             <svg class="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>

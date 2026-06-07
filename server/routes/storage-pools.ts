@@ -48,7 +48,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
     }
 
     // 验证存储类型
-    if (!['local', 'upyun'].includes(storageType)) {
+    if (!['local', 'upyun', 'ftp'].includes(storageType)) {
       return res.status(400).json({ error: '不支持的存储类型' })
     }
 
@@ -60,6 +60,12 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
     if (storageType === 'upyun') {
       if (!config.upyunOperator || !config.upyunPassword || !config.upyunBucket) {
         return res.status(400).json({ error: '又拍云存储需要填写操作员名称、密码和服务名' })
+      }
+    }
+
+    if (storageType === 'ftp') {
+      if (!config.ftpHost) {
+        return res.status(400).json({ error: 'FTP 存储需要填写主机地址' })
       }
     }
 

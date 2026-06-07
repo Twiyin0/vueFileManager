@@ -1,5 +1,6 @@
 import { LocalStorage } from './local'
 import { UpyunStorage } from './upyun'
+import { FtpStorage } from './ftp'
 import { PrefixStorage } from './prefix'
 import { StorageProvider } from './storage'
 import db from '../db'
@@ -19,6 +20,8 @@ function createStorageInstance(pool: any): StorageProvider {
       config.upyunBucket,
       config.upyunEndpoint || 'v0.api.upyun.com'
     )
+  } else if (pool.storage_type === 'ftp') {
+    storage = new FtpStorage(config)
   } else {
     storage = new LocalStorage(config.localPath || './uploads')
   }
