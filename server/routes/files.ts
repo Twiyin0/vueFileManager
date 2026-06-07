@@ -596,7 +596,26 @@ router.post('/copy', flexibleAuth, requirePermission('write'), async (req: ApiKe
   }
 })
 
-// 跨存储池复制
+// 并发控制辅助函数
+async function processConcurrently<T>(
+  items: T[],
+  fn: (item: T, index: number) => Promise<void>,
+  concurrency = 3
+): Promise<string[]> {
+  const errors: string[] = []
+  let i = 0
+  async function next() {
+    while (i < items.length) {
+      const idx = i++
+      try { await fn(items[idx], idx) }
+      catch (err: any) { errors.push(err.message) }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => next()))
+  return errors
+}
+
+// 跨存储池复制（并发 3）
 router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
     const { srcPaths, names, srcPoolId, destPoolId, destPath } = req.body
@@ -605,19 +624,13 @@ router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req:
     }
     const srcStorage = getStorageByPoolId(req.userId!, srcPoolId)
     const destStorage = getStorageByPoolId(req.userId!, destPoolId)
-    const errors: string[] = []
 
-    for (let i = 0; i < srcPaths.length; i++) {
-      const srcPath = srcPaths[i]
-      try {
-        const fileName = (names && names[i]) || srcPath.split('/').filter(Boolean).pop() || ''
-        const targetPath = destPath ? `${destPath}/${fileName}` : fileName
-        const data = await srcStorage.download(srcPath)
-        await destStorage.upload(targetPath, data)
-      } catch (err: any) {
-        errors.push(`${srcPath}: ${err.message}`)
-      }
-    }
+    const errors = await processConcurrently(srcPaths, async (srcPath, i) => {
+      const fileName = (names && names[i]) || srcPath.split('/').filter(Boolean).pop() || ''
+      const targetPath = destPath ? `${destPath}/${fileName}` : fileName
+      const data = await srcStorage.download(srcPath)
+      await destStorage.upload(targetPath, data)
+    })
 
     res.json({ message: '跨池复制完成', errors })
   } catch (err: any) {
@@ -625,7 +638,7 @@ router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req:
   }
 })
 
-// 跨存储池移动
+// 跨存储池移动（并发 3）
 router.post('/cross-move', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
     const { srcPaths, names, srcPoolId, destPoolId, destPath } = req.body
@@ -634,20 +647,14 @@ router.post('/cross-move', flexibleAuth, requirePermission('write'), async (req:
     }
     const srcStorage = getStorageByPoolId(req.userId!, srcPoolId)
     const destStorage = getStorageByPoolId(req.userId!, destPoolId)
-    const errors: string[] = []
 
-    for (let i = 0; i < srcPaths.length; i++) {
-      const srcPath = srcPaths[i]
-      try {
-        const fileName = (names && names[i]) || srcPath.split('/').filter(Boolean).pop() || ''
-        const targetPath = destPath ? `${destPath}/${fileName}` : fileName
-        const data = await srcStorage.download(srcPath)
-        await destStorage.upload(targetPath, data)
-        await srcStorage.remove(srcPath)
-      } catch (err: any) {
-        errors.push(`${srcPath}: ${err.message}`)
-      }
-    }
+    const errors = await processConcurrently(srcPaths, async (srcPath, i) => {
+      const fileName = (names && names[i]) || srcPath.split('/').filter(Boolean).pop() || ''
+      const targetPath = destPath ? `${destPath}/${fileName}` : fileName
+      const data = await srcStorage.download(srcPath)
+      await destStorage.upload(targetPath, data)
+      await srcStorage.remove(srcPath)
+    })
 
     res.json({ message: '跨池移动完成', errors })
   } catch (err: any) {

@@ -17,3 +17,7 @@ yarn.lock
 .claude
 ._*
 **/._*
+*__MACOSX/*
+*__MACOSX*
+__MACOSX
+examples/

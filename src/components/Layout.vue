@@ -58,6 +58,12 @@ onMounted(async () => {
         </Transition>
       </div>
       <div class="flex items-center gap-3 flex-shrink-0">
+        <router-link to="/api-docs" class="p-2 rounded-lg hover:opacity-80 transition-opacity" title="API 文档" style="color: var(--text-secondary-color)">
+          <Icon name="file-lines" class="w-5 h-5" />
+        </router-link>
+        <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:opacity-80 transition-opacity" title="GitHub" style="color: var(--text-secondary-color)">
+          <Icon name="github" class="w-5 h-5" />
+        </a>
         <ThemeToggle />
         <template v-if="authStore.isLoggedIn">
           <router-link to="/settings" class="p-2 rounded-lg hover:opacity-80" title="设置" style="color: var(--text-color)">

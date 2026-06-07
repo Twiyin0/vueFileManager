@@ -60,6 +60,11 @@ app.get('/api/site-config', (_req, res) => {
   })
 })
 
+// API 文档（公开）
+app.get('/API.md', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'API.md'))
+})
+
 // SPA fallback（生产模式）
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {

@@ -81,6 +81,11 @@ const router = createRouter({
       name: 'Favourites',
       component: () => import('@/views/Favourites.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/api-docs',
+      name: 'ApiDocs',
+      component: () => import('@/views/ApiDocs.vue')
     }
   ]
 })
