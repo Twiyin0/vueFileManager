@@ -9,7 +9,7 @@
 - 📝 重命名、移动、复制（支持跨存储池）
 - 🔍 文件搜索（递归）
 - 📦 创建文件夹
-- 👁️ 文件预览 v3：视频 (ArtPlayer, 16:9 容器 + playsInline) / 音频 (APlayer, 浮动左下角播放器, 自动添加目录歌曲) / 图片 (ViewerJS 全屏画廊, 透明毛玻璃左右箭头, blob URL 防 iOS 系统预览抢占, 文件夹内前后翻页) / PDF (PDF.js CDN canvas 渲染, 工具栏含页码跳转/缩放) / 代码 (Monaco Editor 可编辑 + Ctrl+S 保存, Toast 保存提示)
+- 👁️ 文件预览 v4：视频 (ArtPlayer, 16:9 容器 + playsInline) / 音频 (APlayer, 浮动左下角播放器, 自动添加目录歌曲) / 图片 (ViewerJS 全屏画廊, 透明毛玻璃左右箭头, blob URL 防 iOS 系统预览抢占, 文件夹内前后翻页) / PDF (PDF.js CDN canvas 渲染, 工具栏含页码跳转/缩放) / 代码 (CodeMirror 6 可编辑 + Ctrl+S 保存, Toast 保存提示, 暗色主题)
 - ☑️ 常驻复选框 + 自动批量模式（勾选即进入批量，右键菜单含批量操作）
 - 🖱️ 右键上下文菜单（含批量操作：复制/移动/打包下载/删除）
 - 📊 文件详情面板
@@ -241,7 +241,7 @@ vueFileManager/
 │   │   ├── MoveDialog.vue    # 移动对话框
 │   │   ├── GuestShareDialog.vue # 访客分享对话框
 │   │   ├── ShareDialog.vue   # 分享链接对话框
-│   │   ├── FilePreview.vue   # 文件预览（毛玻璃头部, ArtPlayer/APlayer/ViewerJS/Monaco）
+│   │   ├── FilePreview.vue   # 文件预览（毛玻璃头部, ArtPlayer/APlayer/ViewerJS/CodeMirror 6）
 │   │   ├── Toast.vue         # Toast 通知
 │   │   ├── ConfirmDialog.vue # 确认弹窗
 │   │   └── ThemeToggle.vue   # 主题切换（放大图标）
@@ -279,7 +279,7 @@ npx tsx test/workflows.ts
 npx tsx test/upyun.ts
 ```
 
-测试覆盖（135 项）：
+测试覆盖（108 项）：
 - ✅ 认证 API（注册/登录/用户信息/Token校验）
 - ✅ 存储池 API（CRUD/切换默认/连接测试）
 - ✅ 文件 API（列表/创建/重命名/移动/复制/搜索/批量删除/回收站删除/永久删除/打包下载）
@@ -292,7 +292,7 @@ npx tsx test/upyun.ts
 - ✅ API Key API（创建/列表/认证/删除）
 - ✅ 用户设置 API（获取/更新/恢复默认）
 - ✅ 访客 API（用户列表/分享列表/文件列表/预览/创建文件夹/重命名/删除/回收站标注/权限配置/权限更新/权限降级403）
-- ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制/管理员保护）
+- ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制/管理员保护/配额超限400）
 - ✅ 封禁用户 API Key 验证（403 拒绝）
 - ✅ IP 黑名单/白名单（CRUD/模式切换/白名单默认IP/127.0.0.1保护）
 
@@ -396,7 +396,7 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 - Vue 3 (Composition API)
 - TypeScript
 - Tailwind CSS 4
-- ArtPlayer + APlayer + ViewerJS + Monaco Editor + PDF.js（文件预览 v3）
+- ArtPlayer + APlayer + ViewerJS + CodeMirror 6 + PDF.js（文件预览 v4）
 - Vue Router 4
 - Pinia
 - Fetch API

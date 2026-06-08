@@ -82,7 +82,18 @@ async function handleDelete() {
 }
 
 async function copyKey(key: string, id: number) {
-  await navigator.clipboard.writeText(key)
+  try {
+    await navigator.clipboard.writeText(key)
+  } catch {
+    // Fallback for non-HTTPS / macOS restrictions
+    const ta = document.createElement('textarea')
+    ta.value = key
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
   copiedId.value = id
   setTimeout(() => { copiedId.value = null }, 2000)
 }

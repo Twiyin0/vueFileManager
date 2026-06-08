@@ -19,11 +19,15 @@ export default defineConfig({
     }
   },
   build: {
+    chunkSizeWarningLimit: 100,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'monaco-editor': ['monaco-editor'],
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('/vue/') || id.includes('\\vue\\') ||
+                id.includes('/vue-router/') || id.includes('\\vue-router\\') ||
+                id.includes('/pinia/') || id.includes('\\pinia\\')) return 'vue-vendor'
+          }
         }
       }
     }

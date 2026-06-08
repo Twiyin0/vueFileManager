@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { api } from '@/api'
-import ArtPlayer from 'artplayer'
-import APlayer from 'aplayer'
-import Viewer from 'viewerjs'
-import VueMonacoEditor from '@guolao/vue-monaco-editor'
+import type ArtPlayer from 'artplayer'
+import type APlayer from 'aplayer'
+import type Viewer from 'viewerjs'
 import Icon from '@/components/Icon.vue'
-
-import 'aplayer/dist/APlayer.min.css'
-import 'viewerjs/dist/viewer.css'
 
 const props = defineProps<{
   show: boolean
@@ -178,57 +174,165 @@ async function saveTextFile() {
   }
 }
 
-function handleMonacoMount(editor: any, monaco: any) {
-  // Register Ctrl+S / Cmd+S for save
-  editor.addAction({
-    id: 'save-file',
-    label: '保存文件',
-    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-    run: () => saveTextFile(),
-  })
-}
+// ---- CodeMirror state ----
+const editorContainer = ref<HTMLDivElement>()
+let cmView: any = null
+let themeCompartment: any = null
 
-/** Monaco options: tuned for performance on large files */
 const isEditorReadOnly = computed(() => props.guestBaseUrl ? !props.editable : false)
-const monacoOptions = computed(() => ({
-  readOnly: isEditorReadOnly.value,
-  minimap: { enabled: false },
-  automaticLayout: true,
-  scrollBeyondLastLine: false,
-  wordWrap: 'on' as const,
-  fontSize: 14,
-  lineNumbers: 'on' as const,
-  renderWhitespace: 'none' as const,
-  smoothScrolling: true,
-  cursorBlinking: 'smooth' as const,
-  // Performance: disable heavy features for large files
-  bracketPairColorization: { enabled: false },
-  guides: { indentation: false, bracketPairs: false },
-  suggest: { showWords: false, showSnippets: false },
-  occurrencesHighlight: 'off' as const,
-  selectionHighlight: false,
-  renderLineHighlight: 'none' as const,
-  folding: false,
-  hideCursorInOverviewRuler: true,
-  overviewRulerBorder: false,
-  overviewRulerLanes: 0,
-}))
 
-const languageMap: Record<string, string> = {
-  js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
-  html: 'html', css: 'css', scss: 'scss', less: 'less',
-  json: 'json', xml: 'xml', yaml: 'yaml', yml: 'yaml',
-  py: 'python', java: 'java', go: 'go', rs: 'rust',
-  vue: 'html', sh: 'shell', bash: 'shell', zsh: 'shell',
-  sql: 'sql', md: 'markdown', markdown: 'markdown',
-  dockerfile: 'dockerfile', txt: 'plaintext', log: 'plaintext', env: 'plaintext',
-  cfg: 'plaintext', php: 'php', rb: 'ruby', c: 'c', cpp: 'cpp',
-  swift: 'swift', kt: 'kotlin', dart: 'dart', lua: 'lua',
+const cmLanguageName = computed(() => {
+  const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
+  const map: Record<string, string> = {
+    js: 'JavaScript', jsx: 'JSX', ts: 'TypeScript', tsx: 'TSX',
+    html: 'HTML', css: 'CSS', scss: 'SCSS', less: 'LESS',
+    json: 'JSON', xml: 'XML', yaml: 'YAML', yml: 'YAML',
+    py: 'Python', java: 'Java', go: 'Go', rs: 'Rust',
+    vue: 'HTML', sql: 'SQL', md: 'Markdown', markdown: 'Markdown',
+    php: 'PHP', c: 'C', cpp: 'C++', rb: 'Ruby',
+    swift: 'Swift', kt: 'Kotlin', dart: 'Dart', lua: 'Lua',
+  }
+  return map[ext] || 'Plain Text'
+})
+
+async function getLangExtension(ext: string): Promise<any> {
+  switch (ext) {
+    case 'js': case 'jsx': return (await import('@codemirror/lang-javascript')).javascript({ jsx: true })
+    case 'ts': case 'tsx': return (await import('@codemirror/lang-javascript')).javascript({ typescript: true, jsx: true })
+    case 'html': case 'vue': return (await import('@codemirror/lang-html')).html()
+    case 'css': case 'scss': case 'less': return (await import('@codemirror/lang-css')).css()
+    case 'json': return (await import('@codemirror/lang-json')).json()
+    case 'xml': return (await import('@codemirror/lang-xml')).xml()
+    case 'yaml': case 'yml': return (await import('@codemirror/lang-yaml')).yaml()
+    case 'py': return (await import('@codemirror/lang-python')).python()
+    case 'java': return (await import('@codemirror/lang-java')).java()
+    case 'go': return (await import('@codemirror/lang-go')).go()
+    case 'rs': return (await import('@codemirror/lang-rust')).rust()
+    case 'sql': return (await import('@codemirror/lang-sql')).sql()
+    case 'md': case 'markdown': return (await import('@codemirror/lang-markdown')).markdown()
+    case 'php': return (await import('@codemirror/lang-php')).php()
+    case 'c': case 'cpp': return (await import('@codemirror/lang-cpp')).cpp()
+    default: return []
+  }
 }
 
-const monacoLanguage = computed(() => {
+async function getCmThemes(EditorView: any, HighlightStyle: any, tags: any) {
+  const lightHighlight = HighlightStyle.define([
+    { tag: tags.keyword, color: '#d73a49' },
+    { tag: tags.string, color: '#032f62' },
+    { tag: tags.number, color: '#005cc5' },
+    { tag: tags.comment, color: '#6a737d', fontStyle: 'italic' },
+    { tag: tags.variableName, color: '#24292e' },
+    { tag: tags.typeName, color: '#6f42c1' },
+    { tag: tags.tagName, color: '#22863a' },
+    { tag: tags.attributeName, color: '#6f42c1' },
+    { tag: tags.propertyName, color: '#005cc5' },
+  ])
+  const darkHighlight = HighlightStyle.define([
+    { tag: tags.keyword, color: '#c586c0' },
+    { tag: tags.string, color: '#ce9178' },
+    { tag: tags.number, color: '#b5cea8' },
+    { tag: tags.comment, color: '#6a9955', fontStyle: 'italic' },
+    { tag: tags.variableName, color: '#9cdcfe' },
+    { tag: tags.typeName, color: '#4ec9b0' },
+    { tag: tags.tagName, color: '#569cd6' },
+    { tag: tags.attributeName, color: '#9cdcfe' },
+    { tag: tags.propertyName, color: '#9cdcfe' },
+  ])
+  const lightTheme = EditorView.theme({
+    '&': { backgroundColor: '#ffffff', color: '#24292e' },
+    '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '14px', caretColor: '#24292e' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#24292e !important', borderLeftWidth: '2px' },
+    '.cm-gutters': { backgroundColor: '#f6f8fa', color: '#959da5', borderRight: '1px solid #e1e4e8' },
+    '&.cm-focused': { outline: 'none' },
+    '.cm-selectionBackground, ::selection': { backgroundColor: '#c8e1ff !important' },
+    '.cm-activeLine': { backgroundColor: '#f0f4f8' },
+    '.cm-activeLineGutter': { backgroundColor: '#e8ecf0' },
+  })
+  const darkTheme = EditorView.theme({
+    '&': { backgroundColor: '#1e1e1e', color: '#d4d4d4' },
+    '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '14px', caretColor: '#aeafad' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#aeafad !important', borderLeftWidth: '2px' },
+    '.cm-gutters': { backgroundColor: '#1e1e1e', color: '#858585', borderRight: '1px solid #333' },
+    '&.cm-focused': { outline: 'none' },
+    '.cm-selectionBackground, ::selection': { backgroundColor: '#264f78 !important' },
+    '.cm-activeLine': { backgroundColor: '#2a2d2e' },
+    '.cm-activeLineGutter': { backgroundColor: '#2a2d2e' },
+  })
+  return { lightHighlight, darkHighlight, lightTheme, darkTheme }
+}
+
+async function initCodeMirror() {
+  if (!editorContainer.value) return
+
+  const [
+    { EditorView, keymap, lineNumbers },
+    { EditorState, Compartment },
+    { defaultKeymap, history, historyKeymap },
+    { bracketMatching, indentOnInput, syntaxHighlighting, HighlightStyle },
+    { tags },
+  ] = await Promise.all([
+    import('@codemirror/view'),
+    import('@codemirror/state'),
+    import('@codemirror/commands'),
+    import('@codemirror/language'),
+    import('@lezer/highlight'),
+  ])
+
   const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
-  return languageMap[ext] || 'plaintext'
+  const langExt = await getLangExtension(ext)
+  const { lightHighlight, darkHighlight, lightTheme, darkTheme } = await getCmThemes(EditorView, HighlightStyle, tags)
+
+  themeCompartment = new Compartment()
+
+  const state = EditorState.create({
+    doc: textContent.value,
+    extensions: [
+      lineNumbers(),
+      history(),
+      bracketMatching(),
+      indentOnInput(),
+      EditorView.lineWrapping,
+      keymap.of([...defaultKeymap, ...historyKeymap, {
+        key: 'Mod-s',
+        run() { saveTextFile(); return true },
+      }]),
+      langExt,
+      syntaxHighlighting(isDark.value ? darkHighlight : lightHighlight),
+      themeCompartment.of(isDark.value ? darkTheme : lightTheme),
+      EditorView.updateListener.of(update => {
+        if (update.docChanged) {
+          textContent.value = update.state.doc.toString()
+        }
+      }),
+      isEditorReadOnly.value ? EditorState.readOnly.of(true) : [],
+    ],
+  })
+
+  cmView = new EditorView({ state, parent: editorContainer.value })
+}
+
+function destroyCodeMirror() {
+  if (cmView) { cmView.destroy(); cmView = null }
+}
+
+// Watch isDark to switch theme dynamically
+watch(isDark, async (dark) => {
+  if (cmView && themeCompartment) {
+    const [
+      { EditorView },
+      { syntaxHighlighting, HighlightStyle },
+      { tags },
+    ] = await Promise.all([
+      import('@codemirror/view'),
+      import('@codemirror/language'),
+      import('@lezer/highlight'),
+    ])
+    const { lightHighlight, darkHighlight, lightTheme, darkTheme } = await getCmThemes(EditorView, HighlightStyle, tags)
+    cmView.dispatch({
+      effects: themeCompartment.reconfigure(dark ? darkTheme : lightTheme),
+    })
+  }
 })
 
 async function loadTextContent() {
@@ -239,6 +343,8 @@ async function loadTextContent() {
     textContent.value = await resp.text()
   } catch { textContent.value = '// Failed to load file content' }
   loading.value = false
+  await nextTick()
+  initCodeMirror()
 }
 
 function buildGallery() {
@@ -257,7 +363,7 @@ function buildGallery() {
 
 // ---- Initializers ----
 
-function initImageViewer() {
+async function initImageViewer() {
   if (!imageContainer.value) return
   destroyImageViewer()
   imageContainer.value.innerHTML = ''
@@ -280,6 +386,9 @@ function initImageViewer() {
     imageContainer.value!.appendChild(img)
   })
 
+  await import('viewerjs/dist/viewer.css')
+  const { default: ViewerClass } = await import('viewerjs')
+
   // Fetch current image as blob (anti iOS system preview), then create ViewerJS
   const currentUrl = getImagePreviewUrl(list[galleryIndex.value])
   fetch(currentUrl)
@@ -291,7 +400,7 @@ function initImageViewer() {
       const allImgs = imageContainer.value!.querySelectorAll('img')
       allImgs[galleryIndex.value].src = imageBlobUrl
 
-      viewer = new Viewer(imageContainer.value!, {
+      viewer = new ViewerClass(imageContainer.value!, {
         initialViewIndex: galleryIndex.value,
         navbar: true,
         toolbar: {
@@ -327,10 +436,11 @@ function navigateImage(dir: number) {
   viewer.view(newIdx)
 }
 
-function initVideoPlayer() {
+async function initVideoPlayer() {
   if (!videoContainer.value) return
   try {
-    artPlayer = new ArtPlayer({
+    const { default: ArtPlayerClass } = await import('artplayer')
+    artPlayer = new ArtPlayerClass({
       container: videoContainer.value,
       url: previewUrl.value,
       autoplay: false,
@@ -353,10 +463,12 @@ function initVideoPlayer() {
   } catch (err) { console.error('ArtPlayer init error:', err); loading.value = false }
 }
 
-function initAudioPlayer() {
+async function initAudioPlayer() {
   if (!audioContainer.value) return
   try {
-    aplayerInst = new APlayer({
+    await import('aplayer/dist/APlayer.min.css')
+    const { default: APlayerClass } = await import('aplayer')
+    aplayerInst = new APlayerClass({
       container: audioContainer.value,
       autoplay: false,
       volume: 0.3,
@@ -392,6 +504,7 @@ function destroyPlayers() {
   if (artPlayer) { try { artPlayer.destroy() } catch {}; artPlayer = null }
   if (aplayerInst) { try { aplayerInst.destroy() } catch {}; aplayerInst = null }
   destroyImageViewer()
+  destroyCodeMirror()
   if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null }
   pdfDoc = null; pdfTotalPages.value = 0; pdfPageNum.value = 1
   galleryFiles.value = []; galleryIndex.value = 0
@@ -553,11 +666,11 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             </div>
           </div>
 
-          <!-- TEXT/CODE: Monaco Editor + Save -->
+          <!-- TEXT/CODE: CodeMirror Editor + Save -->
           <div v-if="!loading && (fileType === 'text' || fileType === 'markdown')" class="flex flex-col h-full" style="min-height: 60vh">
             <div class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
-              <span class="text-xs" style="color: var(--text-secondary-color)">{{ monacoLanguage }}</span>
+              <span class="text-xs" style="color: var(--text-secondary-color)">{{ cmLanguageName }}</span>
               <span class="flex-1" />
               <button v-if="!isEditorReadOnly" @click="saveTextFile"
                 :disabled="isSaving"
@@ -567,14 +680,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
               </button>
             </div>
             <div class="flex-1 rounded-b-lg overflow-hidden border-t-0 relative" style="border-color: var(--border-color); min-height: 55vh">
-              <VueMonacoEditor
-                v-model:value="textContent"
-                :language="monacoLanguage"
-                :theme="isDark ? 'vs-dark' : 'vs'"
-                height="55vh"
-                :options="monacoOptions"
-                @mount="handleMonacoMount"
-              />
+              <div ref="editorContainer" class="h-full" />
             </div>
             <!-- Save toast: centered overlay with auto-dismiss -->
             <Transition name="toast">

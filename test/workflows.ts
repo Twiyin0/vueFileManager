@@ -716,6 +716,41 @@ async function testAdmin() {
     console.log(yellow(`  testuser 新配额: ${tu.storage_quota} (5GB)`))
   })
 
+  // ---- 配额超限测试 ----
+  let originalQuota = 0
+  await test('配额超限准备 - 获取当前配额', async () => {
+    const { data } = await api('GET', `/admin/users/${testUserId}`, null, auth(adminToken))
+    originalQuota = data.user.storage.quota
+    assert(originalQuota > 0, `配额获取失败: ${originalQuota}`)
+    console.log(yellow(`  当前配额: ${originalQuota}`))
+  })
+
+  await test('配额超限准备 - 设置极小配额 (100B)', async () => {
+    const { status } = await api('PUT', `/admin/users/${testUserId}/quota`, { quota: 100 }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+  })
+
+  await test('POST /files/upload - 配额超限应返回 400', async () => {
+    const pools = await api('GET', '/storage-pools', null, auth(userToken))
+    const pool = pools.data.pools.find((p: any) => p.isDefault) || pools.data.pools[0]
+    const fd = new FormData()
+    fd.append('file', new Blob(['x'.repeat(200)]), 'quota-test.txt')
+    const res = await fetch(`${BASE}/files/upload?path=/&poolId=${pool.id}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userToken}` },
+      body: fd,
+    })
+    const data = await res.json().catch(() => null)
+    assert(res.status === 400, `期望 400，实际 ${res.status}`)
+    assert(data?.error?.includes('存储空间不足'), `错误信息不匹配: ${data?.error}`)
+    console.log(yellow(`  返回: ${res.status} - ${data.error}`))
+  })
+
+  await test('配额恢复 - 还原原始配额', async () => {
+    const { status } = await api('PUT', `/admin/users/${testUserId}/quota`, { quota: originalQuota }, auth(adminToken))
+    assert(status === 200, `状态码 ${status}`)
+  })
+
   await test('POST /admin/users - 创建用户', async () => {
     const { status, data } = await api('POST', '/admin/users', { username: 'admin-created', password: 'admin123456', role: 'user' }, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)

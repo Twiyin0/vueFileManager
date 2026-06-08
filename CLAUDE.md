@@ -52,7 +52,7 @@ VueFileManager v1.0.0-beta.10
 │   ├── Header：Logo + 页面标题 + API文档/主题开发链接 + 主题切换 + 用户操作
 │   ├── Sidebar：可收缩可拖拽（160-400px），localStorage 持久化
 │   ├── FileList：常驻复选框，自动批量模式，右键菜单含批量操作
-│   ├── FilePreview：ArtPlayer/APlayer/ViewerJS/Monaco/PDF.js
+│   ├── FilePreview：ArtPlayer/APlayer/ViewerJS/CodeMirror 6/PDF.js
 │   ├── APlayer：浮动左下角，点击音频触发，自动添加目录歌曲
 │   └── 通用组件：Toast/ConfirmDialog/MoveDialog/ShareDialog/SpotlightSearch
 │
@@ -69,7 +69,7 @@ VueFileManager v1.0.0-beta.10
 └── 🚀 部署
     ├── 构建：NODE_OPTIONS='--max-old-space-size=3072' yarn build
     ├── 2G 内存服务器需 4G swap
-    └── Monaco Editor manualChunks 分包优化
+    └── CodeMirror 6 按需懒加载（替代 Monaco Editor）
 ```
 
 ## 暗色模式样式规范
@@ -219,7 +219,7 @@ VueFileManager v1.0.0-beta.10
 | 视频 | ArtPlayer | `artplayer` |
 | 音频 | APlayer | `aplayer` |
 | 图片 | ViewerJS | `viewerjs` |
-| 文本/代码 | Monaco Editor | `@guolao/vue-monaco-editor` + `monaco-editor` |
+| 文本/代码 | CodeMirror 6 | `codemirror` + 语言包（按需懒加载） |
 | PDF | iframe | - |
 
 ### 预览组件使用
@@ -256,7 +256,7 @@ VueFileManager v1.0.0-beta.10
 - **ArtPlayer**：通过 JS `theme` 选项设置强调色，UI 天生暗色无需 CSS
 - **APlayer**：大量硬编码亮色值需覆盖（背景/文字/边框/进度条/列表），见 `main.css` 中 `.dark .aplayer` 规则
 - **ViewerJS**：工具栏/导航栏底色覆盖为暗色半透明
-- **Monaco Editor**：通过响应式 prop `:theme="isDark ? 'vs-dark' : 'vs'"` 切换
+- **CodeMirror 6**：通过 `Compartment` 动态 reconfigure 主题（`EditorView.theme()` + `HighlightStyle`）
 
 主题切换检测：`MutationObserver` 监听 `<html>` 的 `class` 变化，`isDark` ref 响应式联动。
 
