@@ -77,6 +77,38 @@ async function saveQuota() {
   }
 }
 
+// 上传限制
+const uploadLimit = ref(100)
+const showUploadLimitDialog = ref(false)
+const newUploadLimit = ref('')
+
+async function fetchUploadLimit() {
+  try {
+    const res = await api.get<{ upload_limit: number }>('/admin/upload-limit')
+    uploadLimit.value = res.upload_limit
+  } catch {}
+}
+
+function openUploadLimitDialog() {
+  newUploadLimit.value = String(uploadLimit.value)
+  showUploadLimitDialog.value = true
+}
+
+async function saveUploadLimit() {
+  const val = parseInt(newUploadLimit.value)
+  if (isNaN(val) || val < 1 || val > 10240) {
+    alert('请输入 1-10240 之间的数字')
+    return
+  }
+  try {
+    await api.put('/admin/upload-limit', { upload_limit: val })
+    uploadLimit.value = val
+    showUploadLimitDialog.value = false
+  } catch (err: any) {
+    alert(err.message)
+  }
+}
+
 // IP 黑名单
 interface IpBlacklistEntry {
   id: number
@@ -123,7 +155,10 @@ async function fetchUsers() {
   }
 }
 
-onMounted(fetchUsers)
+onMounted(() => {
+  fetchUsers()
+  fetchUploadLimit()
+})
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -498,6 +533,29 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- 上传限制 -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="upload" class="w-5 h-5 text-blue-500" />
+            上传限制
+          </h2>
+          <button @click="openUploadLimitDialog" class="btn-secondary text-sm flex items-center gap-1.5">
+            <Icon name="pen" class="w-4 h-4" />
+            修改
+          </button>
+        </div>
+        <div class="card">
+          <div class="flex items-center gap-3">
+            <span class="text-sm dark:text-dark-text-secondary" style="color: var(--text-secondary-color)">单文件上传大小限制：</span>
+            <span class="text-lg font-semibold dark:text-dark-text" style="color: var(--text-color)">{{ uploadLimit }} MB</span>
+          </div>
+          <p class="text-xs mt-2 dark:text-dark-text-secondary" style="color: var(--text-secondary-color)">
+            在 config.yml 中配置 upload_limit 字段，或在此处修改（重启后完全生效）
+          </p>
+        </div>
+      </div>
+
       <!-- IP 黑名单/白名单 -->
       <div class="mt-8">
         <div class="flex items-center justify-between mb-4">
@@ -784,6 +842,25 @@ onMounted(() => {
           <div class="flex justify-end gap-3">
             <button @click="quotaDialog.show = false" class="btn-secondary text-sm">取消</button>
             <button @click="saveQuota" class="btn-primary text-sm">保存</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 上传限制对话框 -->
+    <Teleport to="body">
+      <div v-if="showUploadLimitDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showUploadLimitDialog = false"/>
+        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+          <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">修改上传限制</h3>
+          <div class="mb-4">
+            <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">单文件大小限制（MB）</label>
+            <input v-model="newUploadLimit" type="number" min="1" max="10240" class="input-field" placeholder="100" />
+            <p class="text-xs mt-1" style="color: var(--text-secondary-color)">范围：1 - 10240 MB</p>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button @click="showUploadLimitDialog = false" class="btn-secondary text-sm">取消</button>
+            <button @click="saveUploadLimit" class="btn-primary text-sm">保存</button>
           </div>
         </div>
       </div>

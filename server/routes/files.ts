@@ -2,12 +2,16 @@ import { Router, Response } from 'express'
 import multer from 'multer'
 import crypto from 'crypto'
 import fs from 'fs/promises'
+import fsSync from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { flexibleAuth, ApiKeyRequest, requirePermission } from '../middleware/apikey'
 import { getStorage, getStorageByPoolId } from '../services/factory'
+import { LocalStorage } from '../services/local'
+import { PrefixStorage } from '../services/prefix'
+import config from '../config'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const UPLOAD_TEMP_DIR = path.join(__dirname, '..', '..', 'data', 'uploads')
@@ -23,7 +27,7 @@ function isJunkFile(filename: string): boolean {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: config.upload_limit * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (isJunkFile(file.originalname)) {
       cb(new Error(`JUNK:${file.originalname}`))
@@ -717,12 +721,13 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
     if (!filePath) {
       return res.status(400).json({ error: '缺少文件路径' })
     }
-    const data = await storage.download(filePath)
+
     const ext = filePath.split('.').pop()?.toLowerCase() || ''
     const mimeTypes: Record<string, string> = {
       'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
       'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
       'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
+      'aac': 'audio/aac', 'm4a': 'audio/mp4',
       'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'flac': 'audio/flac',
       'pdf': 'application/pdf',
       'txt': 'text/plain', 'md': 'text/markdown', 'json': 'application/json',
@@ -731,7 +736,43 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
       'py': 'text/x-python', 'java': 'text/x-java', 'go': 'text/x-go',
       'rs': 'text/x-rust', 'vue': 'text/x-vue', 'sh': 'text/x-shellscript',
     }
-    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
+    const contentType = mimeTypes[ext] || 'application/octet-stream'
+
+    // 音频/视频文件支持 Range 请求（移动端播放必须）
+    const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
+    const innerStorage = storage instanceof PrefixStorage ? (storage as any).inner : storage
+    if (isMedia && innerStorage instanceof LocalStorage) {
+      const fullPath = await (innerStorage as any).resolvePath(filePath)
+      const stat = await fs.stat(fullPath)
+      const fileSize = stat.size
+      const range = req.headers.range
+
+      res.setHeader('Accept-Ranges', 'bytes')
+      res.setHeader('Content-Type', contentType)
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-')
+        const start = parseInt(parts[0], 10)
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+        const chunkSize = end - start + 1
+
+        res.status(206)
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+        res.setHeader('Content-Length', chunkSize)
+
+        const stream = fsSync.createReadStream(fullPath, { start, end })
+        stream.pipe(res)
+      } else {
+        res.setHeader('Content-Length', fileSize)
+        const stream = fsSync.createReadStream(fullPath)
+        stream.pipe(res)
+      }
+      return
+    }
+
+    // 非本地存储或非媒体文件：读取整个文件
+    const data = await storage.download(filePath)
+    res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Length', data.length)
     res.send(data)
   } catch (err: any) {

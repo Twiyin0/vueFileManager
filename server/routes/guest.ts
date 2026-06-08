@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import multer from 'multer'
 import db from '../db'
 import { getStorageByPoolId } from '../services/factory'
+import config from '../config'
 import { Request } from 'express'
 
 const router = Router()
@@ -21,7 +22,7 @@ const mimeTypes: Record<string, string> = {
 }
 
 // multer 配置
-const upload = multer({ storage: multer.memoryStorage() })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.upload_limit * 1024 * 1024 } })
 
 // 权限别名映射：高级权限包含低级权限
 const permissionAliases: Record<string, string[]> = {

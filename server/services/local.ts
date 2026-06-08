@@ -79,7 +79,7 @@ export class LocalStorage implements StorageProvider {
   }
 
   /** Resolve a possibly-mangled path by matching against actual filesystem entries */
-  private async resolvePath(filePath: string): Promise<string> {
+  async resolvePath(filePath: string): Promise<string> {
     const direct = this.fullPath(filePath)
     try { await fs.access(direct); return direct } catch {}
     // ENOENT — try matching against sibling files (fixes encoding mismatches on external drives)

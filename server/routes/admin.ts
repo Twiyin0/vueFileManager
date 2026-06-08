@@ -1,8 +1,12 @@
 import { Router, Response } from 'express'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
+import yaml from 'js-yaml'
 import db, { syncStoragePoolsFromConfig } from '../db'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth'
 import { clearStorageCache } from '../services/factory'
+import config from '../config'
 import { getUserQuota } from '../services/quota'
 
 const router = Router()
@@ -408,6 +412,33 @@ router.put('/ip-list/mode', authMiddleware, adminMiddleware, (req: AuthRequest, 
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
+})
+
+// 获取上传限制
+router.get('/upload-limit', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {
+  res.json({ upload_limit: config.upload_limit })
+})
+
+// 更新上传限制
+router.put('/upload-limit', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+  const { upload_limit } = req.body
+  if (typeof upload_limit !== 'number' || upload_limit < 1 || upload_limit > 10240) {
+    return res.status(400).json({ error: '上传限制必须在 1-10240 MB 之间' })
+  }
+
+  // 更新内存中的配置
+  config.upload_limit = upload_limit
+
+  // 写入 config.yml
+  try {
+    const configPath = path.join(process.cwd(), 'config.yml')
+    const fileContents = fs.readFileSync(configPath, 'utf8')
+    const yamlConfig = yaml.load(fileContents) as any
+    yamlConfig.upload_limit = upload_limit
+    fs.writeFileSync(configPath, yaml.dump(yamlConfig, { lineWidth: -1 }), 'utf8')
+  } catch {}
+
+  res.json({ upload_limit, message: '上传限制已更新（重启后完全生效）' })
 })
 
 export default router
