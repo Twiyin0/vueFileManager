@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore, ThemeMode } from '@/stores/theme'
-import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import GuestShareDialog from '@/components/GuestShareDialog.vue'
 import Icon from '@/components/Icon.vue'
@@ -122,7 +121,6 @@ function formatDate(dateStr: string): string {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <!-- 提示消息 -->
       <div v-if="message" class="mb-4 p-3 rounded-lg text-sm"
@@ -335,5 +333,4 @@ function formatDate(dateStr: string): string {
       @close="showEditDialog = false; editShare = null"
       @done="loadGuestShares()"
     />
-  </Layout>
 </template>

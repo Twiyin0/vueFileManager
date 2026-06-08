@@ -90,18 +90,28 @@ body {
 
 /* 按钮通用样式 */
 .btn-primary {
-  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply px-4 py-2 rounded-lg font-medium transition-colors duration-150;
   background-color: var(--accent-color);
   color: white;
 }
 
 .btn-primary:hover {
   opacity: 0.9;
-  transform: translateY(-1px);
+}
+
+.dark .btn-primary {
+  background-color: var(--accent-soft-color);
+  color: var(--accent-color);
+  border: 1px solid transparent;
+}
+
+.dark .btn-primary:hover {
+  background-color: var(--accent-color);
+  color: white;
 }
 
 .btn-secondary {
-  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply px-4 py-2 rounded-lg font-medium transition-colors duration-150;
   background-color: var(--hover-color);
   color: var(--text-color);
   border: 1px solid var(--border-color);
@@ -111,8 +121,18 @@ body {
   opacity: 0.85;
 }
 
+.dark .btn-secondary {
+  background-color: var(--card-color);
+  color: var(--text-secondary-color);
+}
+
+.dark .btn-secondary:hover {
+  background-color: var(--hover-color);
+  color: var(--text-color);
+}
+
 .btn-danger {
-  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply px-4 py-2 rounded-lg font-medium transition-colors duration-150;
   background-color: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
@@ -149,7 +169,6 @@ body {
 .input-field:focus {
   outline: none;
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.15);
 }
 
 /* 下拉选择框紧凑样式 */
@@ -158,18 +177,25 @@ select.input-field {
 }
 
 .dark .input-field:focus {
-  box-shadow: 0 0 0 3px rgba(107, 124, 255, 0.15);
+  border-color: var(--accent-color);
 }
 
 /* 卡片 */
 .card {
-  @apply rounded-xl p-5 transition-all duration-200;
+  @apply rounded-lg p-5 transition-all duration-150;
   background-color: var(--card-color);
   border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-
 .dark .card {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.card.cursor-pointer:hover {
+  background-color: var(--hover-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.dark .card.cursor-pointer:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* 缩略图网格模式 */
@@ -207,6 +233,68 @@ select.input-field {
 /* =============================================
    第三方组件暗色模式适配
    ============================================= */
+
+/* ---- APlayer 浮动播放器定位 ---- */
+.aplayer-float {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 40;
+}
+.aplayer-float .aplayer-wrap {
+  width: 18rem; /* w-72 */
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+.dark .aplayer-float .aplayer-wrap {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* 移动端：底部居中，更宽 */
+.aplayer-float.aplayer-mobile {
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+}
+.aplayer-float.aplayer-mobile .aplayer-wrap {
+  width: 100%;
+}
+
+/* 移动端 APlayer 样式覆盖 */
+.aplayer-float.aplayer-mobile .aplayer {
+  font-size: 13px;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info {
+  padding: 8px 10px 6px;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info .aplayer-music {
+  flex: 1;
+  min-width: 0;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info .aplayer-music .aplayer-title {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info .aplayer-music .aplayer-author {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info .aplayer-controller {
+  flex-shrink: 0;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info .aplayer-controller .aplayer-bar-wrap {
+  margin: 0 4px;
+}
+.aplayer-float.aplayer-mobile .aplayer .aplayer-info .aplayer-time {
+  font-size: 11px;
+}
+/* 移动端隐藏播放列表（太占空间） */
+.aplayer-float.aplayer-mobile .aplayer-list {
+  max-height: 120px;
+}
 
 /* ---- APlayer 暗色模式 ---- */
 .aplayer {
@@ -415,6 +503,39 @@ select.input-field {
 .toast-enter-from { opacity: 0; transform: translateX(-50%) translateY(10px); }
 .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 
+/* ---- 视图模式切换按钮 ---- */
+.view-mode-toggle {
+  background-color: var(--surface-color);
+}
+.view-mode-toggle button {
+  color: var(--text-secondary-color);
+}
+.view-mode-toggle button:hover {
+  background-color: var(--hover-color);
+}
+.view-mode-active {
+  background-color: var(--accent-soft-color) !important;
+  color: var(--accent-color) !important;
+}
+
+/* ---- 移动端全局适配 ---- */
+@media (max-width: 639px) {
+  /* 防止横向滚动 */
+  html, body {
+    overflow-x: hidden;
+  }
+
+  /* 按钮最小点击区域（iOS HIG 推荐 44px） */
+  button, .btn-primary, .btn-secondary, .btn-danger {
+    min-height: 36px;
+  }
+
+  /* 对话框容器移动端间距 */
+  .dialog-container {
+    padding: 0.5rem !important;
+  }
+}
+
 /* ---- 复选框统一样式（排除 sr-only toggle） ---- */
 input[type="checkbox"]:not(.sr-only) {
   appearance: none;
@@ -449,5 +570,5 @@ input[type="checkbox"]:not(.sr-only):checked::after {
 }
 input[type="checkbox"]:not(.sr-only):focus {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 25%, transparent);
+  border-color: var(--accent-color);
 }

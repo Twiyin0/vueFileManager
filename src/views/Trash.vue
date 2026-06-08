@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
-import Layout from '@/components/Layout.vue'
 import Icon from '@/components/Icon.vue'
 
 const fileIconMap: Record<string, { icon: string; color: string }> = {
@@ -92,7 +91,6 @@ function formatDate(date: string) {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <div v-if="items.length > 0" class="flex justify-end mb-4">
         <button @click="emptyTrash" class="btn-danger text-sm">清空回收站</button>
@@ -141,5 +139,4 @@ function formatDate(date: string) {
         <p class="text-gray-500 dark:text-dark-text-secondary">删除的文件会出现在这里</p>
       </div>
     </div>
-  </Layout>
 </template>

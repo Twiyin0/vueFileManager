@@ -69,7 +69,7 @@ onMounted(async () => {
             v-for="user in users"
             :key="user.username"
             :to="`/guest/${user.username}`"
-            class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group"
+            class="card flex items-center gap-4 cursor-pointer group"
           >
             <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-dark-accent-soft flex items-center justify-center">
               <Icon name="user" class="w-6 h-6 text-blue-500 dark:text-dark-accent" />

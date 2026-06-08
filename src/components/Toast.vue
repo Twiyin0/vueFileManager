@@ -32,7 +32,7 @@ watch(() => props.show, (val) => {
   <Teleport to="body">
     <Transition name="toast">
       <div v-if="visible" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] pointer-events-none">
-        <div class="px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 pointer-events-auto"
+        <div class="px-4 py-2.5 rounded-lg shadow-sm text-sm font-medium flex items-center gap-2 pointer-events-auto"
           :class="{
             'bg-green-500 text-white': type === 'success',
             'bg-red-500 text-white': type === 'error',

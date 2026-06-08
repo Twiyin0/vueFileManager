@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { api } from '@/api'
-import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
 
@@ -352,7 +351,6 @@ onMounted(() => {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <div class="flex justify-end mb-4">
         <button @click="openCreateDialog" class="btn-primary text-sm flex items-center gap-1.5">
@@ -562,7 +560,7 @@ onMounted(() => {
 
     <!-- 添加 IP 黑名单弹窗 -->
     <Teleport to="body">
-      <div v-if="showAddIpDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showAddIpDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showAddIpDialog = false"/>
         <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">添加 IP {{ ipListMode === 'whitelist' ? '白名单' : '黑名单' }}</h3>
@@ -589,7 +587,7 @@ onMounted(() => {
 
     <!-- 创建用户弹窗 -->
     <Teleport to="body">
-      <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateDialog = false"/>
         <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">创建用户</h3>
@@ -626,7 +624,7 @@ onMounted(() => {
 
     <!-- 用户详情弹窗 -->
     <Teleport to="body">
-      <div v-if="showDetailDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showDetailDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showDetailDialog = false"/>
         <div class="relative card w-full max-w-lg max-h-[80vh] overflow-y-auto" style="padding: 1.5rem">
           <div class="flex items-center justify-between mb-4">
@@ -742,7 +740,7 @@ onMounted(() => {
 
     <!-- 重置密码弹窗 -->
     <Teleport to="body">
-      <div v-if="showResetPwdDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showResetPwdDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showResetPwdDialog = false"/>
         <div class="relative card w-full max-w-sm" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-1" style="color: var(--text-color)">重置密码</h3>
@@ -773,7 +771,7 @@ onMounted(() => {
 
     <!-- 配额调整对话框 -->
     <Teleport to="body">
-      <div v-if="quotaDialog.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="quotaDialog.show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="quotaDialog.show = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">调整存储配额</h3>
@@ -790,5 +788,4 @@ onMounted(() => {
         </div>
       </div>
     </Teleport>
-  </Layout>
 </template>

@@ -9,7 +9,7 @@
  * - 亮暗切换由系统 .dark 类控制，主题只改颜色值
  */
 
-:root {
+/* :root {
   --accent-color: #8b5cf6;
   --accent-soft-color: #ede9fe;
 }
@@ -17,4 +17,14 @@
 .dark {
   --accent-color: #a78bfa;
   --accent-soft-color: #4c1d95;
+} */
+
+:root {
+  --accent-color: #3b82f6;      /* 柔和蓝色，对比度适中 */
+  --accent-soft-color: #dbeafe;  /* 极浅蓝背景 */
+}
+
+.dark {
+  --accent-color: #60a5fa;      /* 较亮的雾蓝，不刺眼 */
+  --accent-soft-color: #1e3a8a;  /* 深蓝背景，沉稳舒适 */
 }

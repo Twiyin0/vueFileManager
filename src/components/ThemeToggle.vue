@@ -1,34 +1,74 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useThemeStore, ThemeMode } from '@/stores/theme'
 import Icon from '@/components/Icon.vue'
 
 const themeStore = useThemeStore()
+const showDropdown = ref(false)
+const dropdownRef = ref<HTMLDivElement>()
 
-const themes: { mode: ThemeMode; label: string; icon: string }[] = [
-  { mode: 'light', label: '亮色', icon: 'sun' },
-  { mode: 'dark', label: '暗色', icon: 'moon' },
-  { mode: 'system', label: '跟随系统', icon: 'system' },
+const themes: { mode: ThemeMode; label: string; icon: string; activeColor: string }[] = [
+  { mode: 'light', label: '亮色', icon: 'sun', activeColor: '#eab308' },
+  { mode: 'dark', label: '暗色', icon: 'moon', activeColor: '#60a5fa' },
+  { mode: 'system', label: '跟随系统', icon: 'monitor', activeColor: '#22c55e' },
 ]
+
+const currentTheme = computed(() => themes.find(t => t.mode === themeStore.mode) || themes[2])
+
+function handleClickOutside(e: MouseEvent) {
+  if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
+    showDropdown.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleClickOutside))
+
+function selectTheme(mode: ThemeMode) {
+  themeStore.setTheme(mode)
+  showDropdown.value = false
+}
 </script>
 
 <template>
-  <div class="flex items-center gap-0.5 p-0.5 rounded-lg" style="background-color: var(--hover-color)">
+  <div ref="dropdownRef" class="relative">
     <button
-      v-for="theme in themes"
-      :key="theme.mode"
-      @click="themeStore.setTheme(theme.mode)"
-      class="p-1.5 rounded-md transition-all"
-      :style="themeStore.mode === theme.mode
-        ? 'background-color: var(--surface-color); box-shadow: 0 1px 2px rgba(0,0,0,0.1)'
-        : ''"
-      :title="theme.label"
+      @click.stop="showDropdown = !showDropdown"
+      class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
+      :title="currentTheme.label"
+      style="color: var(--text-secondary-color)"
     >
-      <!-- 太阳 -->
-      <Icon v-if="theme.icon === 'sun'" name="sun" class="w-5 h-5" :style="{ color: themeStore.mode === theme.mode ? '#eab308' : 'var(--text-secondary-color)' }" />
-      <!-- 月亮 -->
-      <Icon v-if="theme.icon === 'moon'" name="moon" class="w-5 h-5" :style="{ color: themeStore.mode === theme.mode ? '#60a5fa' : 'var(--text-secondary-color)' }" />
-      <!-- 系统 -->
-      <Icon v-if="theme.icon === 'system'" name="monitor" class="w-5 h-5" :style="{ color: themeStore.mode === theme.mode ? '#22c55e' : 'var(--text-secondary-color)' }" />
+      <Icon :name="currentTheme.icon" class="w-5 h-5 flex-shrink-0" :style="{ color: currentTheme.activeColor }" />
+      <span class="text-xs hidden sm:inline">{{ currentTheme.label }}</span>
     </button>
+    <!-- 下拉菜单 -->
+    <Transition name="dropdown">
+      <div v-if="showDropdown"
+        class="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg border py-1 shadow-sm"
+        style="background-color: var(--card-color); border-color: var(--border-color)">
+        <button
+          v-for="theme in themes"
+          :key="theme.mode"
+          @click.stop="selectTheme(theme.mode)"
+          class="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+          :style="{ color: themeStore.mode === theme.mode ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: themeStore.mode === theme.mode ? '500' : 'normal' }"
+        >
+          <Icon :name="theme.icon" class="w-4 h-4" :style="{ color: themeStore.mode === theme.mode ? theme.activeColor : 'var(--text-secondary-color)' }" />
+          {{ theme.label }}
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
+
+<style scoped>
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all 0.15s ease;
+}
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>

@@ -181,10 +181,10 @@ function submitPassword() {
 <template>
   <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
     <!-- Header -->
-    <header class="h-11 flex items-center justify-between px-4 border-b flex-shrink-0" style="background-color: var(--surface-color); border-color: var(--border-color)">
+    <header class="h-11 flex items-center justify-between px-3 sm:px-4 flex-shrink-0" style="background-color: var(--surface-color)">
       <router-link to="/guest" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
         <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
-        <span style="color: var(--text-color)">VueFileManager</span>
+        <span class="hidden sm:inline" style="color: var(--text-color)">VueFileManager</span>
       </router-link>
       <ThemeToggle />
     </header>
@@ -200,17 +200,17 @@ function submitPassword() {
       </div>
 
       <!-- 错误 -->
-      <div v-else-if="error" class="max-w-md mx-auto p-8 text-center">
-        <Icon name="exclamation" class="w-16 h-16 mx-auto mb-4 text-red-400" />
-        <h2 class="text-xl font-semibold mb-2" style="color: var(--text-color)">访问失败</h2>
-        <p style="color: var(--text-secondary-color)">{{ error }}</p>
+      <div v-else-if="error" class="max-w-md mx-auto p-4 sm:p-8 text-center">
+        <Icon name="exclamation" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-red-400" />
+        <h2 class="text-lg sm:text-xl font-semibold mb-2" style="color: var(--text-color)">访问失败</h2>
+        <p class="text-sm" style="color: var(--text-secondary-color)">{{ error }}</p>
       </div>
 
       <!-- 需要密码 -->
-      <div v-else-if="needPassword" class="max-w-md mx-auto p-8">
-        <div class="text-center mb-6">
-          <Icon name="lock" class="w-16 h-16 mx-auto mb-4" style="color: var(--accent-color)" />
-          <h2 class="text-xl font-semibold mb-2" style="color: var(--text-color)">需要密码</h2>
+      <div v-else-if="needPassword" class="max-w-md mx-auto p-4 sm:p-8">
+        <div class="text-center mb-4 sm:mb-6">
+          <Icon name="lock" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4" style="color: var(--accent-color)" />
+          <h2 class="text-lg sm:text-xl font-semibold mb-2" style="color: var(--text-color)">需要密码</h2>
           <p class="text-sm" style="color: var(--text-secondary-color)">此分享链接需要密码才能访问</p>
           <p v-if="shareInfo?.owner" class="text-xs mt-1" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</p>
         </div>
@@ -226,19 +226,19 @@ function submitPassword() {
       <template v-else-if="shareInfo && shareInfo.fileType === 'folder'">
         <div class="px-4 pt-4">
           <!-- 面包屑 -->
-          <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap">
-            <button @click="fetchFolderContents()" class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover" style="color: var(--accent-color)">
+          <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap min-w-0">
+            <button @click="fetchFolderContents()" class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover truncate max-w-[120px] sm:max-w-none" style="color: var(--accent-color)">
               {{ shareInfo.fileName }}
             </button>
             <template v-for="(segment, index) in currentSubPath.split('/').filter(Boolean)" :key="index">
-              <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              <Icon name="chevron-right" class="w-4 h-4 flex-shrink-0" style="color: var(--text-secondary-color)" />
               <button @click="fetchFolderContents(currentSubPath.split('/').filter(Boolean).slice(0, index + 1).join('/'))"
-                class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover truncate max-w-[100px] sm:max-w-none"
                 :style="{ color: index === currentSubPath.split('/').filter(Boolean).length - 1 ? 'var(--text-color)' : 'var(--accent-color)' }">
                 {{ segment }}
               </button>
             </template>
-            <span class="ml-2 text-xs" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</span>
+            <span class="ml-2 text-xs hidden sm:inline flex-shrink-0" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</span>
           </div>
 
           <!-- 文件列表 -->
@@ -268,7 +268,7 @@ function submitPassword() {
               <Icon :name="getIconInfo(file.name, file.type).icon" :class="['w-5 h-5 flex-shrink-0', getIconInfo(file.name, file.type).color]" />
               <span class="flex-1 text-sm truncate" style="color: var(--text-color)">{{ file.name }}</span>
               <span v-if="file.type !== 'folder'" class="text-xs" style="color: var(--text-secondary-color)">{{ formatSize(file.size) }}</span>
-              <button v-if="file.type !== 'folder'" @click.stop="handleDownloadFile(file)" class="p-1 rounded hover:bg-gray-200 dark:hover:bg-dark-hover transition-colors" title="下载">
+              <button v-if="file.type !== 'folder'" @click.stop="handleDownloadFile(file)" class="p-2 sm:p-1 rounded hover:bg-gray-200 dark:hover:bg-dark-hover transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="下载">
                 <Icon name="download" class="w-4 h-4" style="color: var(--text-secondary-color)" />
               </button>
             </div>
@@ -277,10 +277,10 @@ function submitPassword() {
       </template>
 
       <!-- 单文件分享 -->
-      <div v-else-if="shareInfo" class="max-w-lg mx-auto p-8">
-        <div class="text-center mb-6">
-          <Icon name="file-alt" class="w-16 h-16 mx-auto mb-4" style="color: var(--accent-color)" />
-          <h2 class="text-xl font-semibold mb-2" style="color: var(--text-color)">{{ shareInfo.fileName }}</h2>
+      <div v-else-if="shareInfo" class="max-w-lg mx-auto p-4 sm:p-8">
+        <div class="text-center mb-4 sm:mb-6">
+          <Icon name="file-alt" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4" style="color: var(--accent-color)" />
+          <h2 class="text-lg sm:text-xl font-semibold mb-2 truncate px-4" style="color: var(--text-color)">{{ shareInfo.fileName }}</h2>
           <p class="text-sm" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</p>
         </div>
         <div v-if="!sign" class="mb-4 p-3 rounded-lg text-sm" style="background: rgba(245,158,11,0.1); color: #d97706">

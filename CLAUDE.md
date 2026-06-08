@@ -3,7 +3,7 @@
 ## 项目架构脑图
 
 ```
-VueFileManager v1.0.0-beta.10
+VueFileManager v1.0.0-beta.12
 ├── 🏗️ 技术栈
 │   ├── 前端：Vue 3 + TypeScript + Tailwind CSS 4 + Pinia
 │   ├── 后端：Express + TypeScript (tsx) + better-sqlite3
@@ -45,15 +45,18 @@ VueFileManager v1.0.0-beta.10
 │   ├── plugins/ 目录，manifest.json + style.css
 │   ├── CSS 变量覆盖（亮/暗模式分别定义）
 │   ├── /themes 页面管理开关
-│   └── /theme-docs 开发文档
+│   └── /theme-docs 详细开发文档（含组件类、布局结构、响应式、示例）
 │
 ├── 🖥️ 前端架构
+│   ├── App.vue（Layout 持久化，路由切换不重建侧边栏）
 │   ├── Layout.vue（Header + 侧边栏 + 主内容区 + Footer）
-│   ├── Header：Logo + 页面标题 + API文档/主题开发链接 + 主题切换 + 用户操作
-│   ├── Sidebar：可收缩可拖拽（160-400px），localStorage 持久化
+│   ├── Header：Logo + 页面标题 + 更多菜单（移动端 ⋮ 下拉）+ ThemeToggle（显示当前模式）
+│   ├── Sidebar：扁平化设计，激活项左侧竖条动画，可收缩可拖拽（160-400px）
 │   ├── FileList：常驻复选框，自动批量模式，右键菜单含批量操作
 │   ├── FilePreview：ArtPlayer/APlayer/ViewerJS/CodeMirror 6/PDF.js
-│   ├── APlayer：浮动左下角，点击音频触发，自动添加目录歌曲
+│   ├── APlayer：浮动播放器（桌面左下角/移动端底部全宽），移动端适配
+│   ├── 移动端适配：Header 精简、侧边栏覆盖层、按钮图标化、对话框紧凑
+│   ├── 页面切换动效（fade + translateY）
 │   └── 通用组件：Toast/ConfirmDialog/MoveDialog/ShareDialog/SpotlightSearch
 │
 ├── 🗄️ 数据库（SQLite）
@@ -68,6 +71,7 @@ VueFileManager v1.0.0-beta.10
 │
 └── 🚀 部署
     ├── 构建：NODE_OPTIONS='--max-old-space-size=3072' yarn build
+    ├── deploy.sh 自动部署脚本（rsync + Docker）
     ├── 2G 内存服务器需 4G swap
     └── CodeMirror 6 按需懒加载（替代 Monaco Editor）
 ```
@@ -154,14 +158,16 @@ VueFileManager v1.0.0-beta.10
 
 ## 布局系统
 
-`Layout.vue` 为全局布局组件，结构：
-- **Header** (`h-11`)：Logo（28×28px）+ 页面标题（带切换动效）+ 外部链接（API 文档、GitHub）+ 用户操作（ThemeToggle、设置、退出）
-- **侧边栏**：功能导航（文件管理、收藏、分享、回收站、存储池、设置、API Keys、管理、访客），可收缩可拖拽调节宽度
-- **主内容区**：`<slot />` 填充，独立滚动（`overflow-auto`）
+`Layout.vue` 为全局布局组件，在 `App.vue` 中持久化渲染（路由切换不销毁重建）。
+
+结构：
+- **Header** (`h-11`)：Logo（28×28px）+ 页面标题（桌面端，带切换动效）+ 外部链接（桌面端直接显示，移动端收进更多菜单 ⋮）+ ThemeToggle（下拉菜单，桌面端显示当前模式文字）+ 用户操作
+- **侧边栏**：扁平化设计（无边框分隔，激活项左侧 3px 竖条 + 动画），可收缩可拖拽调节宽度（160-400px），移动端为覆盖层（fixed + 半透明遮罩 + 滑入动效）
+- **主内容区**：`<slot />` 填充，独立滚动（`overflow-auto`），页面切换有 fade 动效
 - **回到顶部按钮**：滚动超 300px 出现，弹跳动效，`fixed` 定位右下角
 - **Footer**：版权信息 + 备案号（config.yml 可配置），内容区底部随内容滚动
 
-所有认证页面（Home、StoragePools、Settings 等）通过 `<Layout>` 包裹。`Home.vue` 中的文件夹目录树已移除，存储池选择改为面包屑首位下拉菜单。
+认证页面通过 `App.vue` 中 `v-if="needsLayout"` 判断是否包裹 Layout。路由使用 `meta.noLayout` 标记不需要 Layout 的页面（登录、访客、分享等）。
 
 ### 复选框样式
 

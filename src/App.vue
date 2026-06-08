@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { useThemeStore } from '@/stores/theme'
+import { useRoute } from 'vue-router'
+import Layout from '@/components/Layout.vue'
 
 const authStore = useAuthStore()
-const themeStore = useThemeStore()
+const route = useRoute()
+
+const needsLayout = computed(() => !route.meta.noLayout)
 
 onMounted(async () => {
   if (localStorage.getItem('token')) {
@@ -14,5 +17,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <router-view />
+  <Layout v-if="needsLayout">
+    <router-view />
+  </Layout>
+  <router-view v-else />
 </template>

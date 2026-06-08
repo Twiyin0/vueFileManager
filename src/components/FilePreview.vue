@@ -595,7 +595,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
     <!-- ============================================================ -->
     <!-- VIDEO / AUDIO / PDF / TEXT: 标准 modal 对话框                -->
     <!-- ============================================================ -->
-    <div v-else-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div v-else-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
 
       <div :class="['relative w-full max-h-[90vh] flex flex-col rounded-xl overflow-hidden', fileType === 'video' ? 'max-w-7xl' : 'max-w-5xl']" style="background-color: var(--surface-color)">

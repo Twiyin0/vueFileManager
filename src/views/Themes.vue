@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import Layout from '@/components/Layout.vue'
 import Icon from '@/components/Icon.vue'
 
 interface Theme {
@@ -51,7 +50,6 @@ async function toggleTheme(theme: Theme) {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
@@ -114,5 +112,4 @@ async function toggleTheme(theme: Theme) {
         </template>
       </template>
     </div>
-  </Layout>
 </template>

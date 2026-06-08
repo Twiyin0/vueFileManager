@@ -58,7 +58,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div v-if="visible" ref="menuRef"
-      class="fixed z-50 bg-white dark:bg-dark-card rounded-lg shadow-xl border dark:border-dark-border border-light-border py-1 min-w-[180px] max-h-[70vh] overflow-y-auto"
+      class="fixed z-50 bg-white dark:bg-dark-card rounded-lg shadow-sm border dark:border-dark-border border-light-border py-1 min-w-[180px] max-h-[70vh] overflow-y-auto"
       :style="menuStyle">
       <!-- 单文件操作 -->
       <template v-if="item">

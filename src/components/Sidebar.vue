@@ -6,6 +6,7 @@ import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
   collapsed?: boolean
+  mobile?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -72,16 +73,15 @@ function isActive(path: string) {
 
 <template>
   <aside
-    class="border-r flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden relative"
+    class="sidebar-aside flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden relative"
     :class="collapsed ? 'w-16' : ''"
     :style="collapsed ? '' : { width: sidebarWidth + 'px' }"
-    style="background-color: var(--surface-color); border-color: var(--border-color)"
   >
-    <!-- 收缩按钮（顶部） -->
-    <div class="px-2 pt-2 pb-1 border-b" style="border-color: var(--border-color)">
+    <!-- 收缩按钮 -->
+    <div class="px-2 pt-2 pb-1">
       <button
         @click="emit('toggle')"
-        class="w-full flex items-center justify-center p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+        class="w-full flex items-center justify-center p-2 transition-colors rounded-md"
         style="color: var(--text-secondary-color)"
         :title="collapsed ? '展开侧边栏' : '收缩侧边栏'"
       >
@@ -89,40 +89,36 @@ function isActive(path: string) {
       </button>
     </div>
 
-    <nav class="flex-1 px-2 py-2 space-y-1 overflow-y-auto">
+    <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
       <router-link
         v-for="item in navItems"
         :key="item.path"
         :to="item.path"
-        class="flex items-center rounded-lg text-sm transition-colors"
-        :class="collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'"
-        :style="isActive(item.path)
-          ? 'background-color: var(--accent-soft-color); color: var(--accent-color)'
-          : 'color: var(--text-secondary-color)'"
+        class="sidebar-item flex items-center text-sm transition-all duration-150 relative"
+        :class="[
+          collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5',
+          isActive(item.path) ? 'sidebar-item-active' : ''
+        ]"
         :title="collapsed ? item.label : undefined"
-        @mouseenter="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', isActive(item.path) ? '' : 'var(--hover-color)')"
-        @mouseleave="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', isActive(item.path) ? 'var(--accent-soft-color)' : '')"
       >
         <Icon :name="item.icon" class="w-5 h-5 flex-shrink-0" />
         <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
       </router-link>
 
       <template v-if="authStore.isAdmin">
-        <div class="pt-3 mt-3 border-t" style="border-color: var(--border-color)">
-          <p v-if="!collapsed" class="px-3 py-1 text-xs uppercase" style="color: var(--text-secondary-color)">管理</p>
+        <div class="sidebar-divider my-2 mx-1">
+          <p v-if="!collapsed" class="px-2 pt-1 pb-0.5 text-xs uppercase tracking-wider" style="color: var(--text-secondary-color); opacity: 0.6">管理</p>
         </div>
         <router-link
           v-for="item in adminItems"
           :key="item.path"
           :to="item.path"
-          class="flex items-center rounded-lg text-sm transition-colors"
-          :class="collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'"
-          :style="isActive(item.path)
-            ? 'background-color: var(--accent-soft-color); color: var(--accent-color)'
-            : 'color: var(--text-secondary-color)'"
+          class="sidebar-item flex items-center text-sm transition-all duration-150 relative"
+          :class="[
+            collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5',
+            isActive(item.path) ? 'sidebar-item-active' : ''
+          ]"
           :title="collapsed ? item.label : undefined"
-          @mouseenter="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', isActive(item.path) ? '' : 'var(--hover-color)')"
-          @mouseleave="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', isActive(item.path) ? 'var(--accent-soft-color)' : '')"
         >
           <Icon :name="item.icon" class="w-5 h-5 flex-shrink-0" />
           <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
@@ -130,28 +126,24 @@ function isActive(path: string) {
       </template>
 
       <!-- 访客模式入口 -->
-      <div class="pt-3 mt-3 border-t" style="border-color: var(--border-color)">
-        <router-link
-          to="/guest"
-          class="flex items-center rounded-lg text-sm transition-colors"
-          :class="collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'"
-          style="color: var(--text-secondary-color)"
-          :title="collapsed ? '访客模式' : undefined"
-          @mouseenter="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', 'var(--hover-color)')"
-          @mouseleave="($event.currentTarget as HTMLElement)?.style.setProperty('background-color', '')"
-        >
-          <Icon name="globe" class="w-5 h-5 flex-shrink-0" />
-          <span v-if="!collapsed" class="truncate">访客模式</span>
-        </router-link>
-      </div>
+      <div class="sidebar-divider my-2 mx-1" />
+      <router-link
+        to="/guest"
+        class="sidebar-item flex items-center text-sm transition-all duration-150 relative"
+        :class="collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5'"
+        :title="collapsed ? '访客模式' : undefined"
+      >
+        <Icon name="globe" class="w-5 h-5 flex-shrink-0" />
+        <span v-if="!collapsed" class="truncate">访客模式</span>
+      </router-link>
     </nav>
 
     <!-- 底部留白（给 APlayer 收缩图标留空间） -->
     <div class="h-12 flex-shrink-0" />
 
-    <!-- 拖拽调节条（展开时显示） -->
+    <!-- 拖拽调节条（桌面端展开时显示） -->
     <div
-      v-if="!collapsed"
+      v-if="!collapsed && !mobile"
       class="absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-10 group"
       @mousedown="onDragStart"
     >
@@ -160,3 +152,62 @@ function isActive(path: string) {
     </div>
   </aside>
 </template>
+
+<style scoped>
+.sidebar-aside {
+  background-color: var(--surface-color);
+  border-right: 1px solid var(--border-color);
+}
+
+/* 分隔线 */
+.sidebar-divider {
+  border-top: 1px solid var(--border-color);
+  opacity: 0.6;
+}
+
+/* 导航项基础样式 */
+.sidebar-item {
+  color: var(--text-secondary-color);
+  border-radius: 0.375rem;
+  background-color: transparent;
+}
+
+.sidebar-item:hover {
+  background-color: var(--hover-color);
+  color: var(--text-color);
+}
+
+/* 激活项：左侧竖条 + 背景高亮 */
+.sidebar-item-active {
+  background-color: var(--accent-soft-color);
+  color: var(--accent-color) !important;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.sidebar-item-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background-color: var(--accent-color);
+  animation: accent-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform-origin: top center;
+}
+
+@keyframes accent-slide-in {
+  0% {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+</style>

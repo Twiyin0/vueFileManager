@@ -91,7 +91,7 @@ function close() {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="close"/>
       <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
         <!-- 分享结果 -->

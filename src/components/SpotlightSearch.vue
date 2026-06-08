@@ -89,7 +89,7 @@ onUnmounted(() => {
   <Teleport to="body">
     <div v-if="visible" class="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh] bg-black/50"
       @click.self="visible = false">
-      <div class="w-full max-w-lg bg-white dark:bg-dark-card rounded-xl shadow-2xl overflow-hidden">
+      <div class="w-full max-w-lg bg-white dark:bg-dark-card rounded-xl shadow-sm border dark:border-dark-border overflow-hidden">
         <div class="flex items-center px-4 border-b dark:border-dark-border border-light-border">
           <Icon name="search" class="w-5 h-5 text-gray-400" />
           <input v-model="query" @keydown="handleKeydown"

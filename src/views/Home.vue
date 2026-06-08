@@ -3,7 +3,6 @@ import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFilesStore, FileItem } from '@/stores/files'
 import { api } from '@/api'
-import Layout from '@/components/Layout.vue'
 import FileList from '@/components/FileList.vue'
 import UploadDialog from '@/components/UploadDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -175,6 +174,9 @@ function openFile(file: FileItem) {
   }
 }
 
+// 移动端检测
+const isMobileDevice = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
+
 function openAplayerWithFile(targetFile: FileItem) {
   const audioList = buildAudioList()
   if (audioList.length === 0) return
@@ -194,24 +196,31 @@ function openAplayerWithFile(targetFile: FileItem) {
     return
   }
 
-  // 否则初始化 APlayer
+  // 销毁旧实例
   destroyAplayer()
   showAplayer.value = true
   aplayerCollapsed.value = false
 
+  // 等待 DOM 渲染完成后再初始化
   nextTick(() => {
-    if (!aplayerRef.value) return
-    aplayerInst = new APlayer({
-      container: aplayerRef.value,
-      autoplay: true,
-      volume: 0.3,
-      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-      audio: audioList,
-    })
-    // 播放目标文件
-    if (targetIndex > 0) {
-      aplayerInst.list.switch(targetIndex)
-    }
+    setTimeout(() => {
+      if (!aplayerRef.value) return
+      aplayerInst = new APlayer({
+        container: aplayerRef.value,
+        autoplay: !isMobileDevice, // 移动端不自动播放（浏览器会阻止）
+        volume: 0.3,
+        theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+        audio: audioList,
+      })
+      // 播放目标文件
+      if (targetIndex > 0) {
+        aplayerInst.list.switch(targetIndex)
+      }
+      // 移动端：用户点击即触发播放（需要用户手势）
+      if (isMobileDevice) {
+        aplayerInst.play()
+      }
+    }, 50)
   })
 }
 
@@ -686,7 +695,26 @@ function destroyAplayer() {
 }
 
 function toggleAplayerCollapse() {
-  aplayerCollapsed.value = !aplayerCollapsed.value
+  const wasCollapsed = aplayerCollapsed.value
+  aplayerCollapsed.value = !wasCollapsed
+
+  // 展开时重新初始化 APlayer（v-if 会销毁旧 DOM）
+  if (wasCollapsed && showAplayer.value) {
+    nextTick(() => {
+      setTimeout(() => {
+        if (!aplayerRef.value) return
+        const audioList = buildAudioList()
+        if (audioList.length === 0) return
+        aplayerInst = new APlayer({
+          container: aplayerRef.value,
+          autoplay: true,
+          volume: 0.3,
+          theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+          audio: audioList,
+        })
+      }, 50)
+    })
+  }
 }
 
 // 目录变化时自动刷新 APlayer 列表
@@ -707,12 +735,11 @@ watch([currentPath, currentPoolId], () => {
 </script>
 
 <template>
-  <Layout>
     <!-- 拖拽上传覆盖层 -->
     <div v-if="isDragging"
       class="fixed inset-0 z-40 bg-blue-500/20 border-4 border-dashed border-blue-500 flex items-center justify-center"
       @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
-      <div class="bg-white dark:bg-dark-card rounded-xl p-8 shadow-xl text-center">
+      <div class="bg-white dark:bg-dark-card rounded-xl p-8 border text-center">
         <Icon name="upload" class="w-16 h-16 mb-3" style="color: var(--accent-color)" />
         <p class="text-lg font-semibold" style="color: var(--text-color)">拖放文件到此处上传</p>
       </div>
@@ -737,7 +764,7 @@ watch([currentPath, currentPoolId], () => {
                 </button>
                 <!-- 下拉菜单 -->
                 <div v-if="showPoolDropdown"
-                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg shadow-xl border py-1"
+                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border py-1 shadow-sm"
                   style="background-color: var(--card-color); border-color: var(--border-color)">
                   <button @click="goBackToPools(); showPoolDropdown = false"
                     class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
@@ -769,12 +796,12 @@ watch([currentPath, currentPoolId], () => {
             </div>
 
             <!-- 操作按钮 -->
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <!-- Spotlight搜索触发 -->
               <button @click="triggerSpotlight"
                 class="btn-secondary text-sm flex items-center gap-1" title="Ctrl+K 搜索">
                 <Icon name="search" class="w-4 h-4" />
-                搜索
+                <span class="hidden sm:inline">搜索</span>
               </button>
 
               <!-- 刷新 -->
@@ -785,16 +812,16 @@ watch([currentPath, currentPoolId], () => {
 
               <button v-if="currentPath || currentPoolId" @click="goUp" class="btn-secondary text-sm flex items-center gap-1">
                 <Icon name="arrow-up" class="w-4 h-4" />
-                上级
+                <span class="hidden sm:inline">上级</span>
               </button>
 
               <!-- 视图模式切换 -->
-              <div class="flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
-                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :style="viewMode === 'list' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'"
+              <div class="view-mode-toggle flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
+                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :class="viewMode === 'list' ? 'view-mode-active' : ''"
                   title="列表模式">
                   <Icon name="list" class="w-4 h-4" />
                 </button>
-                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :style="viewMode === 'grid' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'"
+                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :class="viewMode === 'grid' ? 'view-mode-active' : ''"
                   title="图片模式">
                   <Icon name="grid" class="w-4 h-4" />
                 </button>
@@ -802,17 +829,17 @@ watch([currentPath, currentPoolId], () => {
 
               <button @click="showCreateFolder = true" class="btn-secondary text-sm flex items-center gap-1">
                 <Icon name="folder-plus" class="w-4 h-4" />
-                新建
+                <span class="hidden sm:inline">新建</span>
               </button>
 
               <button @click="showRemoteUpload = true" class="btn-secondary text-sm flex items-center gap-1" title="远程URL上传">
                 <Icon name="network-wired" class="w-4 h-4" />
-                远程上传
+                <span class="hidden sm:inline">远程上传</span>
               </button>
 
               <button @click="showUpload = true" class="btn-primary text-sm flex items-center gap-1">
                 <Icon name="upload" class="w-4 h-4" />
-                上传
+                <span class="hidden sm:inline">上传</span>
               </button>
             </div>
           </div>
@@ -820,36 +847,38 @@ watch([currentPath, currentPoolId], () => {
           <!-- 批量选择提示条 -->
           <div v-if="isSelectMode" class="mb-3 p-2 rounded-lg flex items-center justify-between text-sm"
             style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
-            <div class="flex items-center gap-3">
-              <button @click="selectAll" class="text-sm hover:underline" style="color: var(--accent-color)">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button @click="selectAll" class="text-sm hover:underline flex-shrink-0" style="color: var(--accent-color)">
                 {{ selectedFiles.size === (showSearch ? searchResults : filesStore.files).length ? '取消全选' : '全选' }}
               </button>
-              <span style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
+              <span class="truncate" style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
             </div>
-            <button @click="clearSelection" class="text-sm hover:underline" style="color: var(--text-secondary-color)">
-              取消选择
+            <button @click="clearSelection" class="text-sm hover:underline flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">
+              取消
             </button>
           </div>
 
           <!-- 剪贴板提示 -->
-          <div v-if="clipboardFiles.length > 0 && !isSelectMode" class="mb-3 p-2 rounded-lg border flex items-center justify-between text-sm"
+          <div v-if="clipboardFiles.length > 0 && !isSelectMode" class="mb-3 p-2 rounded-lg border text-sm"
             style="background-color: var(--hover-color); border-color: var(--border-color)">
-            <span style="color: var(--text-secondary-color)">
-              剪贴板：{{ clipboardMode === 'copy' ? '复制' : '移动' }} {{ clipboardFiles.length }} 个项目
-            </span>
-            <div class="flex items-center gap-2">
-              <button @click="handlePaste" class="btn-primary text-xs px-3 py-1">粘贴到当前目录</button>
-              <button @click="clipboardFiles = []" class="btn-secondary text-xs px-3 py-1">清空</button>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <span class="truncate" style="color: var(--text-secondary-color)">
+                {{ clipboardMode === 'copy' ? '复制' : '移动' }} {{ clipboardFiles.length }} 项
+              </span>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button @click="handlePaste" class="btn-primary text-xs px-3 py-1">粘贴</button>
+                <button @click="clipboardFiles = []" class="btn-secondary text-xs px-3 py-1">清空</button>
+              </div>
             </div>
           </div>
 
           <!-- 上传进度 -->
-          <div v-if="showUploadProgress" class="mb-4 p-4 rounded-lg bg-white dark:bg-dark-card border dark:border-dark-border border-light-border">
+          <div v-if="showUploadProgress" class="mb-4 p-3 sm:p-4 rounded-lg bg-white dark:bg-dark-card border dark:border-dark-border border-light-border">
             <h4 class="text-sm font-semibold mb-2 dark:text-dark-text">上传进度</h4>
             <div v-for="(item, index) in uploadProgress" :key="index" class="mb-2 last:mb-0">
               <div class="flex items-center justify-between text-xs mb-1">
-                <span class="dark:text-dark-text truncate max-w-[200px]">{{ item.file }}</span>
-                <span class="dark:text-dark-text-secondary">{{ item.percent }}%</span>
+                <span class="dark:text-dark-text truncate max-w-[150px] sm:max-w-[200px]">{{ item.file }}</span>
+                <span class="dark:text-dark-text-secondary flex-shrink-0 ml-2">{{ item.percent }}%</span>
               </div>
               <div class="w-full bg-gray-200 dark:bg-dark-hover rounded-full h-2">
                 <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
@@ -918,7 +947,7 @@ watch([currentPath, currentPoolId], () => {
 
     <!-- 远程上传对话框 -->
     <Teleport to="body">
-      <div v-if="showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRemoteUpload = false"/>
         <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">远程URL上传</h3>
@@ -935,7 +964,7 @@ watch([currentPath, currentPoolId], () => {
 
     <!-- 新建文件夹对话框 -->
     <Teleport to="body">
-      <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">新建文件夹</h3>
@@ -950,7 +979,7 @@ watch([currentPath, currentPoolId], () => {
 
     <!-- 重命名对话框 -->
     <Teleport to="body">
-      <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">重命名</h3>
@@ -1009,26 +1038,26 @@ watch([currentPath, currentPoolId], () => {
       @close="toast.show = false"
     />
 
-    <!-- APlayer 浮动播放器（左下角） -->
+    <!-- APlayer 浮动播放器 -->
     <Teleport to="body">
-      <div v-if="showAplayer" class="fixed bottom-4 left-4 z-40">
+      <div v-if="showAplayer" class="aplayer-float" :class="{ 'aplayer-mobile': isMobileDevice }">
         <!-- 收缩态：圆形图标 -->
         <div v-if="aplayerCollapsed"
           @click="toggleAplayerCollapse"
-          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all hover:scale-105"
+          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm transition-all active:scale-95"
           style="background-color: var(--accent-color); color: white"
           title="展开播放器">
           <Icon name="music" class="w-4 h-4" />
         </div>
-        <!-- 展开态：播放器（aplayerRef 始终存在） -->
-        <div v-show="!aplayerCollapsed" class="w-72 rounded-lg shadow-2xl overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+        <!-- 展开态 -->
+        <div v-if="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
           <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
             <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
             <div class="flex items-center gap-0.5">
-              <button @click="toggleAplayerCollapse" class="p-0.5 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
+              <button @click="toggleAplayerCollapse" class="p-1 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
                 <Icon name="chevron-down" class="w-3.5 h-3.5" />
               </button>
-              <button @click="destroyAplayer" class="p-0.5 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
+              <button @click="destroyAplayer" class="p-1 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
                 <Icon name="xmark" class="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1037,5 +1066,4 @@ watch([currentPath, currentPoolId], () => {
         </div>
       </div>
     </Teleport>
-  </Layout>
 </template>

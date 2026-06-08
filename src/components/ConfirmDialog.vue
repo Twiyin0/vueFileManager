@@ -16,7 +16,7 @@ const emit = defineEmits<{
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <!-- 遮罩 -->
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('cancel')"/>
       <!-- 对话框 -->

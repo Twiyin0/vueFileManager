@@ -217,10 +217,10 @@ function getPreviewUrl(file: FileItem): string {
         </div>
 
         <!-- 操作 -->
-        <div v-if="showActions" class="col-span-4 sm:col-span-2 flex items-center justify-end gap-1" @click.stop>
+        <div v-if="showActions" class="col-span-4 sm:col-span-2 flex items-center justify-end gap-0.5 sm:gap-1" @click.stop>
           <button
             @click="emit('detail', file)"
-            class="p-1.5 rounded-md hover:opacity-80 transition-colors"
+            class="p-2 sm:p-1.5 rounded-md hover:opacity-80 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
             title="详情"
           >
             <Icon name="circle-information" class="w-4 h-4" style="color: var(--text-secondary-color)" />
@@ -228,14 +228,14 @@ function getPreviewUrl(file: FileItem): string {
           <button
             v-if="file.type === 'file'"
             @click="emit('download', file)"
-            class="p-1.5 rounded-md hover:opacity-80 transition-colors"
+            class="p-2 sm:p-1.5 rounded-md hover:opacity-80 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
             title="下载"
           >
             <Icon name="download" class="w-4 h-4" style="color: var(--text-secondary-color)" />
           </button>
           <button
             @click="emit('delete', file)"
-            class="p-1.5 rounded-md hover:opacity-80 transition-colors"
+            class="p-2 sm:p-1.5 rounded-md hover:opacity-80 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
             title="删除"
           >
             <Icon name="trash" class="w-4 h-4 text-red-500" />

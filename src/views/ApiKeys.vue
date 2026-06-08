@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
-import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
 
@@ -108,7 +107,6 @@ function formatDate(dateStr: string): string {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <div class="flex justify-end mb-4">
         <button @click="showCreate = true" class="btn-primary text-sm flex items-center gap-1">
@@ -182,7 +180,7 @@ function formatDate(dateStr: string): string {
 
     <!-- 创建对话框 -->
     <Teleport to="body">
-      <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="closeCreate"/>
         <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
           <!-- 创建成功 -->
@@ -253,5 +251,4 @@ function formatDate(dateStr: string): string {
       @confirm="handleDelete"
       @cancel="showDeleteConfirm = false"
     />
-  </Layout>
 </template>

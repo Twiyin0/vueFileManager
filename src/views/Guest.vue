@@ -244,6 +244,9 @@ function destroyAplayer() {
   showAplayer.value = false
 }
 
+// 移动端检测
+const isMobileDevice = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
+
 function openAplayerWithFile(targetFile: FileItem) {
   const audioList = buildAudioList()
   if (audioList.length === 0) return
@@ -264,20 +267,41 @@ function openAplayerWithFile(targetFile: FileItem) {
   aplayerCollapsed.value = false
 
   nextTick(() => {
-    if (!aplayerRef.value) return
-    aplayerInst = new APlayer({
-      container: aplayerRef.value,
-      autoplay: true,
-      volume: 0.3,
-      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-      audio: audioList,
-    })
-    if (targetIndex > 0) aplayerInst.list.switch(targetIndex)
+    setTimeout(() => {
+      if (!aplayerRef.value) return
+      aplayerInst = new APlayer({
+        container: aplayerRef.value,
+        autoplay: !isMobileDevice,
+        volume: 0.3,
+        theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+        audio: audioList,
+      })
+      if (targetIndex > 0) aplayerInst.list.switch(targetIndex)
+      if (isMobileDevice) aplayerInst.play()
+    }, 50)
   })
 }
 
 function toggleAplayerCollapse() {
-  aplayerCollapsed.value = !aplayerCollapsed.value
+  const wasCollapsed = aplayerCollapsed.value
+  aplayerCollapsed.value = !wasCollapsed
+
+  if (wasCollapsed && showAplayer.value) {
+    nextTick(() => {
+      setTimeout(() => {
+        if (!aplayerRef.value) return
+        const audioList = buildAudioList()
+        if (audioList.length === 0) return
+        aplayerInst = new APlayer({
+          container: aplayerRef.value,
+          autoplay: true,
+          volume: 0.3,
+          theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+          audio: audioList,
+        })
+      }, 50)
+    })
+  }
 }
 
 // 目录变化时刷新 APlayer
@@ -530,22 +554,22 @@ const permLabels: Record<string, string> = {
 <template>
   <div class="h-screen flex flex-col overflow-hidden" style="background-color: var(--bg-color)">
     <!-- Header -->
-    <header class="h-11 flex items-center justify-between px-4 border-b flex-shrink-0" style="background-color: var(--surface-color); border-color: var(--border-color)">
-      <div class="flex items-center gap-3 min-w-0">
+    <header class="h-11 flex items-center justify-between px-3 sm:px-4 flex-shrink-0" style="background-color: var(--surface-color)">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
         <router-link to="/guest" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
           <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
-          <span style="color: var(--text-color)">VueFileManager</span>
+          <span class="hidden sm:inline" style="color: var(--text-color)">VueFileManager</span>
         </router-link>
         <span v-if="isFolderView" class="text-sm font-medium truncate" style="color: var(--text-secondary-color)">
-          / {{ owner }} 的文件
+          / {{ owner }}
         </span>
-        <span v-else class="text-sm font-medium truncate" style="color: var(--text-secondary-color)">
+        <span v-else class="text-sm font-medium truncate hidden sm:inline" style="color: var(--text-secondary-color)">
           / 访客模式
         </span>
       </div>
-      <div class="flex items-center gap-3 flex-shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
         <ThemeToggle />
-        <router-link to="/login" class="btn-primary text-sm">登录</router-link>
+        <router-link to="/login" class="btn-primary text-sm px-3 py-1.5">登录</router-link>
       </div>
     </header>
 
@@ -553,7 +577,7 @@ const permLabels: Record<string, string> = {
     <main class="flex-1 overflow-auto" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
       <!-- 拖拽上传覆盖层 -->
       <div v-if="isDragging" class="fixed inset-0 z-40 bg-blue-500/20 border-4 border-dashed border-blue-500 flex items-center justify-center">
-        <div class="bg-white dark:bg-dark-card rounded-xl p-8 shadow-xl text-center">
+        <div class="bg-white dark:bg-dark-card rounded-xl p-8 border text-center">
           <Icon name="upload" class="w-16 h-16 mb-3" style="color: var(--accent-color)" />
           <p class="text-lg font-semibold" style="color: var(--text-color)">拖放文件到此处上传</p>
         </div>
@@ -588,7 +612,7 @@ const permLabels: Record<string, string> = {
               v-for="share in shares"
               :key="share.id"
               @click="navigateToShare(share.id)"
-              class="card flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer group"
+              class="card flex items-center gap-4 cursor-pointer group"
             >
               <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: var(--accent-soft-color)">
                 <Icon name="folder" class="w-6 h-6" style="color: var(--accent-color)" />
@@ -630,7 +654,7 @@ const permLabels: Record<string, string> = {
                   <Icon name="chevron-down" class="w-3 h-3" />
                 </button>
                 <div v-if="showShareDropdown"
-                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg shadow-xl border py-1"
+                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border py-1 shadow-sm"
                   style="background-color: var(--card-color); border-color: var(--border-color)">
                   <div v-for="s in shares" :key="s.id"
                     class="px-4 py-2 text-sm flex items-center gap-2 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
@@ -652,10 +676,10 @@ const permLabels: Record<string, string> = {
             </div>
 
             <!-- 操作按钮 -->
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <!-- 搜索 -->
               <div class="flex items-center gap-1">
-                <input v-model="searchQuery" type="text" class="input-field text-sm w-32" placeholder="搜索..."
+                <input v-model="searchQuery" type="text" class="input-field text-sm w-24 sm:w-32" placeholder="搜索..."
                   @keyup.enter="handleSearch" @input="!searchQuery && (showSearch = false)" />
                 <button @click="handleSearch" class="btn-secondary text-sm p-1.5" title="搜索">
                   <Icon name="search" class="w-4 h-4" />
@@ -671,23 +695,23 @@ const permLabels: Record<string, string> = {
               </button>
 
               <!-- 视图切换 -->
-              <div class="flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
-                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :style="viewMode === 'list' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'">
+              <div class="view-mode-toggle flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
+                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :class="viewMode === 'list' ? 'view-mode-active' : ''">
                   <Icon name="list" class="w-4 h-4" />
                 </button>
-                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :style="viewMode === 'grid' ? 'background-color: var(--accent-color); color: white' : 'color: var(--text-secondary-color)'">
+                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :class="viewMode === 'grid' ? 'view-mode-active' : ''">
                   <Icon name="grid" class="w-4 h-4" />
                 </button>
               </div>
 
               <button v-if="hasPermission('upload')" @click="showCreateFolder = true" class="btn-secondary text-sm flex items-center gap-1">
                 <Icon name="folder-plus" class="w-4 h-4" />
-                新建
+                <span class="hidden sm:inline">新建</span>
               </button>
 
               <label v-if="hasPermission('upload')" class="btn-primary text-sm flex items-center gap-1 cursor-pointer">
                 <Icon name="upload" class="w-4 h-4" />
-                上传
+                <span class="hidden sm:inline">上传</span>
                 <input type="file" class="hidden" multiple @change="handleUpload(($event.target as HTMLInputElement).files!)" />
               </label>
             </div>
@@ -696,13 +720,13 @@ const permLabels: Record<string, string> = {
           <!-- 批量选择提示 -->
           <div v-if="isSelectMode" class="mb-3 p-2 rounded-lg flex items-center justify-between text-sm"
             style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
-            <div class="flex items-center gap-3">
-              <button @click="selectAll" class="text-sm hover:underline" style="color: var(--accent-color)">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button @click="selectAll" class="text-sm hover:underline flex-shrink-0" style="color: var(--accent-color)">
                 {{ selectedFiles.size === (showSearch ? searchResults : files).length ? '取消全选' : '全选' }}
               </button>
-              <span style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
+              <span class="truncate" style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
             </div>
-            <button @click="clearSelection" class="text-sm hover:underline" style="color: var(--text-secondary-color)">取消选择</button>
+            <button @click="clearSelection" class="text-sm hover:underline flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">取消</button>
           </div>
 
           <!-- 搜索结果 -->
@@ -725,8 +749,8 @@ const permLabels: Record<string, string> = {
           <div v-if="showUploadProgress" class="mb-3 p-3 rounded-lg border" style="background-color: var(--card-color); border-color: var(--border-color)">
             <div v-for="(item, index) in uploadProgress" :key="index" class="mb-2 last:mb-0">
               <div class="flex items-center justify-between text-xs mb-1">
-                <span class="truncate max-w-[200px]" style="color: var(--text-color)">{{ item.file }}</span>
-                <span style="color: var(--text-secondary-color)">{{ item.percent }}%</span>
+                <span class="truncate max-w-[150px] sm:max-w-[200px]" style="color: var(--text-color)">{{ item.file }}</span>
+                <span class="flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">{{ item.percent }}%</span>
               </div>
               <div class="w-full rounded-full h-2" style="background-color: var(--hover-color)">
                 <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
@@ -808,7 +832,7 @@ const permLabels: Record<string, string> = {
 
     <!-- 新建文件夹 -->
     <Teleport to="body">
-      <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">新建文件夹</h3>
@@ -823,7 +847,7 @@ const permLabels: Record<string, string> = {
 
     <!-- 重命名 -->
     <Teleport to="body">
-      <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false"/>
         <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4" style="color: var(--text-color)">重命名</h3>
@@ -838,22 +862,22 @@ const permLabels: Record<string, string> = {
 
     <!-- APlayer 浮动播放器 -->
     <Teleport to="body">
-      <div v-if="showAplayer" class="fixed bottom-4 left-4 z-40">
+      <div v-if="showAplayer" class="aplayer-float" :class="{ 'aplayer-mobile': isMobileDevice }">
         <div v-if="aplayerCollapsed"
           @click="toggleAplayerCollapse"
-          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all hover:scale-105"
+          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm transition-all active:scale-95"
           style="background-color: var(--accent-color); color: white"
           title="展开播放器">
           <Icon name="music" class="w-4 h-4" />
         </div>
-        <div v-show="!aplayerCollapsed" class="w-72 rounded-lg shadow-2xl overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+        <div v-if="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
           <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
             <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
             <div class="flex items-center gap-0.5">
-              <button @click="toggleAplayerCollapse" class="p-0.5 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
+              <button @click="toggleAplayerCollapse" class="p-1 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
                 <Icon name="chevron-down" class="w-3.5 h-3.5" />
               </button>
-              <button @click="destroyAplayer" class="p-0.5 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
+              <button @click="destroyAplayer" class="p-1 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
                 <Icon name="xmark" class="w-3.5 h-3.5" />
               </button>
             </div>

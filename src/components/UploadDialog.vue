@@ -69,7 +69,7 @@ function openFilePicker() {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')"/>
       <div class="relative card w-full max-w-lg max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
         <h3 class="text-lg font-semibold mb-2" style="color: var(--text-color)">上传文件</h3>

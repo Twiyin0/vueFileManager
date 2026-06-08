@@ -29,6 +29,23 @@ const app = express()
 const PORT = Number(process.env.PORT) || config.server.port
 const HOST = process.env.HOST || config.server.host || 'localhost'
 
+// 监听 config.yml 变化，触发 tsx watch 自动重启
+const configFilePath = path.join(__dirname, '..', 'config.yml')
+const selfFilePath = path.join(__dirname, 'index.ts')
+let configWatchDebounce: NodeJS.Timeout | null = null
+try {
+  fs.watch(configFilePath, () => {
+    if (configWatchDebounce) return
+    configWatchDebounce = setTimeout(() => {
+      configWatchDebounce = null
+      console.log('\n🔄 检测到 config.yml 变更，正在重启...')
+      // 触碰自身文件让 tsx watch 检测到变化并重启
+      const time = new Date()
+      fs.utimesSync(selfFilePath, time, time)
+    }, 500)
+  })
+} catch { /* ignore */ }
+
 // 中间件
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000'],
@@ -126,10 +143,10 @@ async function startServer() {
   })
 
   const server = app.listen(PORT, HOST, () => {
-    const displayHost = HOST === '0.0.0.0' ? '0.0.0.0 (all interfaces)' : HOST
+    const displayHost = HOST === '0.0.0.0' ? '0.0.0.0 (所有网络接口)' : HOST
     console.log(`\n🚀 VueFileManager 服务器已启动`)
-    console.log(`📡 生产环境: http://${displayHost}:${PORT}`)
-    console.log(`📡 API: http://${HOST}:${PORT}/api`)
+    console.log(`📡 监听地址: ${displayHost}:${PORT}`)
+    console.log(`📡 API: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/api`)
     console.log(`🌐 开发环境: http://localhost:5173\n`)
   })
 

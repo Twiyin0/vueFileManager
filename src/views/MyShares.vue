@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
-import Layout from '@/components/Layout.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
 
@@ -93,7 +92,6 @@ function isMaxedOut(share: Share): boolean {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <!-- 加载状态 -->
       <div v-if="loading" class="flex items-center justify-center py-20">
@@ -189,5 +187,4 @@ function isMaxedOut(share: Share): boolean {
       @confirm="handleDelete"
       @cancel="showDeleteConfirm = false"
     />
-  </Layout>
 </template>

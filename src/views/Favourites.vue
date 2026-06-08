@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import { useRouter } from 'vue-router'
-import Layout from '@/components/Layout.vue'
 import FilePreview from '@/components/FilePreview.vue'
 import Icon from '@/components/Icon.vue'
 
@@ -103,7 +102,6 @@ function formatSize(size: number) {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
@@ -153,5 +151,4 @@ function formatSize(size: number) {
       :pool-id="fileToPreview.poolId"
       @close="showPreview = false; fileToPreview = null"
     />
-  </Layout>
 </template>

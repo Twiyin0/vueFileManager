@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
-import Layout from '@/components/Layout.vue'
 import Icon from '@/components/Icon.vue'
 
 interface StoragePool {
@@ -233,7 +232,6 @@ function getStorageLabel(type: string) {
 </script>
 
 <template>
-  <Layout>
     <div class="px-4 pt-4">
       <!-- 存储配额概览 -->
       <div class="card mb-4">
@@ -349,7 +347,7 @@ function getStorageLabel(type: string) {
 
       <!-- 添加/编辑对话框 -->
       <div v-if="showAddDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto shadow-xl">
+        <div class="card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto shadow-sm">
           <div class="p-6">
             <h2 class="text-xl font-bold mb-4 dark:text-dark-text text-light-text">
               {{ editingPool ? '编辑存储池' : '添加存储池' }}
@@ -499,5 +497,4 @@ function getStorageLabel(type: string) {
         </div>
       </div>
     </div>
-  </Layout>
 </template>
