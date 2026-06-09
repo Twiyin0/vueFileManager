@@ -228,8 +228,8 @@ VueFileManager v1.0.0-beta.12
 | 文本/代码 | CodeMirror 6 | `codemirror` + 语言包（按需懒加载） |
 | PDF | PDF.js CDN | - |
 | Word (.docx) | docx-preview | `docx-preview` |
-| Excel (.xls/.xlsx/.csv) | SheetJS | `xlsx` |
-| PowerPoint (.pptx) | pptx-preview | `pptx-preview` |
+| Excel (.xls/.xlsx/.csv) | ExcelJS | `exceljs` |
+| PowerPoint (.ppt/.pptx) | 不支持预览（提示下载） | - |
 
 ### 预览组件使用
 
@@ -246,6 +246,8 @@ VueFileManager v1.0.0-beta.12
 - `filePath` 若以 `/api/` 开头则直接使用（分享预览），否则拼装 `/api/files/preview?path=...&poolId=...&token=...`
 - 分享页面 (`Share.vue`) 复用同一组件，传分享预览 URL
 - 预览对话框头部使用半透明毛玻璃样式：`backdrop-blur-md` + `color-mix(in srgb, var(--surface-color) 75%, transparent)`
+- 预览对话框支持全屏切换（header 右侧展开/压缩按钮）
+- Excel 预览使用 ExcelJS 解析，自定义 sheet tab 栏支持多工作表切换
 
 ### 浮动 APlayer 音乐播放器
 

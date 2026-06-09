@@ -67,7 +67,7 @@ const fileType = computed(() => {
   if (ext === 'doc') return 'doc-legacy'
   if (ext === 'docx') return 'docx'
   if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xlsx'
-  if (['ppt', 'pptx'].includes(ext)) return 'pptx'
+  if (['ppt', 'pptx'].includes(ext)) return 'ppt-legacy'
   return 'unknown'
 })
 
@@ -88,7 +88,6 @@ let pdfBlobUrl: string | null = null
 
 // ---- Office state ----
 const docxContainer = ref<HTMLDivElement>()
-const pptxContainer = ref<HTMLDivElement>()
 const excelSheets = ref<{ name: string; html: string }[]>([])
 const excelActiveSheet = ref(0)
 
@@ -103,6 +102,9 @@ const pdfCanvas = ref<HTMLCanvasElement>()
 
 // ---- Loading ----
 const loading = ref(true)
+
+// ---- Fullscreen ----
+const isFullscreen = ref(false)
 
 // ---- Image gallery (for floating header counter + prev/next navigation) ----
 const galleryFiles = ref<{ path: string; name: string; poolId?: number }[]>([])
@@ -511,12 +513,12 @@ async function initDocxViewer() {
     const resp = await fetch(previewUrl.value)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const blob = await resp.blob()
-    const { renderAsync } = await import('docx-preview')
+    const docxPreview = await import('docx-preview')
+    loading.value = false
     await nextTick()
     if (docxContainer.value) {
-      await renderAsync(blob, docxContainer.value, undefined, { ignoreWidth: true, ignoreHeight: true })
+      await docxPreview.renderAsync(blob, docxContainer.value, undefined, { ignoreWidth: true, ignoreHeight: true })
     }
-    loading.value = false
   } catch (err) { console.error('DOCX viewer init error:', err); loading.value = false }
 }
 
@@ -525,30 +527,48 @@ async function initExcelViewer() {
     const resp = await fetch(previewUrl.value)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const arrayBuf = await resp.arrayBuffer()
-    const XLSX = await import('xlsx')
-    const wb = XLSX.read(arrayBuf, { type: 'array' })
-    excelSheets.value = wb.SheetNames.map(name => ({
-      name,
-      html: XLSX.utils.sheet_to_html(wb.Sheets[name], { id: `sheet-${name}` })
-    }))
+    const ExcelJS = await import('exceljs')
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load(arrayBuf)
+
+    excelSheets.value = wb.worksheets.map(ws => {
+      // 获取实际使用的范围
+      const rows: string[][] = []
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const cells: string[] = []
+        row.eachCell({ includeEmpty: true }, (_cell, colNumber) => {
+          const cell = row.getCell(colNumber)
+          cells[colNumber - 1] = cell.value != null ? String(cell.value) : ''
+        })
+        rows.push(cells)
+      })
+
+      if (rows.length === 0) return { name: ws.name, html: '<p class="text-sm p-4" style="color:var(--text-secondary-color)">空工作表</p>' }
+
+      // 确定最大列数
+      const maxCols = Math.max(...rows.map(r => r.length))
+      // 补齐列
+      rows.forEach(r => { while (r.length < maxCols) r.push('') })
+
+      // 第一行作为表头
+      const header = rows[0]
+      const body = rows.slice(1)
+
+      let html = '<table>'
+      html += '<thead><tr>' + header.map(h => `<th>${h || ''}</th>`).join('') + '</tr></thead>'
+      html += '<tbody>' + body.map(row =>
+        '<tr>' + row.map(c => `<td>${c || ''}</td>`).join('') + '</tr>'
+      ).join('') + '</tbody>'
+      html += '</table>'
+
+      return { name: ws.name, html }
+    })
+
     excelActiveSheet.value = 0
     loading.value = false
   } catch (err) { console.error('Excel viewer init error:', err); loading.value = false }
 }
 
-async function initPptxViewer() {
-  try {
-    const resp = await fetch(previewUrl.value)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const arrayBuf = await resp.arrayBuffer()
-    const { init } = await import('pptx-preview')
-    await nextTick()
-    if (pptxContainer.value) {
-      init(pptxContainer.value, { type: 'arrayBuffer', data: arrayBuf, mode: 'list' })
-    }
-    loading.value = false
-  } catch (err) { console.error('PPTX viewer init error:', err); loading.value = false }
-}
 
 // ---- Cleanup ----
 
@@ -565,7 +585,6 @@ function destroyPlayers() {
   textContent.value = ''
   excelSheets.value = []; excelActiveSheet.value = 0
   if (docxContainer.value) docxContainer.value.innerHTML = ''
-  if (pptxContainer.value) pptxContainer.value.innerHTML = ''
 }
 
 function initPlayer() {
@@ -578,7 +597,6 @@ function initPlayer() {
   else if (ft === 'pdf') initPdfViewer()
   else if (ft === 'docx') initDocxViewer()
   else if (ft === 'xlsx') initExcelViewer()
-  else if (ft === 'pptx') initPptxViewer()
   else loading.value = false
 }
 
@@ -604,6 +622,7 @@ watch([() => props.show, () => props.filePath], async ([show, filePath], [oldSho
   } else {
     destroyPlayers()
     showVideo.value = false
+    isFullscreen.value = false
   }
 })
 
@@ -655,14 +674,21 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
     <!-- ============================================================ -->
     <!-- VIDEO / AUDIO / PDF / TEXT: 标准 modal 对话框                -->
     <!-- ============================================================ -->
-    <div v-else-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
+    <div v-else-if="show" :class="isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4'">
+      <div v-if="!isFullscreen" class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
 
-      <div :class="['relative w-full flex flex-col rounded-xl overflow-hidden', fileType === 'video' ? 'max-w-7xl' : 'max-w-5xl']" style="background-color: var(--surface-color); max-height: 90dvh">
+      <div :class="[
+        'relative w-full flex flex-col overflow-hidden',
+        isFullscreen ? 'h-full rounded-none' : 'rounded-xl',
+        fileType === 'video' ? 'max-w-7xl' : (isFullscreen ? '' : 'max-w-5xl')
+      ]" :style="{ backgroundColor: 'var(--surface-color)', maxHeight: isFullscreen ? '100dvh' : '90dvh' }">
         <!-- Header: 半透明毛玻璃 -->
         <div class="flex items-center justify-between px-2.5 py-1 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
           <h3 class="text-xs font-medium truncate flex-1 mr-2" style="color: var(--text-color)">{{ fileName }}</h3>
           <div class="flex items-center gap-0.5">
+            <button @click="isFullscreen = !isFullscreen" class="p-1 rounded hover:opacity-80 transition-colors" :title="isFullscreen ? '退出全屏' : '全屏'">
+              <Icon :name="isFullscreen ? 'compress-alt' : 'expand-alt'" class="w-3.5 h-3.5" style="color: var(--text-color)" />
+            </button>
             <a :href="previewUrl" :download="fileName" class="p-1 rounded hover:opacity-80 transition-colors" title="下载">
               <Icon name="download" class="w-3.5 h-3.5" style="color: var(--text-color)" />
             </a>
@@ -673,7 +699,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
         </div>
 
         <!-- Content -->
-        <div class="flex-1 overflow-auto" style="background-color: var(--surface-color); touch-action: manipulation" @contextmenu.prevent>
+        <div :class="['flex-1', isFullscreen ? 'flex flex-col overflow-hidden' : 'overflow-auto']" style="background-color: var(--surface-color); touch-action: manipulation" @contextmenu.prevent>
 
           <!-- LOADING -->
           <div v-if="loading" class="flex items-center justify-center py-20">
@@ -758,7 +784,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             <div ref="docxContainer" class="docx-content" />
           </div>
 
-          <!-- EXCEL: SheetJS + 自定义 sheet tab -->
+          <!-- EXCEL: ExcelJS + 自定义 sheet tab -->
           <div v-if="!loading && fileType === 'xlsx'" class="office-container">
             <div class="flex flex-col h-full">
               <!-- Sheet tabs -->
@@ -779,15 +805,11 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             </div>
           </div>
 
-          <!-- PPTX: pptx-preview -->
-          <div v-if="!loading && fileType === 'pptx'" class="office-container">
-            <div ref="pptxContainer" class="pptx-content" />
-          </div>
-
-          <!-- UNSUPPORTED / LEGACY DOC -->
-          <div v-if="!loading && (fileType === 'unknown' || fileType === 'doc-legacy')" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
+          <!-- UNSUPPORTED / LEGACY DOC / PPT -->
+          <div v-if="!loading && (fileType === 'unknown' || fileType === 'doc-legacy' || fileType === 'ppt-legacy')" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
             <Icon name="file-alt" class="w-16 h-16 mb-4" />
             <p v-if="fileType === 'doc-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持预览 .doc 格式，请转为 .docx</p>
+            <p v-else-if="fileType === 'ppt-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持在线预览 PPT，请下载查看</p>
             <p v-else class="text-lg" style="color: var(--text-secondary-color)">不支持预览此文件类型</p>
             <a :href="previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">下载文件</a>
           </div>
@@ -799,7 +821,8 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 
 <style scoped>
 .office-container {
-  height: min(80vh, calc(100dvh - 80px));
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 .office-container :deep(table) {
@@ -818,8 +841,5 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 }
 .docx-content {
   padding: 1.5rem;
-}
-.pptx-content {
-  padding: 1rem;
 }
 </style>
