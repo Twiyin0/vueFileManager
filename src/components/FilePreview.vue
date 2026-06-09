@@ -64,7 +64,8 @@ const fileType = computed(() => {
   if (ext === 'pdf') return 'pdf'
   if (['md', 'markdown'].includes(ext)) return 'markdown'
   if (['txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'java', 'go', 'rs', 'vue', 'sh', 'sql', 'toml', 'ini', 'cfg', 'log', 'env', 'gitignore', 'dockerfile'].includes(ext)) return 'text'
-  if (['doc', 'docx'].includes(ext)) return 'docx'
+  if (ext === 'doc') return 'doc-legacy'
+  if (ext === 'docx') return 'docx'
   if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xlsx'
   if (['ppt', 'pptx'].includes(ext)) return 'pptx'
   return 'unknown'
@@ -731,10 +732,11 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             />
           </div>
 
-          <!-- UNSUPPORTED -->
-          <div v-if="!loading && fileType === 'unknown'" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
+          <!-- UNSUPPORTED / LEGACY DOC -->
+          <div v-if="!loading && (fileType === 'unknown' || fileType === 'doc-legacy')" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
             <Icon name="file-alt" class="w-16 h-16 mb-4" />
-            <p class="text-lg" style="color: var(--text-secondary-color)">不支持预览此文件类型</p>
+            <p v-if="fileType === 'doc-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持预览 .doc 格式，请转为 .docx</p>
+            <p v-else class="text-lg" style="color: var(--text-secondary-color)">不支持预览此文件类型</p>
             <a :href="previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">下载文件</a>
           </div>
         </div>
@@ -746,6 +748,12 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 <style scoped>
 .office-container {
   height: min(80vh, calc(100dvh - 80px));
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.office-container :deep(.x-spreadsheet) {
+  flex: 1;
+  overflow: hidden;
 }
 </style>

@@ -352,7 +352,7 @@ router.post('/:username/:shareId/upload', upload.single('file'), async (req: Req
       return res.status(403).json({ error: '无权访问此路径' })
     }
 
-    const normalizedName = req.file.originalname.normalize('NFC')
+    const normalizedName = Buffer.from(req.file.originalname, 'latin1').toString('utf8').normalize('NFC')
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
     const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const filePath = basePath

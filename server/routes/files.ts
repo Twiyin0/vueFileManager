@@ -141,7 +141,7 @@ router.post('/upload', flexibleAuth, requirePermission('write'), uploadSingle('f
 
     const storage = getStorageForRequest(req)
     const dirPath = (req.query.path as string) || ''
-    const normalizedName = req.file.originalname.normalize('NFC')
+    const normalizedName = Buffer.from(req.file.originalname, 'latin1').toString('utf8').normalize('NFC')
     const filePath = dirPath ? `${dirPath}/${normalizedName}` : normalizedName
     await storage.upload(filePath, req.file.buffer)
 
