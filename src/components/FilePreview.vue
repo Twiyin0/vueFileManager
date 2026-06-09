@@ -598,7 +598,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
     <div v-else-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
 
-      <div :class="['relative w-full max-h-[90vh] flex flex-col rounded-xl overflow-hidden', fileType === 'video' ? 'max-w-7xl' : 'max-w-5xl']" style="background-color: var(--surface-color)">
+      <div :class="['relative w-full flex flex-col rounded-xl overflow-hidden', fileType === 'video' ? 'max-w-7xl' : 'max-w-5xl']" style="background-color: var(--surface-color); max-height: 90dvh">
         <!-- Header: 半透明毛玻璃 -->
         <div class="flex items-center justify-between px-2.5 py-1 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
           <h3 class="text-xs font-medium truncate flex-1 mr-2" style="color: var(--text-color)">{{ fileName }}</h3>
@@ -632,7 +632,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             class="flex items-center justify-center py-8 px-4" />
 
           <!-- PDF: PDF.js CDN canvas + toolbar -->
-          <div v-if="!loading && fileType === 'pdf'" class="flex flex-col h-full" style="min-height: 70vh">
+          <div v-if="!loading && fileType === 'pdf'" class="flex flex-col" style="height: min(70vh, calc(100dvh - 80px))">
             <!-- PDF Toolbar -->
             <div class="flex items-center gap-1.5 px-2.5 py-1 border-b flex-shrink-0 flex-wrap"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
@@ -667,7 +667,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
           </div>
 
           <!-- TEXT/CODE: CodeMirror Editor + Save -->
-          <div v-if="!loading && (fileType === 'text' || fileType === 'markdown')" class="flex flex-col h-full" style="min-height: 60vh">
+          <div v-if="!loading && (fileType === 'text' || fileType === 'markdown')" class="flex flex-col" style="height: min(70vh, calc(100dvh - 80px))">
             <div class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
               <span class="text-xs" style="color: var(--text-secondary-color)">{{ cmLanguageName }}</span>
@@ -679,7 +679,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
                 {{ isSaving ? '保存中...' : '保存' }}
               </button>
             </div>
-            <div class="flex-1 rounded-b-lg overflow-hidden border-t-0 relative" style="border-color: var(--border-color); min-height: 55vh">
+            <div class="flex-1 rounded-b-lg overflow-hidden border-t-0 relative" style="border-color: var(--border-color)">
               <div ref="editorContainer" class="h-full" />
             </div>
             <!-- Save toast: centered overlay with auto-dismiss -->
