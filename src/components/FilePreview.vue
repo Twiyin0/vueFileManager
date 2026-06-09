@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, shallowRef, type Component } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { api } from '@/api'
 import type ArtPlayer from 'artplayer'
 import type APlayer from 'aplayer'
@@ -87,8 +87,10 @@ let imageBlobUrl: string | null = null
 let pdfBlobUrl: string | null = null
 
 // ---- Office state ----
-const officeComponent = shallowRef<Component | null>(null)
-const officeCssLoaded = ref(false)
+const docxContainer = ref<HTMLDivElement>()
+const pptxContainer = ref<HTMLDivElement>()
+const excelSheets = ref<{ name: string; html: string }[]>([])
+const excelActiveSheet = ref(0)
 
 // ---- ViewerJS re-entrancy guard ----
 let isProgrammaticDestroy = false
@@ -504,23 +506,48 @@ async function initPdfViewer() {
   } catch (err) { console.error('PDF init error:', err); loading.value = false }
 }
 
-async function initOfficeViewer() {
+async function initDocxViewer() {
   try {
-    const ft = fileType.value
-    if (ft === 'docx') {
-      if (!officeCssLoaded.value) { await import('@vue-office/docx/lib/index.css'); officeCssLoaded.value = true }
-      const mod = await import('@vue-office/docx')
-      officeComponent.value = mod.default
-    } else if (ft === 'xlsx') {
-      if (!officeCssLoaded.value) { await import('@vue-office/excel/lib/index.css'); officeCssLoaded.value = true }
-      const mod = await import('@vue-office/excel')
-      officeComponent.value = mod.default
-    } else if (ft === 'pptx') {
-      const mod = await import('@vue-office/pptx')
-      officeComponent.value = mod.default
+    const resp = await fetch(previewUrl.value)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const blob = await resp.blob()
+    const { renderAsync } = await import('docx-preview')
+    await nextTick()
+    if (docxContainer.value) {
+      await renderAsync(blob, docxContainer.value, undefined, { ignoreWidth: true, ignoreHeight: true })
     }
     loading.value = false
-  } catch (err) { console.error('Office viewer init error:', err); loading.value = false }
+  } catch (err) { console.error('DOCX viewer init error:', err); loading.value = false }
+}
+
+async function initExcelViewer() {
+  try {
+    const resp = await fetch(previewUrl.value)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const arrayBuf = await resp.arrayBuffer()
+    const XLSX = await import('xlsx')
+    const wb = XLSX.read(arrayBuf, { type: 'array' })
+    excelSheets.value = wb.SheetNames.map(name => ({
+      name,
+      html: XLSX.utils.sheet_to_html(wb.Sheets[name], { id: `sheet-${name}` })
+    }))
+    excelActiveSheet.value = 0
+    loading.value = false
+  } catch (err) { console.error('Excel viewer init error:', err); loading.value = false }
+}
+
+async function initPptxViewer() {
+  try {
+    const resp = await fetch(previewUrl.value)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const arrayBuf = await resp.arrayBuffer()
+    const { init } = await import('pptx-preview')
+    await nextTick()
+    if (pptxContainer.value) {
+      init(pptxContainer.value, { type: 'arrayBuffer', data: arrayBuf, mode: 'list' })
+    }
+    loading.value = false
+  } catch (err) { console.error('PPTX viewer init error:', err); loading.value = false }
 }
 
 // ---- Cleanup ----
@@ -536,7 +563,9 @@ function destroyPlayers() {
   pdfDoc = null; pdfTotalPages.value = 0; pdfPageNum.value = 1
   galleryFiles.value = []; galleryIndex.value = 0
   textContent.value = ''
-  officeComponent.value = null; officeCssLoaded.value = false
+  excelSheets.value = []; excelActiveSheet.value = 0
+  if (docxContainer.value) docxContainer.value.innerHTML = ''
+  if (pptxContainer.value) pptxContainer.value.innerHTML = ''
 }
 
 function initPlayer() {
@@ -547,7 +576,9 @@ function initPlayer() {
   else if (ft === 'image') { buildGallery(); nextTick().then(initImageViewer) }
   else if (ft === 'text' || ft === 'markdown') loadTextContent()
   else if (ft === 'pdf') initPdfViewer()
-  else if (ft === 'docx' || ft === 'xlsx' || ft === 'pptx') initOfficeViewer()
+  else if (ft === 'docx') initDocxViewer()
+  else if (ft === 'xlsx') initExcelViewer()
+  else if (ft === 'pptx') initPptxViewer()
   else loading.value = false
 }
 
@@ -722,14 +753,35 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             </Transition>
           </div>
 
-          <!-- OFFICE: vue-office (docx / xlsx / pptx) -->
-          <div v-if="!loading && (fileType === 'docx' || fileType === 'xlsx' || fileType === 'pptx')" class="office-container">
-            <component
-              v-if="officeComponent"
-              :is="officeComponent"
-              :src="previewUrl"
-              style="height: 100%"
-            />
+          <!-- DOCX: docx-preview -->
+          <div v-if="!loading && fileType === 'docx'" class="office-container">
+            <div ref="docxContainer" class="docx-content" />
+          </div>
+
+          <!-- EXCEL: SheetJS + 自定义 sheet tab -->
+          <div v-if="!loading && fileType === 'xlsx'" class="office-container">
+            <div class="flex flex-col h-full">
+              <!-- Sheet tabs -->
+              <div v-if="excelSheets.length > 1" class="flex items-center gap-0 px-2 py-1 border-b flex-shrink-0 overflow-x-auto"
+                style="border-color: var(--border-color); background-color: var(--hover-color)">
+                <button v-for="(sheet, idx) in excelSheets" :key="sheet.name"
+                  @click="excelActiveSheet = idx"
+                  class="px-3 py-1 text-xs font-medium border-b-2 transition-colors whitespace-nowrap"
+                  :style="{
+                    color: idx === excelActiveSheet ? 'var(--accent-color)' : 'var(--text-secondary-color)',
+                    'border-color': idx === excelActiveSheet ? 'var(--accent-color)' : 'transparent'
+                  }">
+                  {{ sheet.name }}
+                </button>
+              </div>
+              <!-- Sheet content -->
+              <div class="flex-1 overflow-auto p-2" v-html="excelSheets[excelActiveSheet]?.html || ''" />
+            </div>
+          </div>
+
+          <!-- PPTX: pptx-preview -->
+          <div v-if="!loading && fileType === 'pptx'" class="office-container">
+            <div ref="pptxContainer" class="pptx-content" />
           </div>
 
           <!-- UNSUPPORTED / LEGACY DOC -->
@@ -748,21 +800,26 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 <style scoped>
 .office-container {
   height: min(80vh, calc(100dvh - 80px));
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.office-container :deep(.x-spreadsheet) {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.office-container :deep(.x-spreadsheet-sheet) {
-  flex: 1;
   overflow: auto;
 }
-.office-container :deep(.x-spreadsheet-bottombar) {
-  flex-shrink: 0;
+.office-container :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.office-container :deep(td), .office-container :deep(th) {
+  border: 1px solid var(--border-color);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.office-container :deep(th) {
+  background: var(--hover-color);
+  font-weight: 600;
+}
+.docx-content {
+  padding: 1.5rem;
+}
+.pptx-content {
+  padding: 1rem;
 }
 </style>
