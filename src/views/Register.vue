@@ -96,9 +96,8 @@ async function handleRegister() {
 <template>
   <div class="min-h-screen flex items-center justify-center p-4" style="background-color: var(--bg-color)">
     <div class="card w-full max-w-md" style="padding: 2rem">
-      <!-- Logo -->
-      <div class="flex flex-col items-center mb-8">
-        <img src="/logo-long.png" alt="VueFileManager" class="h-16 mb-4" />
+      <!-- 标题 -->
+      <div class="flex flex-col items-center mb-6">
         <h1 class="text-2xl font-bold" style="color: var(--text-color)">创建账户</h1>
         <p class="text-sm mt-1" style="color: var(--text-secondary-color)">注册 VueFileManager 账户</p>
       </div>

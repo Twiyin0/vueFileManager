@@ -12,6 +12,7 @@ REMOTE="root@10.10.1.9"
 REMOTE_DIR="/opt/node/vueFileManager"
 CONTAINER="vueFile"
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
+SSH_SOCKET="/tmp/vfm-deploy-$$"
 
 DO_BUILD=false
 DO_RESTART=false
@@ -30,10 +31,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+cleanup() {
+  ssh -S "$SSH_SOCKET" -O exit "$REMOTE" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 echo "🚀 开始部署到 ${REMOTE}:${REMOTE_DIR}"
 echo ""
 
-# rsync 同步源文件
+# 建立 SSH 主连接（仅此处输入一次密码）
+echo "🔑 建立 SSH 连接..."
+ssh -M -S "$SSH_SOCKET" -fN -o ControlPersist=60s "$REMOTE"
+
+# rsync 复用 SSH 连接
 rsync -avz --progress \
   --exclude='node_modules' \
   --exclude='dist' \
@@ -59,12 +69,13 @@ rsync -avz --progress \
   --exclude='.env' \
   --exclude='.env.*' \
   --delete \
+  -e "ssh -S $SSH_SOCKET" \
   "${LOCAL_DIR}/" "${REMOTE}:${REMOTE_DIR}/"
 
 echo ""
 echo "✅ 文件同步完成"
 
-# 根据参数决定是否执行远程命令
+# 拼接远程命令，单次 SSH 执行
 if [ "$DO_BUILD" = true ] || [ "$DO_RESTART" = true ]; then
   REMOTE_CMD=""
   if [ "$DO_BUILD" = true ]; then
@@ -75,12 +86,10 @@ if [ "$DO_BUILD" = true ] || [ "$DO_RESTART" = true ]; then
   if [ "$DO_RESTART" = true ]; then
     echo ""
     echo "🔄 正在重启 Docker 容器..."
-    if [ -n "$REMOTE_CMD" ]; then
-      REMOTE_CMD="${REMOTE_CMD} && "
-    fi
+    [ -n "$REMOTE_CMD" ] && REMOTE_CMD="${REMOTE_CMD} && "
     REMOTE_CMD="${REMOTE_CMD}docker restart ${CONTAINER} && echo '✅ 容器已重启'"
   fi
-  ssh "${REMOTE}" "${REMOTE_CMD}"
+  ssh -S "$SSH_SOCKET" "$REMOTE" "$REMOTE_CMD"
 fi
 
 echo ""

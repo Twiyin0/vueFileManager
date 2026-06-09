@@ -749,10 +749,19 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
       const fullPath = await (innerStorage as any).resolvePath(filePath)
       const stat = await fs.stat(fullPath)
       const fileSize = stat.size
+      const etag = `"${fileSize}-${stat.mtimeMs}"`
       const range = req.headers.range
+
+      // 非 Range 请求的 ETag 缓存验证（Range 请求不能返回 304，否则浏览器拿不到数据）
+      if (!range && req.headers['if-none-match'] === etag) {
+        res.status(304).end()
+        return
+      }
 
       res.setHeader('Accept-Ranges', 'bytes')
       res.setHeader('Content-Type', contentType)
+      res.setHeader('ETag', etag)
+      res.setHeader('Cache-Control', 'public, max-age=3600')
 
       if (range) {
         const parts = range.replace(/bytes=/, '').split('-')
@@ -776,8 +785,17 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
 
     // 非本地存储或非媒体文件：读取整个文件
     const data = await storage.download(filePath)
+    const etag = `"${data.length}"`
+
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end()
+      return
+    }
+
     res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Length', data.length)
+    res.setHeader('ETag', etag)
+    res.setHeader('Cache-Control', 'public, max-age=3600')
     res.send(data)
   } catch (err: any) {
     res.status(500).json({ error: err.message })

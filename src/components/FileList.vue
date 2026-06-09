@@ -148,7 +148,7 @@ function getPreviewUrl(file: FileItem): string {
         <div
           v-for="file in files"
           :key="file.path"
-          class="group cursor-pointer rounded-lg overflow-hidden border transition-all"
+          class="file-grid-item group cursor-pointer rounded-lg overflow-hidden border transition-all"
           :class="[
             selectedFiles?.has(file.path) ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-600' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600',
             contextHighlighted === file.path ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''

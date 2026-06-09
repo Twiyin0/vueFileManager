@@ -2,7 +2,6 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import Layout from '@/components/Layout.vue'
 import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{
@@ -102,42 +101,40 @@ onUnmounted(() => { observer?.disconnect() })
 </script>
 
 <template>
-  <Layout>
-    <div class="doc-container">
-      <!-- 文档内容 -->
-      <div class="doc-content">
-        <div v-if="loading" class="flex items-center justify-center py-20">
-          <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-          </svg>
-        </div>
-        <div v-else-if="error" class="card p-6 text-center">
-          <Icon name="exclamation" class="w-12 h-12 mx-auto mb-3 text-red-400" />
-          <p class="text-red-500">{{ error }}</p>
-        </div>
-        <div v-else class="prose" v-html="html" />
+  <div class="doc-container">
+    <!-- 文档内容 -->
+    <div class="doc-content">
+      <div v-if="loading" class="flex items-center justify-center py-20">
+        <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
       </div>
-
-      <!-- 右侧目录 -->
-      <aside v-if="toc.length > 0" class="doc-toc">
-        <div class="toc-inner">
-          <p class="toc-title">目录</p>
-          <nav class="toc-list">
-            <a
-              v-for="item in toc"
-              :key="item.id"
-              @click.prevent="scrollTo(item.id)"
-              :class="['toc-link', `toc-level-${item.level}`, { 'toc-active': isScrolledIntoView(item.id) }]"
-              :style="{ paddingLeft: (item.level - 1) * 0.75 + 'rem' }"
-            >
-              {{ item.text }}
-            </a>
-          </nav>
-        </div>
-      </aside>
+      <div v-else-if="error" class="card p-6 text-center">
+        <Icon name="exclamation" class="w-12 h-12 mx-auto mb-3 text-red-400" />
+        <p class="text-red-500">{{ error }}</p>
+      </div>
+      <div v-else class="prose" v-html="html" />
     </div>
-  </Layout>
+
+    <!-- 右侧目录 -->
+    <aside v-if="toc.length > 0" class="doc-toc">
+      <div class="toc-inner">
+        <p class="toc-title">目录</p>
+        <nav class="toc-list">
+          <a
+            v-for="item in toc"
+            :key="item.id"
+            @click.prevent="scrollTo(item.id)"
+            :class="['toc-link', `toc-level-${item.level}`, { 'toc-active': isScrolledIntoView(item.id) }]"
+            :style="{ paddingLeft: (item.level - 1) * 0.75 + 'rem' }"
+          >
+            {{ item.text }}
+          </a>
+        </nav>
+      </div>
+    </aside>
+  </div>
 </template>
 
 <style scoped>

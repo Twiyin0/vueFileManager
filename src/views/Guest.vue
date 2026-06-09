@@ -267,41 +267,21 @@ function openAplayerWithFile(targetFile: FileItem) {
   aplayerCollapsed.value = false
 
   nextTick(() => {
-    setTimeout(() => {
-      if (!aplayerRef.value) return
-      aplayerInst = new APlayer({
-        container: aplayerRef.value,
-        autoplay: !isMobileDevice,
-        volume: 0.3,
-        theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-        audio: audioList,
-      })
-      if (targetIndex > 0) aplayerInst.list.switch(targetIndex)
-      if (isMobileDevice) aplayerInst.play()
-    }, 50)
+    if (!aplayerRef.value) return
+    aplayerInst = new APlayer({
+      container: aplayerRef.value,
+      autoplay: !isMobileDevice,
+      volume: 0.3,
+      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+      audio: audioList,
+    })
+    if (targetIndex > 0) aplayerInst.list.switch(targetIndex)
+    if (isMobileDevice) aplayerInst.play()
   })
 }
 
 function toggleAplayerCollapse() {
-  const wasCollapsed = aplayerCollapsed.value
-  aplayerCollapsed.value = !wasCollapsed
-
-  if (wasCollapsed && showAplayer.value) {
-    nextTick(() => {
-      setTimeout(() => {
-        if (!aplayerRef.value) return
-        const audioList = buildAudioList()
-        if (audioList.length === 0) return
-        aplayerInst = new APlayer({
-          container: aplayerRef.value,
-          autoplay: true,
-          volume: 0.3,
-          theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-          audio: audioList,
-        })
-      }, 50)
-    })
-  }
+  aplayerCollapsed.value = !aplayerCollapsed.value
 }
 
 // 目录变化时刷新 APlayer
@@ -870,7 +850,7 @@ const permLabels: Record<string, string> = {
           title="展开播放器">
           <Icon name="music" class="w-4 h-4" />
         </div>
-        <div v-if="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+        <div v-show="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
           <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
             <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
             <div class="flex items-center gap-0.5">

@@ -203,24 +203,22 @@ function openAplayerWithFile(targetFile: FileItem) {
 
   // 等待 DOM 渲染完成后再初始化
   nextTick(() => {
-    setTimeout(() => {
-      if (!aplayerRef.value) return
-      aplayerInst = new APlayer({
-        container: aplayerRef.value,
-        autoplay: !isMobileDevice, // 移动端不自动播放（浏览器会阻止）
-        volume: 0.3,
-        theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-        audio: audioList,
-      })
-      // 播放目标文件
-      if (targetIndex > 0) {
-        aplayerInst.list.switch(targetIndex)
-      }
-      // 移动端：用户点击即触发播放（需要用户手势）
-      if (isMobileDevice) {
-        aplayerInst.play()
-      }
-    }, 50)
+    if (!aplayerRef.value) return
+    aplayerInst = new APlayer({
+      container: aplayerRef.value,
+      autoplay: !isMobileDevice, // 移动端不自动播放（浏览器会阻止）
+      volume: 0.3,
+      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
+      audio: audioList,
+    })
+    // 播放目标文件
+    if (targetIndex > 0) {
+      aplayerInst.list.switch(targetIndex)
+    }
+    // 移动端：用户点击即触发播放（需要用户手势）
+    if (isMobileDevice) {
+      aplayerInst.play()
+    }
   })
 }
 
@@ -695,26 +693,7 @@ function destroyAplayer() {
 }
 
 function toggleAplayerCollapse() {
-  const wasCollapsed = aplayerCollapsed.value
-  aplayerCollapsed.value = !wasCollapsed
-
-  // 展开时重新初始化 APlayer（v-if 会销毁旧 DOM）
-  if (wasCollapsed && showAplayer.value) {
-    nextTick(() => {
-      setTimeout(() => {
-        if (!aplayerRef.value) return
-        const audioList = buildAudioList()
-        if (audioList.length === 0) return
-        aplayerInst = new APlayer({
-          container: aplayerRef.value,
-          autoplay: true,
-          volume: 0.3,
-          theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-          audio: audioList,
-        })
-      }, 50)
-    })
-  }
+  aplayerCollapsed.value = !aplayerCollapsed.value
 }
 
 // 目录变化时自动刷新 APlayer 列表
@@ -1050,7 +1029,7 @@ watch([currentPath, currentPoolId], () => {
           <Icon name="music" class="w-4 h-4" />
         </div>
         <!-- 展开态 -->
-        <div v-if="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+        <div v-show="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
           <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
             <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
             <div class="flex items-center gap-0.5">

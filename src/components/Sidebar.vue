@@ -157,6 +157,7 @@ function isActive(path: string) {
 .sidebar-aside {
   background-color: var(--surface-color);
   border-right: 1px solid var(--border-color);
+  border-radius: 0.5rem;
 }
 
 /* 分隔线 */

@@ -4,6 +4,10 @@ import db from '../db'
 import { getStorageByPoolId } from '../services/factory'
 import config from '../config'
 import { Request } from 'express'
+import fs from 'fs/promises'
+import fsSync from 'fs'
+import { LocalStorage } from '../services/local'
+import { PrefixStorage } from '../services/prefix'
 
 const router = Router()
 
@@ -13,6 +17,7 @@ const mimeTypes: Record<string, string> = {
   'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
   'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
   'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'flac': 'audio/flac',
+  'aac': 'audio/aac', 'm4a': 'audio/mp4',
   'pdf': 'application/pdf',
   'txt': 'text/plain', 'md': 'text/markdown', 'json': 'application/json',
   'js': 'text/javascript', 'ts': 'text/typescript', 'html': 'text/html',
@@ -191,13 +196,65 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
       return res.status(400).json({ error: '不支持预览文件夹' })
     }
 
-    const data = await storage.download(fullPath)
     const ext = relativePath.split('.').pop()?.toLowerCase() || ''
     const fileName = relativePath.split('/').pop() || 'file'
+    const contentType = mimeTypes[ext] || 'application/octet-stream'
 
-    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
+    // 音频/视频文件支持 Range 请求（移动端播放必须）
+    const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
+    const innerStorage = storage instanceof PrefixStorage ? (storage as any).inner : storage
+    if (isMedia && innerStorage instanceof LocalStorage) {
+      const resolvedPath = await (innerStorage as LocalStorage).resolvePath(fullPath)
+      const stat = await fs.stat(resolvedPath)
+      const fileSize = stat.size
+      const etag = `"${fileSize}-${stat.mtimeMs}"`
+      const range = req.headers.range
+
+      // 非 Range 请求的 ETag 缓存验证（Range 请求不能返回 304，否则浏览器拿不到数据）
+      if (!range && req.headers['if-none-match'] === etag) {
+        res.status(304).end()
+        return
+      }
+
+      res.setHeader('Accept-Ranges', 'bytes')
+      res.setHeader('Content-Type', contentType)
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
+      res.setHeader('ETag', etag)
+      res.setHeader('Cache-Control', 'public, max-age=3600')
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-')
+        const start = parseInt(parts[0], 10)
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+        const chunkSize = end - start + 1
+
+        res.status(206)
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+        res.setHeader('Content-Length', chunkSize)
+
+        const stream = fsSync.createReadStream(resolvedPath, { start, end })
+        stream.pipe(res)
+      } else {
+        res.setHeader('Content-Length', fileSize)
+        const stream = fsSync.createReadStream(resolvedPath)
+        stream.pipe(res)
+      }
+      return
+    }
+
+    // 非本地存储或非媒体文件：读取整个文件
+    const data = await storage.download(fullPath)
+    const etag = `"${data.length}"`
+
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end()
+      return
+    }
+
+    res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Length', data.length)
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
+    res.setHeader('ETag', etag)
     res.setHeader('Cache-Control', 'public, max-age=3600')
 
     res.send(data)
