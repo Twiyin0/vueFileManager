@@ -30,7 +30,7 @@ const menuStyle = computed(() => {
   return { left: props.x + 'px', top: top + 'px' }
 })
 
-function handleClickOutside(e: MouseEvent) {
+function handleClickOutside(e: Event) {
   if (menuRef.value && !menuRef.value.contains(e.target as Node)) {
     emit('close')
   }
@@ -48,10 +48,12 @@ function isAllowed(action: string): boolean {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('touchstart', handleClickOutside)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('touchstart', handleClickOutside)
 })
 </script>
 

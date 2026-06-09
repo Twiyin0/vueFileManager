@@ -47,12 +47,14 @@ export class LocalStorage implements StorageProvider {
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name)
         const stat = await fs.stat(fullPath)
+        // macOS 使用 NFD 编码中文文件名，统一标准化为 NFC
+        const normalizedName = entry.name.normalize('NFC')
         files.push({
-          name: entry.name,
+          name: normalizedName,
           type: entry.isDirectory() ? 'folder' : 'file',
           size: stat.size,
           modified: stat.mtime.toISOString(),
-          path: path.join(prefix || '', entry.name).replace(/\\/g, '/')
+          path: path.join(prefix || '', normalizedName).replace(/\\/g, '/')
         })
       }
 
@@ -126,7 +128,8 @@ export class LocalStorage implements StorageProvider {
 
   async exists(filePath: string): Promise<boolean> {
     try {
-      await fs.access(this.fullPath(filePath))
+      const fullPath = await this.resolvePath(filePath)
+      await fs.access(fullPath)
       return true
     } catch {
       return false
@@ -142,7 +145,7 @@ export class LocalStorage implements StorageProvider {
   }
 
   async move(srcPath: string, destPath: string): Promise<void> {
-    const fullSrc = this.fullPath(srcPath)
+    const fullSrc = await this.resolvePath(srcPath)
     const fullDest = this.fullPath(destPath)
     await fs.mkdir(path.dirname(fullDest), { recursive: true })
     await fs.rename(fullSrc, fullDest)

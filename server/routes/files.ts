@@ -141,7 +141,8 @@ router.post('/upload', flexibleAuth, requirePermission('write'), uploadSingle('f
 
     const storage = getStorageForRequest(req)
     const dirPath = (req.query.path as string) || ''
-    const filePath = dirPath ? `${dirPath}/${req.file.originalname}` : req.file.originalname
+    const normalizedName = req.file.originalname.normalize('NFC')
+    const filePath = dirPath ? `${dirPath}/${normalizedName}` : normalizedName
     await storage.upload(filePath, req.file.buffer)
 
     res.json({ message: '上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local' })
@@ -182,7 +183,8 @@ router.post('/write', flexibleAuth, requirePermission('write'), async (req: ApiK
 router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   let tempPath: string | null = null
   try {
-    const fileName = req.headers['x-file-name'] as string
+    const rawFileName = req.headers['x-file-name'] as string
+    const fileName = rawFileName ? rawFileName.normalize('NFC') : rawFileName
     const dirPath = (req.headers['x-dir-path'] as string) || ''
     const poolIdStr = req.headers['x-pool-id'] as string
 
@@ -250,7 +252,8 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
 // 断点续传：初始化分片上传
 router.post('/upload/init', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
-    const { fileName, fileSize, dirPath, poolId } = req.body
+    const { fileName: rawFileName, fileSize, dirPath, poolId } = req.body
+    const fileName = rawFileName ? rawFileName.normalize('NFC') : rawFileName
     if (!fileName || !fileSize) {
       return res.status(400).json({ error: '缺少文件名或文件大小' })
     }
@@ -590,10 +593,11 @@ router.post('/mkdir', flexibleAuth, requirePermission('write'), async (req: ApiK
 router.post('/rename', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
   try {
     const storage = getStorageForRequest(req)
-    const { path: filePath, newName } = req.body
-    if (!filePath || !newName) {
+    const { path: filePath, newName: rawNewName } = req.body
+    if (!filePath || !rawNewName) {
       return res.status(400).json({ error: '缺少参数' })
     }
+    const newName = rawNewName.normalize('NFC')
     await storage.rename(filePath, newName)
     res.json({ message: '重命名成功' })
   } catch (err: any) {

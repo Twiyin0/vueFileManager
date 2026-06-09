@@ -41,14 +41,22 @@ const emit = defineEmits<{
   detail: [file: FileItem]
 }>()
 
-// 长按进入多选
+// 长按呼出右键菜单（移动端）
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
 const longPressThreshold = 500
 
 function handleTouchStart(e: TouchEvent, file: FileItem) {
   longPressTimer = setTimeout(() => {
     longPressTimer = null
-    emit('toggleSelect', file.path)
+    const touch = e.touches[0]
+    // 合成一个 MouseEvent 供 ContextMenu 定位
+    const syntheticEvent = new MouseEvent('contextmenu', {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      bubbles: false
+    }) as MouseEvent
+    contextHighlighted.value = file.path
+    emit('contextmenu', syntheticEvent, file)
   }, longPressThreshold)
 }
 

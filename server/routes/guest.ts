@@ -295,11 +295,12 @@ router.post('/:username/:shareId/upload', upload.single('file'), async (req: Req
       return res.status(403).json({ error: '无权访问此路径' })
     }
 
+    const normalizedName = req.file.originalname.normalize('NFC')
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
     const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const filePath = basePath
-      ? (dirPath ? `${basePath}/${dirPath}/${req.file.originalname}` : `${basePath}/${req.file.originalname}`)
-      : (dirPath ? `${dirPath}/${req.file.originalname}` : req.file.originalname)
+      ? (dirPath ? `${basePath}/${dirPath}/${normalizedName}` : `${basePath}/${normalizedName}`)
+      : (dirPath ? `${dirPath}/${normalizedName}` : normalizedName)
 
     await storage.upload(filePath, req.file.buffer)
 
@@ -487,14 +488,16 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
       return res.status(403).json({ error: '该分享未开启重命名权限' })
     }
 
-    const { path: filePath, newName } = req.body
-    if (!filePath || !newName) {
+    const { path: filePath, newName: rawNewName } = req.body
+    if (!filePath || !rawNewName) {
       return res.status(400).json({ error: '缺少文件路径或新名称' })
     }
 
     if (!isPathSafe(filePath)) {
       return res.status(403).json({ error: '无权访问此路径' })
     }
+
+    const newName = rawNewName.normalize('NFC')
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
     const basePath = (share.folder_path || '').replace(/\\/g, '/')
