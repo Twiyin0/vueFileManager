@@ -515,7 +515,6 @@ async function initOfficeViewer() {
       const mod = await import('@vue-office/excel')
       officeComponent.value = mod.default
     } else if (ft === 'pptx') {
-      if (!officeCssLoaded.value) { await import('@vue-office/pptx/lib/index.css'); officeCssLoaded.value = true }
       const mod = await import('@vue-office/pptx')
       officeComponent.value = mod.default
     }
