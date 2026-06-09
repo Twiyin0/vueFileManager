@@ -8,6 +8,7 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
+    "postinstall": "node scripts/patch-vue-office.mjs",
     "build": "NODE_OPTIONS='--max-old-space-size=3072' vite build",
     "build:check": "vue-tsc -b && NODE_OPTIONS='--max-old-space-size=1536' vite build",
     "start": "tsx server/index.ts",
