@@ -755,5 +755,14 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
 .office-container :deep(.x-spreadsheet) {
   flex: 1;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.office-container :deep(.x-spreadsheet-sheet) {
+  flex: 1;
+  overflow: auto;
+}
+.office-container :deep(.x-spreadsheet-bottombar) {
+  flex-shrink: 0;
 }
 </style>
