@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, shallowRef, type Component } from 'vue'
 import { api } from '@/api'
 import type ArtPlayer from 'artplayer'
 import type APlayer from 'aplayer'
@@ -64,6 +64,9 @@ const fileType = computed(() => {
   if (ext === 'pdf') return 'pdf'
   if (['md', 'markdown'].includes(ext)) return 'markdown'
   if (['txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'java', 'go', 'rs', 'vue', 'sh', 'sql', 'toml', 'ini', 'cfg', 'log', 'env', 'gitignore', 'dockerfile'].includes(ext)) return 'text'
+  if (['doc', 'docx'].includes(ext)) return 'docx'
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xlsx'
+  if (['ppt', 'pptx'].includes(ext)) return 'pptx'
   return 'unknown'
 })
 
@@ -81,6 +84,10 @@ let viewer: Viewer | null = null
 // ---- Blob URL tracking ----
 let imageBlobUrl: string | null = null
 let pdfBlobUrl: string | null = null
+
+// ---- Office state ----
+const officeComponent = shallowRef<Component | null>(null)
+const officeCssLoaded = ref(false)
 
 // ---- ViewerJS re-entrancy guard ----
 let isProgrammaticDestroy = false
@@ -496,6 +503,26 @@ async function initPdfViewer() {
   } catch (err) { console.error('PDF init error:', err); loading.value = false }
 }
 
+async function initOfficeViewer() {
+  try {
+    const ft = fileType.value
+    if (ft === 'docx') {
+      if (!officeCssLoaded.value) { await import('@vue-office/docx/lib/index.css'); officeCssLoaded.value = true }
+      const mod = await import('@vue-office/docx')
+      officeComponent.value = mod.default
+    } else if (ft === 'xlsx') {
+      if (!officeCssLoaded.value) { await import('@vue-office/excel/lib/index.css'); officeCssLoaded.value = true }
+      const mod = await import('@vue-office/excel')
+      officeComponent.value = mod.default
+    } else if (ft === 'pptx') {
+      if (!officeCssLoaded.value) { await import('@vue-office/pptx/lib/index.css'); officeCssLoaded.value = true }
+      const mod = await import('@vue-office/pptx')
+      officeComponent.value = mod.default
+    }
+    loading.value = false
+  } catch (err) { console.error('Office viewer init error:', err); loading.value = false }
+}
+
 // ---- Cleanup ----
 
 function destroyPlayers() {
@@ -509,6 +536,7 @@ function destroyPlayers() {
   pdfDoc = null; pdfTotalPages.value = 0; pdfPageNum.value = 1
   galleryFiles.value = []; galleryIndex.value = 0
   textContent.value = ''
+  officeComponent.value = null; officeCssLoaded.value = false
 }
 
 function initPlayer() {
@@ -519,6 +547,7 @@ function initPlayer() {
   else if (ft === 'image') { buildGallery(); nextTick().then(initImageViewer) }
   else if (ft === 'text' || ft === 'markdown') loadTextContent()
   else if (ft === 'pdf') initPdfViewer()
+  else if (ft === 'docx' || ft === 'xlsx' || ft === 'pptx') initOfficeViewer()
   else loading.value = false
 }
 
@@ -693,6 +722,16 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             </Transition>
           </div>
 
+          <!-- OFFICE: vue-office (docx / xlsx / pptx) -->
+          <div v-if="!loading && (fileType === 'docx' || fileType === 'xlsx' || fileType === 'pptx')" class="office-container">
+            <component
+              v-if="officeComponent"
+              :is="officeComponent"
+              :src="previewUrl"
+              style="height: 100%"
+            />
+          </div>
+
           <!-- UNSUPPORTED -->
           <div v-if="!loading && fileType === 'unknown'" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
             <Icon name="file-alt" class="w-16 h-16 mb-4" />
@@ -704,3 +743,10 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.office-container {
+  height: min(80vh, calc(100dvh - 80px));
+  overflow: auto;
+}
+</style>

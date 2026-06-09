@@ -226,7 +226,10 @@ VueFileManager v1.0.0-beta.12
 | 音频 | APlayer | `aplayer` |
 | 图片 | ViewerJS | `viewerjs` |
 | 文本/代码 | CodeMirror 6 | `codemirror` + 语言包（按需懒加载） |
-| PDF | iframe | - |
+| PDF | PDF.js CDN | - |
+| Word (.doc/.docx) | vue-office | `@vue-office/docx` |
+| Excel (.xls/.xlsx/.csv) | vue-office | `@vue-office/excel` |
+| PowerPoint (.ppt/.pptx) | vue-office | `@vue-office/pptx` |
 
 ### 预览组件使用
 
