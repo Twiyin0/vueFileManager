@@ -1,5 +1,8 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
+import Busboy from 'busboy'
+import chardet from 'chardet'
+import iconv from 'iconv-lite'
 import db from '../db'
 import { getStorageByPoolId } from '../services/factory'
 import config from '../config'
@@ -26,8 +29,74 @@ const mimeTypes: Record<string, string> = {
   'rs': 'text/x-rust', 'vue': 'text/x-vue', 'sh': 'text/x-shellscript',
 }
 
-// multer 配置
+// multer 配置（用于非文件字段解析）
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.upload_limit * 1024 * 1024 } })
+
+/**
+ * 自定义文件上传中间件：拦截原始字节检测编码，解决跨平台中文文件名乱码
+ */
+function guestUploadSingle(field: string) {
+  return (req: Request, res: Response, next: any) => {
+    const limits = { fileSize: config.upload_limit * 1024 * 1024 }
+    const bb = Busboy({ headers: req.headers, limits, defCharset: 'latin1' })
+    let fileReceived = false
+
+    bb.on('file', (fieldname: string, stream: any, info: any) => {
+      if (fieldname !== field) { stream.resume(); return }
+
+      let rawFilename: string = info.filename
+      try {
+        const fnameBuf = Buffer.from(info.filename, 'latin1')
+        if (fnameBuf.some(b => b > 0x7f)) {
+          const charset = chardet.detect(fnameBuf)
+          if (charset && iconv.encodingExists(charset)) {
+            rawFilename = iconv.decode(fnameBuf, charset)
+          } else {
+            const tryUtf8 = fnameBuf.toString('utf8')
+            if (!tryUtf8.includes('\ufffd')) {
+              rawFilename = tryUtf8
+            } else if (iconv.encodingExists('gbk')) {
+              rawFilename = iconv.decode(fnameBuf, 'gbk')
+            }
+          }
+        }
+      } catch {}
+      rawFilename = rawFilename.normalize('NFC')
+
+      const chunks: Buffer[] = []
+      let totalSize = 0
+      stream.on('data', (chunk: Buffer) => {
+        totalSize += chunk.length
+        if (totalSize > limits.fileSize) { stream.resume(); return }
+        chunks.push(chunk)
+      })
+      stream.on('end', () => {
+        if (totalSize > limits.fileSize && !res.headersSent) {
+          return res.status(413).json({ error: `文件大小超过限制 (${config.upload_limit}MB)` })
+        }
+        ;(req as any).file = {
+          fieldname, originalname: rawFilename,
+          encoding: info.encoding, mimetype: info.mimeType,
+          buffer: Buffer.concat(chunks), size: totalSize,
+        }
+        fileReceived = true
+      })
+    })
+
+    bb.on('field', (name: string, value: string) => {
+      ;(req as any).body = (req as any).body || {}
+      ;(req as any).body[name] = value
+    })
+
+    bb.on('close', () => {
+      if (!fileReceived && !res.headersSent) return res.status(400).json({ error: '没有文件' })
+      if (!res.headersSent) next()
+    })
+    bb.on('error', (err: Error) => { if (!res.headersSent) res.status(400).json({ error: err.message }) })
+
+    req.pipe(bb)
+  }
+}
 
 // 权限别名映射：高级权限包含低级权限
 const permissionAliases: Record<string, string[]> = {
@@ -316,7 +385,7 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
 })
 
 // 访客上传文件
-router.post('/:username/:shareId/upload', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req: Request, res: Response) => {
   try {
     const user = getUserByUsername(req.params.username as string)
     if (!user) {
@@ -347,12 +416,17 @@ router.post('/:username/:shareId/upload', upload.single('file'), async (req: Req
       return res.status(400).json({ error: '不支持的文件类型' })
     }
 
-    const dirPath = (req.body.dirPath as string) || ''
+    // 优先从 query 参数取文件名，绕开 multipart 编码问题
+    const queryFilename = req.query.filename as string || null
+    const dirPath = (req.body.dirPath as string) || (req.query.dirPath as string) || ''
     if (dirPath && !isPathSafe(dirPath)) {
       return res.status(403).json({ error: '无权访问此路径' })
     }
 
-    const normalizedName = Buffer.from(req.file.originalname, 'latin1').toString('utf8').normalize('NFC')
+    // 安全 decode 文件名（multipart 可能带 encodeURIComponent 编码）
+    let fallbackName = req.file.originalname
+    try { fallbackName = decodeURIComponent(fallbackName) } catch {}
+    const normalizedName = (queryFilename || fallbackName).normalize('NFC')
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
     const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const filePath = basePath

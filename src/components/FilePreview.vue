@@ -63,7 +63,7 @@ const fileType = computed(() => {
   if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg'].includes(ext)) return 'audio'
   if (ext === 'pdf') return 'pdf'
   if (['md', 'markdown'].includes(ext)) return 'markdown'
-  if (['txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'java', 'go', 'rs', 'vue', 'sh', 'sql', 'toml', 'ini', 'cfg', 'log', 'env', 'gitignore', 'dockerfile'].includes(ext)) return 'text'
+  if (['txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'java', 'go', 'rs', 'vue', 'sh', 'bat', 'ps1', 'php', 'sql', 'toml', 'ini', 'cfg', 'log', 'env', 'gitignore', 'dockerfile'].includes(ext)) return 'text'
   if (ext === 'doc') return 'doc-legacy'
   if (ext === 'docx') return 'docx'
   if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xlsx'
@@ -140,9 +140,13 @@ async function renderPdfPage() {
     const page = await pdfDoc.getPage(pdfPageNum.value)
     const viewport = page.getViewport({ scale: pdfScale.value })
     const canvas = pdfCanvas.value
-    canvas.width = viewport.width
-    canvas.height = viewport.height
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = Math.floor(viewport.width * dpr)
+    canvas.height = Math.floor(viewport.height * dpr)
+    canvas.style.width = Math.floor(viewport.width) + 'px'
+    canvas.style.height = Math.floor(viewport.height) + 'px'
     const ctx = canvas.getContext('2d')!
+    ctx.scale(dpr, dpr)
     await page.render({ canvasContext: ctx, viewport }).promise
   } catch (err) { console.error('PDF render error:', err) }
   pdfLoading.value = false
@@ -150,8 +154,9 @@ async function renderPdfPage() {
 
 function pdfPrevPage() { if (pdfPageNum.value > 1) { pdfPageNum.value--; renderPdfPage() } }
 function pdfNextPage() { if (pdfPageNum.value < pdfTotalPages.value) { pdfPageNum.value++; renderPdfPage() } }
-function pdfZoomIn() { pdfScale.value = Math.min(5, pdfScale.value + 0.25); renderPdfPage() }
-function pdfZoomOut() { pdfScale.value = Math.max(0.5, pdfScale.value - 0.25); renderPdfPage() }
+function pdfZoomIn() { pdfScale.value = Math.min(5, pdfScale.value + 0.5); renderPdfPage() }
+function pdfZoomOut() { pdfScale.value = Math.max(0.5, pdfScale.value - 0.5); renderPdfPage() }
+function pdfResetZoom() { pdfScale.value = 1.5; renderPdfPage() }
 
 // ---- Text/Code state ----
 const textContent = ref('')
@@ -203,6 +208,7 @@ const cmLanguageName = computed(() => {
     vue: 'HTML', sql: 'SQL', md: 'Markdown', markdown: 'Markdown',
     php: 'PHP', c: 'C', cpp: 'C++', rb: 'Ruby',
     swift: 'Swift', kt: 'Kotlin', dart: 'Dart', lua: 'Lua',
+    sh: 'Shell', bat: 'Batch', ps1: 'PowerShell',
   }
   return map[ext] || 'Plain Text'
 })
@@ -224,6 +230,16 @@ async function getLangExtension(ext: string): Promise<any> {
     case 'md': case 'markdown': return (await import('@codemirror/lang-markdown')).markdown()
     case 'php': return (await import('@codemirror/lang-php')).php()
     case 'c': case 'cpp': return (await import('@codemirror/lang-cpp')).cpp()
+    case 'sh': case 'bat': {
+      const { StreamLanguage } = await import('@codemirror/language')
+      const { shell } = await import('@codemirror/legacy-modes/mode/shell')
+      return StreamLanguage.define(shell)
+    }
+    case 'ps1': {
+      const { StreamLanguage } = await import('@codemirror/language')
+      const { powerShell } = await import('@codemirror/legacy-modes/mode/powershell')
+      return StreamLanguage.define(powerShell)
+    }
     default: return []
   }
 }
@@ -681,7 +697,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
         'relative w-full flex flex-col overflow-hidden',
         isFullscreen ? 'h-full rounded-none' : 'rounded-xl',
         fileType === 'video' ? 'max-w-7xl' : (isFullscreen ? '' : 'max-w-5xl')
-      ]" :style="{ backgroundColor: 'var(--surface-color)', maxHeight: isFullscreen ? '100dvh' : '90dvh' }">
+      ]" :style="{ backgroundColor: 'var(--surface-color)', height: isFullscreen ? '100dvh' : '90dvh' }">
         <!-- Header: 半透明毛玻璃 -->
         <div class="flex items-center justify-between px-2.5 py-1 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
           <h3 class="text-xs font-medium truncate flex-1 mr-2" style="color: var(--text-color)">{{ fileName }}</h3>
@@ -718,7 +734,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
             class="flex items-center justify-center py-8 px-4" />
 
           <!-- PDF: PDF.js CDN canvas + toolbar -->
-          <div v-if="!loading && fileType === 'pdf'" class="flex flex-col" style="height: min(70vh, calc(100dvh - 80px))">
+          <div v-if="!loading && fileType === 'pdf'" class="flex flex-col flex-1 min-h-0">
             <!-- PDF Toolbar -->
             <div class="flex items-center gap-1.5 px-2.5 py-1 border-b flex-shrink-0 flex-wrap"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
@@ -733,7 +749,9 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
               <button @click="pdfZoomOut" class="toolbar-btn" title="缩小">
                 <Icon name="minus" class="w-4 h-4" />
               </button>
-              <span class="text-xs font-mono" style="color: var(--text-secondary-color)">{{ Math.round(pdfScale * 100) }}%</span>
+              <button @click="pdfResetZoom" class="toolbar-btn text-xs font-mono px-1.5" title="重置缩放">
+                {{ Math.round(pdfScale * 100) }}%
+              </button>
               <button @click="pdfZoomIn" class="toolbar-btn" title="放大">
                 <Icon name="plus" class="w-4 h-4" />
               </button>
@@ -741,19 +759,19 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
               <a :href="previewUrl" :download="fileName" class="toolbar-btn text-xs">下载</a>
             </div>
             <!-- PDF Canvas -->
-            <div class="flex-1 overflow-auto flex justify-center p-4" style="background: #525659">
+            <div class="flex-1 min-h-0 overflow-auto p-4" style="background: #525659; text-align: center">
               <div v-if="pdfLoading" class="flex items-center justify-center py-12">
                 <svg class="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                 </svg>
               </div>
-              <canvas ref="pdfCanvas" class="shadow-lg" />
+              <canvas ref="pdfCanvas" class="shadow-lg inline-block" />
             </div>
           </div>
 
           <!-- TEXT/CODE: CodeMirror Editor + Save -->
-          <div v-if="!loading && (fileType === 'text' || fileType === 'markdown')" class="flex flex-col" style="height: min(70vh, calc(100dvh - 80px))">
+          <div v-if="!loading && (fileType === 'text' || fileType === 'markdown')" class="flex flex-col flex-1 min-h-0">
             <div class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
               <span class="text-xs" style="color: var(--text-secondary-color)">{{ cmLanguageName }}</span>
@@ -765,7 +783,7 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
                 {{ isSaving ? '保存中...' : '保存' }}
               </button>
             </div>
-            <div class="flex-1 rounded-b-lg overflow-hidden border-t-0 relative" style="border-color: var(--border-color)">
+            <div class="flex-1 min-h-0 rounded-b-lg border-t-0 relative" style="border-color: var(--border-color)">
               <div ref="editorContainer" class="h-full" />
             </div>
             <!-- Save toast: centered overlay with auto-dismiss -->

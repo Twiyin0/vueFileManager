@@ -1,10 +1,13 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
+import Busboy from 'busboy'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import fsSync from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import chardet from 'chardet'
+import iconv from 'iconv-lite'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { flexibleAuth, ApiKeyRequest, requirePermission } from '../middleware/apikey'
@@ -25,30 +28,125 @@ function isJunkFile(filename: string): boolean {
   return JUNK_PATTERNS.some(p => p.test(name))
 }
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: config.upload_limit * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (isJunkFile(file.originalname)) {
-      cb(new Error(`JUNK:${file.originalname}`))
-    } else {
-      cb(null, true)
-    }
-  },
-})
+/**
+ * 从 multipart Content-Disposition 头中提取原始文件名字节，
+ * 用 chardet 检测编码后解码为 UTF-8 字符串。
+ * macOS NFD → NFC 标准化。
+ */
+function decodeFilename(rawBytes: Buffer): string {
+  // 检测编码
+  const charset = chardet.detect(rawBytes) || 'UTF-8'
+  let decoded: string
+  if (/utf-?8/i.test(charset)) {
+    decoded = rawBytes.toString('utf8')
+  } else if (iconv.encodingExists(charset)) {
+    decoded = iconv.decode(rawBytes, charset)
+  } else {
+    decoded = rawFnameToUtf8Fallback(rawBytes)
+  }
+  return decoded.normalize('NFC')
+}
 
-/** multer wrapper: catches fileFilter errors and returns proper 400 response */
+function rawFnameToUtf8Fallback(rawBytes: Buffer): string {
+  // 尝试 UTF-8，失败则 GBK，最后 latin1
+  const utf8 = rawBytes.toString('utf8')
+  if (!utf8.includes('\ufffd')) return utf8
+  if (iconv.encodingExists('gbk')) return iconv.decode(rawBytes, 'gbk')
+  return rawBytes.toString('latin1')
+}
+
+/**
+ * 自定义文件上传中间件：拦截原始 multipart 头获取文件名原始字节，
+ * 通过 chardet 检测编码后正确解码，解决跨平台中文文件名乱码。
+ */
 function uploadSingle(field: string) {
   return (req: ApiKeyRequest, res: Response, next: any) => {
-    upload.single(field)(req, res, (err: any) => {
-      if (err) {
-        if (err.message?.startsWith('JUNK:')) {
-          return res.status(400).json({ error: `已拦截系统文件: ${err.message.slice(5)}` })
+    if (!req.is('multipart')) return res.status(400).json({ error: '需要 multipart 请求' })
+
+    const limits = { fileSize: config.upload_limit * 1024 * 1024 }
+    const bb = Busboy({ headers: req.headers, limits, defCharset: 'latin1' })
+    let fileReceived = false
+
+    bb.on('file', (fieldname, stream, info) => {
+      if (fieldname !== field) { stream.resume(); return }
+
+      // 从原始 Content-Disposition 头中提取文件名字节
+      // busboy 的 info 来自已解码的头，我们需要拦截原始头
+      // 通过解析 parts 的原始头来获取
+      let rawFilename = info.filename
+      try {
+        // defCharset:'latin1' 让 busboy 按 latin1 解码，保留原始字节
+        const fnameBuf = Buffer.from(info.filename, 'latin1')
+        // 只有多字节字符（含 0x80-0xFF）才需要编码检测
+        if (fnameBuf.some(b => b > 0x7f)) {
+          const charset = chardet.detect(fnameBuf)
+          if (charset && iconv.encodingExists(charset)) {
+            rawFilename = iconv.decode(fnameBuf, charset)
+          } else {
+            // chardet 检测失败，依次尝试 UTF-8、GBK
+            const tryUtf8 = fnameBuf.toString('utf8')
+            if (!tryUtf8.includes('\ufffd')) {
+              rawFilename = tryUtf8
+            } else if (iconv.encodingExists('gbk')) {
+              rawFilename = iconv.decode(fnameBuf, 'gbk')
+            }
+          }
         }
-        return res.status(400).json({ error: err.message })
+      } catch (e) { console.error('[upload] 编码检测异常:', e) }
+
+      rawFilename = rawFilename.normalize('NFC')
+
+      if (isJunkFile(rawFilename)) {
+        stream.resume()
+        return res.status(400).json({ error: `已拦截系统文件: ${rawFilename}` })
       }
-      next()
+
+      const chunks: Buffer[] = []
+      let totalSize = 0
+      stream.on('data', (chunk: Buffer) => {
+        totalSize += chunk.length
+        if (totalSize > limits.fileSize) {
+          stream.resume() // drain
+          return
+        }
+        chunks.push(chunk)
+      })
+      stream.on('end', () => {
+        if (totalSize > limits.fileSize) {
+          return res.status(413).json({ error: `文件大小超过限制 (${config.upload_limit}MB)` })
+        }
+        ;(req as any).file = {
+          fieldname,
+          originalname: rawFilename,
+          encoding: info.encoding,
+          mimetype: info.mimeType,
+          buffer: Buffer.concat(chunks),
+          size: totalSize,
+        }
+        fileReceived = true
+      })
+      stream.on('error', () => {
+        return res.status(500).json({ error: '文件上传流错误' })
+      })
     })
+
+    bb.on('field', (name: string, value: string) => {
+      ;(req as any).body = (req as any).body || {}
+      ;(req as any).body[name] = value
+    })
+
+    bb.on('close', () => {
+      if (!fileReceived && !res.headersSent) {
+        return res.status(400).json({ error: '没有文件' })
+      }
+      if (!res.headersSent) next()
+    })
+
+    bb.on('error', (err: Error) => {
+      return res.status(400).json({ error: err.message })
+    })
+
+    req.pipe(bb)
   }
 }
 
@@ -141,7 +239,10 @@ router.post('/upload', flexibleAuth, requirePermission('write'), uploadSingle('f
 
     const storage = getStorageForRequest(req)
     const dirPath = (req.query.path as string) || ''
-    const normalizedName = Buffer.from(req.file.originalname, 'latin1').toString('utf8').normalize('NFC')
+    // 安全 decode 文件名（前端可能 encodeURIComponent 编码过）
+    let normalizedName = req.file.originalname
+    try { normalizedName = decodeURIComponent(normalizedName) } catch {}
+    normalizedName = normalizedName.normalize('NFC')
     const filePath = dirPath ? `${dirPath}/${normalizedName}` : normalizedName
     await storage.upload(filePath, req.file.buffer)
 
@@ -184,10 +285,12 @@ router.post('/upload-stream', flexibleAuth, requirePermission('write'), async (r
   let tempPath: string | null = null
   try {
     const rawFileName = req.headers['x-file-name'] as string
-    const fileName = rawFileName ? rawFileName.normalize('NFC') : rawFileName
+    let fileName: string
+    try { fileName = decodeURIComponent(rawFileName) } catch { fileName = rawFileName }
+    fileName = fileName.normalize('NFC')
     const dirPath = (req.headers['x-dir-path'] as string) || ''
     const poolIdStr = req.headers['x-pool-id'] as string
-
+    // fileName = fileName.startsWith('%') ? decodeURIComponent(fileName) : fileName
     if (!fileName) {
       return res.status(400).json({ error: '缺少 X-File-Name 头' })
     }

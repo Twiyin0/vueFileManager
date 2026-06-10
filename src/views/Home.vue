@@ -258,9 +258,6 @@ async function handleUpload(files: FileList, uploadPoolId?: number) {
   for (let i = 0; i < arr.length; i++) {
     const file = arr[i]
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-
       const xhr = new XMLHttpRequest()
       const token = localStorage.getItem('token')
 
@@ -271,6 +268,7 @@ async function handleUpload(files: FileList, uploadPoolId?: number) {
           }
         }
         xhr.onload = () => {
+          // console.log(`[upload] 响应: ${xhr.status} ${xhr.responseText}`)
           if (xhr.status >= 200 && xhr.status < 300) {
             uploadProgress.value[i].percent = 100
             resolve()
@@ -285,9 +283,17 @@ async function handleUpload(files: FileList, uploadPoolId?: number) {
         if (dirPath) params.set('path', dirPath)
         if (targetPoolId) params.set('poolId', String(targetPoolId))
         const query = params.toString() ? `?${params}` : ''
-        xhr.open('POST', `/api/files/upload${query}`)
+        const uploadUrl = `/api/files/upload-stream${query}`
+        const encodedName = encodeURIComponent(file.name)
+        // console.log(`[upload] file.name: ${file.name}`)
+        // console.log(`[upload] encoded: ${encodedName}`)
+        xhr.open('POST', uploadUrl)
         xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-        xhr.send(formData)
+        xhr.setRequestHeader('X-File-Name', encodedName)
+        if (dirPath) xhr.setRequestHeader('X-Dir-Path', dirPath)
+        if (targetPoolId) xhr.setRequestHeader('X-Pool-Id', String(targetPoolId))
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+        xhr.send(file)
       })
     } catch (err: any) {
       console.error(`上传失败: ${file.name}`, err)

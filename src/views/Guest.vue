@@ -465,10 +465,13 @@ async function handleUpload(fileList: FileList) {
     const file = arr[i]
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      // 文件名放 query 参数，multipart 里用占位名，彻底绕开编码问题
+      formData.append('file', file, 'upload.bin')
       if (currentPath.value) formData.append('dirPath', currentPath.value)
 
       const xhr = new XMLHttpRequest()
+      const params = new URLSearchParams({ filename: file.name })
+      if (currentPath.value) params.set('dirPath', currentPath.value)
       await new Promise<void>((resolve, reject) => {
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
@@ -482,7 +485,7 @@ async function handleUpload(fileList: FileList) {
           } else reject(new Error(xhr.statusText))
         }
         xhr.onerror = () => reject(new Error('上传失败'))
-        xhr.open('POST', `/api/guest/${username.value}/${shareId.value}/upload`)
+        xhr.open('POST', `/api/guest/${username.value}/${shareId.value}/upload?${params}`)
         xhr.send(formData)
       })
     } catch (err: any) {
