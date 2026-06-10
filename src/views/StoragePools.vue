@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
 
@@ -22,6 +22,7 @@ const messageType = ref<'success' | 'error'>('success')
 const pools = ref<StoragePool[]>([])
 const showAddDialog = ref(false)
 const editingPool = ref<StoragePool | null>(null)
+const selectedPoolIds = ref<Set<number>>(new Set())
 
 // 存储配额
 const storageInfo = ref({ quota: 0, used: 0, remaining: 0, quotaFormatted: '0 B', usedFormatted: '0 B' })
@@ -81,6 +82,11 @@ async function loadPools() {
     loading.value = false
   }
 }
+
+const canBulkDelete = computed(() => {
+  if (selectedPoolIds.value.size === 0) return false
+  return pools.value.some(pool => selectedPoolIds.value.has(pool.id) && !pool.isDefault)
+})
 
 function showMsg(text: string, type: 'success' | 'error') {
   message.value = text
@@ -149,6 +155,24 @@ function closeDialog() {
   editingPool.value = null
 }
 
+function toggleSelectPool(id: number) {
+  const next = new Set(selectedPoolIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedPoolIds.value = next
+}
+
+function clearSelection() {
+  selectedPoolIds.value = new Set()
+}
+
+function selectDeletablePools() {
+  const deletable = pools.value.filter(pool => !pool.isDefault).map(pool => pool.id)
+  selectedPoolIds.value = new Set(
+    selectedPoolIds.value.size === deletable.length ? [] : deletable
+  )
+}
+
 async function savePool() {
   if (!form.value.name) {
     showMsg('请输入存储池名称', 'error')
@@ -188,6 +212,34 @@ async function deletePool(pool: StoragePool) {
   try {
     await api.delete(`/storage-pools/${pool.id}`)
     showMsg('存储池删除成功', 'success')
+    await loadPools()
+  } catch (err: any) {
+    showMsg(err.message, 'error')
+  }
+}
+
+async function deleteSelectedPools() {
+  const ids = Array.from(selectedPoolIds.value)
+  if (ids.length === 0) return
+
+  const deletableIds = pools.value.filter(pool => ids.includes(pool.id) && !pool.isDefault).map(pool => pool.id)
+  if (deletableIds.length === 0) {
+    showMsg('所选存储池均不可删除', 'error')
+    return
+  }
+
+  if (!confirm(`确定要批量删除 ${deletableIds.length} 个存储池吗？`)) {
+    return
+  }
+
+  try {
+    const res = await api.post<{ message: string; errors?: string[] }>('/storage-pools/batch-delete', { ids: deletableIds })
+    if (res.errors?.length) {
+      showMsg(`${res.message}，部分失败：${res.errors[0]}`, res.errors.length === deletableIds.length ? 'error' : 'success')
+    } else {
+      showMsg(res.message, 'success')
+    }
+    clearSelection()
     await loadPools()
   } catch (err: any) {
     showMsg(err.message, 'error')
@@ -247,11 +299,25 @@ function getStorageLabel(type: string) {
         <p class="text-xs mt-1" style="color: var(--text-secondary-color)">剩余 {{ formatBytes(storageInfo.remaining) }}</p>
       </div>
 
-      <div class="flex justify-end mb-4">
+      <div class="flex flex-wrap justify-end gap-2 mb-4">
+        <button v-if="pools.length > 1" @click="selectDeletablePools" class="btn-secondary flex items-center gap-2">
+          <Icon name="square-check" class="w-4 h-4" />
+          {{ selectedPoolIds.size > 0 ? '取消批选' : '批量选择' }}
+        </button>
+        <button v-if="selectedPoolIds.size > 0" @click="deleteSelectedPools" :disabled="!canBulkDelete" class="btn-danger flex items-center gap-2 disabled:opacity-50">
+          <Icon name="trash" class="w-4 h-4" />
+          批量删除
+        </button>
         <button @click="openAddDialog" class="btn-primary flex items-center gap-2">
           <Icon name="plus" class="w-5 h-5" />
           添加存储池
         </button>
+      </div>
+
+      <div v-if="selectedPoolIds.size > 0" class="mb-4 p-3 rounded-lg text-sm flex items-center justify-between"
+        style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
+        <span style="color: var(--text-color)">已选 {{ selectedPoolIds.size }} 个存储池，默认存储池不会被删除</span>
+        <button @click="clearSelection" class="text-sm hover:underline" style="color: var(--accent-color)">清空</button>
       </div>
 
       <!-- 提示消息 -->
@@ -278,6 +344,12 @@ function getStorageLabel(type: string) {
           :class="pool.isDefault ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''"
         >
           <div class="flex items-center gap-4">
+            <input
+              v-if="!pool.isDefault"
+              type="checkbox"
+              :checked="selectedPoolIds.has(pool.id)"
+              @change="toggleSelectPool(pool.id)"
+            />
             <Icon :name="getStorageIconName(pool.storageType)" class="w-8 h-8 text-blue-500" />
             <div>
               <div class="flex items-center gap-2">

@@ -85,7 +85,7 @@ X-API-Key: <your-api-key>
 // Response（普通文件列表）
 {
   "files": [
-    { "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt", "poolId": 1 }
+    { "name": "file.txt", "type": "file", "size": 1024, "modified": "2024-01-01T00:00:00Z", "path": "file.txt", "poolId": 1, "directUrl": "/api/files/preview?path=file.txt&poolId=1&token=...", "fileUrl": "/api/files/preview?path=file.txt&poolId=1&token=..." }
   ]
 }
 // Response（根目录无 poolId，返回存储池列表）
@@ -100,7 +100,7 @@ X-API-Key: <your-api-key>
 权限：`read`
 ```json
 // Response
-{ "info": { "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt", "poolId": 1 } }
+{ "info": { "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt", "poolId": 1, "directUrl": "/api/files/preview?path=file.txt&poolId=1&token=...", "fileUrl": "/api/files/preview?path=file.txt&poolId=1&token=..." } }
 ```
 
 ### POST `/api/files/upload?path=&poolId=` — 上传文件
@@ -111,7 +111,7 @@ Form Field: file
 ```
 ```json
 // Response
-{ "message": "上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local" }
+{ "message": "上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local", "directUrl": "/api/files/preview?path=dir%2Ffile.txt&poolId=1&token=...", "fileUrl": "/api/files/preview?path=dir%2Ffile.txt&poolId=1&token=..." }
 ```
 
 ### POST `/api/files/upload-stream` — 流式上传
@@ -120,15 +120,15 @@ Form Field: file
 支持 chunked transfer encoding，适合大文件。
 ```
 Headers:
-  X-File-Name: 文件名
-  X-Dir-Path: 目标目录（可选）
+  X-File-Name: encodeURIComponent(文件名)
+  X-Dir-Path: encodeURIComponent(目标目录，可选)
   X-Pool-Id: 存储池ID（可选）
 Content-Type: application/octet-stream
 Body: 文件二进制流
 ```
 ```json
 // Response
-{ "message": "流式上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local" }
+{ "message": "流式上传成功", "path": "dir/file.txt", "poolId": 1, "storageType": "local", "directUrl": "/api/files/preview?path=dir%2Ffile.txt&poolId=1&token=...", "fileUrl": "/api/files/preview?path=dir%2Ffile.txt&poolId=1&token=..." }
 ```
 
 ### POST `/api/files/upload/init` — 断点续传：初始化
@@ -139,6 +139,7 @@ Body: 文件二进制流
 // Response
 { "uploadId": "abc123...", "message": "分片上传已初始化" }
 ```
+> 上传缓存保留时长由 `config.yml` 中的 `resumable_upload_cache_minutes` 控制，超时未完成会自动清理。
 
 ### PATCH `/api/files/upload/:uploadId/chunk` — 断点续传：上传分片
 权限：`write`
@@ -156,14 +157,21 @@ Body: 分片二进制数据
 权限：`read`
 ```json
 // Response
-{ "fileName": "large-file.zip", "fileSize": 104857600, "uploadedParts": [0, 1, 2], "createdAt": 1704067200000 }
+{ "fileName": "large-file.zip", "fileSize": 104857600, "uploadedParts": [0, 1, 2], "createdAt": 1704067200000, "updatedAt": 1704068200000, "expiresAt": 1704075400000 }
 ```
 
 ### POST `/api/files/upload/:uploadId/complete` — 断点续传：完成
 权限：`write`
 ```json
 // Response
-{ "message": "分片上传完成", "path": "target-dir/large-file.zip", "poolId": 1, "storageType": "local" }
+{ "message": "分片上传完成", "path": "target-dir/large-file.zip", "poolId": 1, "storageType": "local", "directUrl": "/api/files/preview?path=target-dir%2Flarge-file.zip&poolId=1&token=...", "fileUrl": "/api/files/preview?path=target-dir%2Flarge-file.zip&poolId=1&token=..." }
+```
+
+### DELETE `/api/files/upload/:uploadId` — 断点续传：取消并清理缓存
+权限：`write`
+```json
+// Response
+{ "message": "上传缓存已清理" }
 ```
 
 ### GET `/api/files/download?path=&poolId=` — 下载文件
@@ -318,7 +326,7 @@ DELETE /api/files/delete?path=file.txt&poolId=1&permanent=false
 // Request Body
 { "url": "https://example.com/file.zip", "dirPath": "target-dir", "poolId": 1 }
 // Response
-{ "message": "远程上传成功", "path": "target-dir/file.zip", "poolId": 1, "storageType": "local" }
+{ "message": "远程上传成功", "path": "target-dir/file.zip", "poolId": 1, "storageType": "local", "directUrl": "/api/files/preview?path=target-dir%2Ffile.zip&poolId=1&token=...", "fileUrl": "/api/files/preview?path=target-dir%2Ffile.zip&poolId=1&token=..." }
 ```
 
 ### GET `/api/files/storage-stats?poolId=` — 存储统计（需认证）
@@ -372,6 +380,15 @@ DELETE /api/files/delete?path=file.txt&poolId=1&permanent=false
 // Response
 { "message": "存储池删除成功" }
 ```
+
+### POST `/api/storage-pools/batch-delete` — 批量删除存储池
+```json
+// Request Body
+{ "ids": [2, 3, 4] }
+// Response
+{ "message": "已删除 3 个存储池", "deletedIds": [2, 3, 4], "errors": [] }
+```
+> 默认存储池不会被删除；失败项会出现在 `errors` 中。
 
 ### POST `/api/storage-pools/:id/set-default` — 设为默认存储池
 ```json

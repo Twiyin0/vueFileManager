@@ -74,6 +74,18 @@ export class FtpStorage implements StorageProvider {
     }
   }
 
+  async uploadStream(filePath: string, stream: NodeJS.ReadableStream): Promise<void> {
+    const client = await this.connect()
+    try {
+      const remotePath = this.fullPath(filePath)
+      const dir = path.posix.dirname(remotePath)
+      await client.ensureDir(dir)
+      await client.uploadFrom(stream as Readable, remotePath)
+    } finally {
+      client.close()
+    }
+  }
+
   async download(filePath: string): Promise<Buffer> {
     const client = await this.connect()
     try {

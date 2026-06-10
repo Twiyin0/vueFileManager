@@ -114,6 +114,8 @@ function getFileIcon(file: FileItem): string {
 }
 
 function getPreviewUrl(file: FileItem): string {
+  if (file.directUrl) return file.directUrl
+  if (file.fileUrl) return file.fileUrl
   if (props.guestBaseUrl) {
     return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
   }

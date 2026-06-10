@@ -110,6 +110,16 @@ export class S3Storage implements StorageProvider {
     await this.client.send(command)
   }
 
+  async uploadStream(filePath: string, stream: NodeJS.ReadableStream, size?: number): Promise<void> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: this.fullKey(filePath),
+      Body: stream as Readable,
+      ...(typeof size === 'number' ? { ContentLength: size } : {}),
+    })
+    await this.client.send(command)
+  }
+
   async download(filePath: string): Promise<Buffer> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,

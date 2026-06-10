@@ -3,6 +3,7 @@ import multer from 'multer'
 import Busboy from 'busboy'
 import chardet from 'chardet'
 import iconv from 'iconv-lite'
+import crypto from 'crypto'
 import db from '../db'
 import { getStorageByPoolId } from '../services/factory'
 import config from '../config'
@@ -13,6 +14,7 @@ import { LocalStorage } from '../services/local'
 import { PrefixStorage } from '../services/prefix'
 
 const router = Router()
+const TEMP_UPLOAD_PREFIX = '.temp_'
 
 // MIME 类型映射（与 public.ts 一致）
 const mimeTypes: Record<string, string> = {
@@ -124,6 +126,26 @@ function isPathSafe(targetPath: string): boolean {
   return true
 }
 
+function isTemporaryUploadFile(filename: string): boolean {
+  const name = filename.split('/').pop() || filename
+  return name.startsWith(TEMP_UPLOAD_PREFIX)
+}
+
+function shouldUseAtomicTempUpload(storageType?: string): boolean {
+  return storageType === 'local' || storageType === 'ftp' || storageType === 'upyun'
+}
+
+function buildTemporaryUploadPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  const lastSlashIndex = normalized.lastIndexOf('/')
+  if (lastSlashIndex === -1) {
+    return `${TEMP_UPLOAD_PREFIX}${normalized}`
+  }
+  const dir = normalized.slice(0, lastSlashIndex)
+  const name = normalized.slice(lastSlashIndex + 1)
+  return `${dir}/${TEMP_UPLOAD_PREFIX}${name}`
+}
+
 // 获取用户信息（根据用户名）
 function getUserByUsername(username: string) {
   return db.prepare('SELECT id, username FROM users WHERE username = ?').get(username) as any
@@ -211,7 +233,7 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
     // 过滤路径前缀，返回给访客的是相对于 basePath 的路径
     const prefix = basePath ? basePath + '/' : ''
     const result = files
-      .filter(f => !/^\._/.test(f.name) && f.name !== '.DS_Store')
+      .filter(f => !/^\._/.test(f.name) && f.name !== '.DS_Store' && !isTemporaryUploadFile(f.name))
       .map(f => ({
         ...f,
         path: prefix ? (f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path) : f.path
@@ -432,8 +454,29 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
     const filePath = basePath
       ? (dirPath ? `${basePath}/${dirPath}/${normalizedName}` : `${basePath}/${normalizedName}`)
       : (dirPath ? `${dirPath}/${normalizedName}` : normalizedName)
+    const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(share.storage_pool_id) as any
+    const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type) ? buildTemporaryUploadPath(filePath) : filePath
 
-    await storage.upload(filePath, req.file.buffer)
+    try {
+      await storage.upload(uploadPath, req.file.buffer)
+      if (uploadPath !== filePath) {
+        try {
+          await storage.move(uploadPath, filePath)
+        } catch (err) {
+          if (await storage.exists(filePath)) {
+            await storage.remove(filePath)
+            await storage.move(uploadPath, filePath)
+          } else {
+            throw err
+          }
+        }
+      }
+    } catch (err) {
+      if (uploadPath !== filePath) {
+        await storage.remove(uploadPath).catch(() => {})
+      }
+      throw err
+    }
 
     const relativePath = basePath ? filePath.replace(basePath + '/', '').replace(basePath, '') : filePath
     res.json({ message: '上传成功', path: relativePath })

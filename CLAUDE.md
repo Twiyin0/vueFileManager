@@ -13,16 +13,16 @@ VueFileManager v1.0.0-beta.12
 ├── 📁 文件管理
 │   ├── 浏览/上传/下载/删除/重命名/移动/复制
 │   ├── 搜索（递归）/ ZIP 打包下载
-│   ├── 流式上传 + 断点续传
+│   ├── 流式上传 + 断点续传（缓存 TTL 可配，支持取消清理）
 │   ├── 远程 URL 上传 / 拖拽上传
 │   ├── 回收站（恢复/永久删除/清空）
 │   ├── 收藏系统
 │   └── 分享系统（密码/过期/下载限制/signToken）
 │
 ├── 💾 存储池系统
-│   ├── 多存储池管理（CRUD/切换默认/连接测试）
+│   ├── 多存储池管理（CRUD/切换默认/连接测试/批量删除）
 │   ├── 本地存储（用户目录自动隔离 storage_root/username）
-│   ├── Upyun 云存储（keepalive + retry）
+│   ├── Upyun 云存储（keepalive + retry + 原生 move/copy）
 │   ├── FTP（basic-ftp）
 │   ├── S3/OSS（@aws-sdk/client-s3，兼容 MinIO/阿里云）
 │   └── 用户配额管理（默认 10GB，管理员可调）
@@ -67,12 +67,13 @@ VueFileManager v1.0.0-beta.12
 │   └── ip_blacklist / ip_whitelist / ip_list_config
 │
 ├── 🧪 测试（test/workflows.ts）
-│   └── 104 项全流程测试覆盖所有 API
+│   └── 121 项全流程测试覆盖所有 API
 │
 └── 🚀 部署
     ├── 构建：NODE_OPTIONS='--max-old-space-size=3072' yarn build
     ├── deploy.sh 自动部署脚本（rsync + Docker）
     ├── 2G 内存服务器需 4G swap
+    ├── Nginx 反代上传建议关闭 `proxy_request_buffering`
     └── CodeMirror 6 按需懒加载（替代 Monaco Editor）
 ```
 

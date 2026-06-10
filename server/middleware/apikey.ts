@@ -52,7 +52,7 @@ export function requirePermission(permission: string) {
 
 // 统一认证：支持 JWT 或 API Key
 export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFunction) {
-  const apiKey = req.headers['x-api-key'] as string
+  const apiKey = req.headers['x-api-key'] as string || req.query.apiKey as string
   const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '') || req.query.token as string
 
   if (apiKey) {

@@ -13,6 +13,8 @@ export interface StorageProvider {
   list(prefix: string): Promise<FileInfo[]>
   // 上传文件
   upload(filePath: string, data: Buffer): Promise<void>
+  // 流式上传文件（可选，用于减少大文件二次落盘/读回）
+  uploadStream?(filePath: string, stream: NodeJS.ReadableStream, size?: number): Promise<void>
   // 下载文件
   download(filePath: string): Promise<Buffer>
   // 删除文件/文件夹

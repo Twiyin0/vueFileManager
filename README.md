@@ -16,9 +16,12 @@
 - ⌘ Spotlight 全局搜索 (Ctrl+K)
 - 📦 ZIP 打包下载
 - 📡 远程 URL 上传
-- 📥 拖拽上传 + 上传进度条
+- 📥 拖拽上传 + 上传进度条 + 上传中取消
+- ⚡ 流式上传 + 断点续传（支持缓存过期自动清理）
+- 🔗 文件列表 / 文件信息 / 上传结果直接返回 `directUrl` / `fileUrl`
 - ⚡ Express body 限制提升至 50MB，Upyun keepalive HTTPS Agent + 指数退避重试
 - 💾 文本保存端点 30s 超时保护
+- 📝 Markdown 预览高亮
 - 📋 剪贴板复制/粘贴 + Toast 通知
 - 📦 移动对话框（跨存储池文件夹选择器）
 - 👆 长按进入多选模式（移动端）
@@ -30,6 +33,7 @@
 - 🔒 本地存储用户目录自动隔离（`storage_root/<username>/`）
 - 🔄 存储池独立配置，一键切换默认
 - 🧪 存储池连接测试
+- 🗑️ 存储池批量删除
 - 📝 config.yml 预配置存储池，新用户自动继承
 
 ### 用户系统
@@ -131,6 +135,12 @@ server:
   # 监听地址，留空默认 localhost，0.0.0.0 可从局域网访问
   host: ''
   jwt_secret: vue-file-manager-secret-key-2024
+
+# 单文件上传限制（MB）
+upload_limit: 100
+
+# 断点续传缓存保留时间（分钟）
+resumable_upload_cache_minutes: 120
 
 # 存储池配置（新用户自动继承）
 storage_pools:
@@ -264,7 +274,7 @@ vueFileManager/
 ├── test/                       # 测试
 │   ├── workflows.ts          # API 全流程测试（121 项）
 │   └── upyun.ts              # Upyun 存储测试
-└── API.md                      # API 文档
+└── public/API.md               # API 文档
 ```
 
 ## 🧪 测试
@@ -280,7 +290,7 @@ npx tsx test/workflows.ts
 npx tsx test/upyun.ts
 ```
 
-测试覆盖（108 项）：
+测试覆盖（121 项）：
 - ✅ 认证 API（注册/登录/用户信息/Token校验）
 - ✅ 存储池 API（CRUD/切换默认/连接测试）
 - ✅ 文件 API（列表/创建/重命名/移动/复制/搜索/批量删除/回收站删除/永久删除/打包下载）
@@ -299,7 +309,7 @@ npx tsx test/upyun.ts
 
 ## 📖 API 文档
 
-详见 [API.md](./API.md)
+详见 [public/API.md](./public/API.md)
 
 ### 认证方式
 
@@ -327,6 +337,7 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 文件 | `PATCH /api/files/upload/:id/chunk` | 断点续传分片 |
 | 文件 | `GET /api/files/upload/:id/status` | 断点续传状态 |
 | 文件 | `POST /api/files/upload/:id/complete` | 断点续传完成 |
+| 文件 | `DELETE /api/files/upload/:id` | 取消并清理断点续传缓存 |
 | 文件 | `GET /api/files/download` | 下载 |
 | 文件 | `GET /api/files/preview` | 预览 |
 | 文件 | `POST /api/files/rename` | 重命名 |
@@ -342,11 +353,12 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 文件 | `GET /api/files/storage-stats` | 存储统计 |
 | 文件 | `POST /api/files/download-zip` | ZIP打包下载 |
 | 文件 | `POST /api/files/remote-upload` | 远程URL上传 |
-| 文件 | `PUT /api/files/save` | 保存文本/代码 (30s超时) |
+| 文件 | `POST /api/files/write` | 保存文本/代码 (30s超时) |
 | 存储池 | `GET /api/storage-pools` | 存储池列表 |
 | 存储池 | `POST /api/storage-pools` | 创建存储池 |
 | 存储池 | `PUT /api/storage-pools/:id` | 更新存储池 |
 | 存储池 | `DELETE /api/storage-pools/:id` | 删除存储池 |
+| 存储池 | `POST /api/storage-pools/batch-delete` | 批量删除存储池 |
 | 存储池 | `POST /api/storage-pools/:id/set-default` | 设为默认 |
 | 存储池 | `POST /api/storage-pools/:id/test` | 测试连接 |
 | 回收站 | `GET /api/trash` | 回收站列表 |
@@ -417,6 +429,7 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 **部署:**
 - Docker 支持
 - deploy.sh 自动部署脚本（rsync + Docker exec）
+- Nginx 反代大文件上传时建议关闭请求体缓冲：`proxy_request_buffering off;`，避免代理层先完整接收上传再转发给 Node
 
 ## 📄 许可证
 

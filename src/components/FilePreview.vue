@@ -10,6 +10,7 @@ const props = defineProps<{
   show: boolean
   filePath: string
   fileName: string
+  fileUrl?: string
   poolId?: number
   token?: string
   /** All files in the current directory (for image gallery prev/next navigation) */
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 
 // ---- URL helpers ----
 const previewUrl = computed(() => {
+  if (props.fileUrl) return props.fileUrl
   if (!props.filePath) return ''
   if (props.filePath.startsWith('/api/')) return props.filePath
   if (props.guestBaseUrl) {
@@ -255,6 +257,12 @@ async function getCmThemes(EditorView: any, HighlightStyle: any, tags: any) {
     { tag: tags.tagName, color: '#22863a' },
     { tag: tags.attributeName, color: '#6f42c1' },
     { tag: tags.propertyName, color: '#005cc5' },
+    { tag: tags.heading, color: '#0f766e', fontWeight: '700' },
+    { tag: tags.emphasis, fontStyle: 'italic', color: '#7c3aed' },
+    { tag: tags.strong, fontWeight: '700', color: '#111827' },
+    { tag: tags.link, color: '#2563eb', textDecoration: 'underline' },
+    { tag: tags.monospace, color: '#b45309', backgroundColor: '#fef3c7' },
+    { tag: tags.list, color: '#0f766e' },
   ])
   const darkHighlight = HighlightStyle.define([
     { tag: tags.keyword, color: '#c586c0' },
@@ -266,6 +274,12 @@ async function getCmThemes(EditorView: any, HighlightStyle: any, tags: any) {
     { tag: tags.tagName, color: '#569cd6' },
     { tag: tags.attributeName, color: '#9cdcfe' },
     { tag: tags.propertyName, color: '#9cdcfe' },
+    { tag: tags.heading, color: '#4fd1c5', fontWeight: '700' },
+    { tag: tags.emphasis, fontStyle: 'italic', color: '#c4b5fd' },
+    { tag: tags.strong, fontWeight: '700', color: '#f8fafc' },
+    { tag: tags.link, color: '#60a5fa', textDecoration: 'underline' },
+    { tag: tags.monospace, color: '#fbbf24', backgroundColor: '#3f2d16' },
+    { tag: tags.list, color: '#4fd1c5' },
   ])
   const lightTheme = EditorView.theme({
     '&': { backgroundColor: '#ffffff', color: '#24292e' },

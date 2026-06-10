@@ -40,6 +40,13 @@ export class PrefixStorage implements StorageProvider {
     return this.inner.upload(this.withPrefix(filePath), data)
   }
 
+  async uploadStream(filePath: string, stream: NodeJS.ReadableStream, size?: number): Promise<void> {
+    if (!this.inner.uploadStream) {
+      throw new Error('当前存储不支持流式上传')
+    }
+    return this.inner.uploadStream(this.withPrefix(filePath), stream, size)
+  }
+
   async download(filePath: string): Promise<Buffer> {
     return this.inner.download(this.withPrefix(filePath))
   }

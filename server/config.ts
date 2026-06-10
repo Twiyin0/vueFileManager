@@ -40,6 +40,7 @@ interface Config {
   }
   storage_root: string
   upload_limit: number  // MB
+  resumable_upload_cache_minutes: number
   ip_list_mode: 'blacklist' | 'whitelist'
   site: {
     icp_beian: string
@@ -62,6 +63,7 @@ const defaultConfig: Config = {
   },
   storage_root: './uploads',
   upload_limit: 100,
+  resumable_upload_cache_minutes: 120,
   ip_list_mode: 'blacklist',
   site: {
     icp_beian: '',
@@ -102,6 +104,7 @@ try {
       server: { ...defaultConfig.server, ...loaded.server },
       storage_root: loaded.storage_root || defaultConfig.storage_root,
       upload_limit: loaded.upload_limit || defaultConfig.upload_limit,
+      resumable_upload_cache_minutes: loaded.resumable_upload_cache_minutes ?? defaultConfig.resumable_upload_cache_minutes,
       ip_list_mode: loaded.ip_list_mode || defaultConfig.ip_list_mode,
       site: { ...defaultConfig.site, ...loaded.site },
       storage_pools: loaded.storage_pools || defaultConfig.storage_pools,

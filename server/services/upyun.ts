@@ -92,6 +92,11 @@ export class UpyunStorage implements StorageProvider {
     await withRetry(() => this.client.putFile(remotePath, data))
   }
 
+  async uploadStream(filePath: string, stream: NodeJS.ReadableStream): Promise<void> {
+    const remotePath = this.normalizePath(filePath)
+    await withRetry(() => this.client.putFile(remotePath, stream as any))
+  }
+
   async download(filePath: string): Promise<Buffer> {
     const remotePath = this.normalizePath(filePath)
     const chunks: Buffer[] = []
@@ -156,14 +161,21 @@ export class UpyunStorage implements StorageProvider {
   }
 
   async move(srcPath: string, destPath: string): Promise<void> {
-    const srcData = await this.download(srcPath)
-    await this.upload(destPath, srcData)
-    await this.remove(srcPath)
+    const sourcePath = this.normalizePath(srcPath)
+    const targetPath = this.normalizePath(destPath)
+    const moved = await withRetry(() => this.client.move(targetPath, sourcePath))
+    if (!moved) {
+      throw new Error('又拍云移动文件失败')
+    }
   }
 
   async copy(srcPath: string, destPath: string): Promise<void> {
-    const srcData = await this.download(srcPath)
-    await this.upload(destPath, srcData)
+    const sourcePath = this.normalizePath(srcPath)
+    const targetPath = this.normalizePath(destPath)
+    const copied = await withRetry(() => this.client.copy(targetPath, sourcePath))
+    if (!copied) {
+      throw new Error('又拍云复制文件失败')
+    }
   }
 
   async search(prefix: string, keyword: string): Promise<FileInfo[]> {

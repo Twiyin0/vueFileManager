@@ -10,6 +10,8 @@ export interface FileItem {
   path: string
   poolId?: number
   isPool?: boolean
+  directUrl?: string
+  fileUrl?: string
 }
 
 export const useFilesStore = defineStore('files', () => {

@@ -202,6 +202,52 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
+// 批量删除存储池
+router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+    if (ids.length === 0) {
+      return res.status(400).json({ error: '缺少存储池 ID 列表' })
+    }
+
+    const deletedIds: number[] = []
+    const errors: string[] = []
+
+    for (const rawId of ids) {
+      const id = Number(rawId)
+      if (!Number.isInteger(id) || id <= 0) {
+        errors.push(`无效的存储池 ID: ${rawId}`)
+        continue
+      }
+
+      const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
+      if (!pool) {
+        errors.push(`存储池不存在: #${id}`)
+        continue
+      }
+      if (pool.is_default) {
+        errors.push(`不能删除默认存储池: ${pool.name}`)
+        continue
+      }
+
+      db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
+      deletedIds.push(id)
+    }
+
+    if (deletedIds.length > 0) {
+      clearStorageCache(req.userId!)
+    }
+
+    res.json({
+      message: deletedIds.length > 0 ? `已删除 ${deletedIds.length} 个存储池` : '没有存储池被删除',
+      deletedIds,
+      errors
+    })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // 设置默认存储池
 router.post('/:id/set-default', authMiddleware, (req: AuthRequest, res: Response) => {
   try {

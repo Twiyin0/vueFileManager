@@ -1,6 +1,7 @@
 import fs from 'fs/promises'
 import fsSync from 'fs'
 import path from 'path'
+import { pipeline } from 'stream/promises'
 import { StorageProvider, FileInfo } from './storage'
 
 export class LocalStorage implements StorageProvider {
@@ -73,6 +74,13 @@ export class LocalStorage implements StorageProvider {
     const fullPath = this.fullPath(filePath)
     await fs.mkdir(path.dirname(fullPath), { recursive: true })
     await fs.writeFile(fullPath, data)
+  }
+
+  async uploadStream(filePath: string, stream: NodeJS.ReadableStream): Promise<void> {
+    const fullPath = this.fullPath(filePath)
+    await fs.mkdir(path.dirname(fullPath), { recursive: true })
+    const writeStream = fsSync.createWriteStream(fullPath)
+    await pipeline(stream, writeStream)
   }
 
   async download(filePath: string): Promise<Buffer> {

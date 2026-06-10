@@ -9,9 +9,8 @@ import FilePreview from '@/components/FilePreview.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import UploadDialog from '@/components/UploadDialog.vue'
 import Icon from '@/components/Icon.vue'
-import APlayer from 'aplayer'
-import 'aplayer/dist/APlayer.min.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -51,6 +50,17 @@ const uploading = ref(false)
 const uploadError = ref('')
 const showUploadProgress = ref(false)
 const uploadProgress = ref<{ file: string; percent: number }[]>([])
+const uploadStatus = ref('')
+const activeUploads = ref<XMLHttpRequest[]>([])
+const showUpload = ref(false)
+const pendingUploadFiles = ref<File[]>([])
+const isUploadBusy = computed(() => uploadStatus.value === 'uploading' || uploadStatus.value === 'processing')
+const uploadStatusLabel = computed(() => {
+  if (uploadStatus.value === 'cancelled') return '已取消'
+  if (uploadStatus.value === 'processing') return '服务器处理中'
+  if (uploadStatus.value === 'completed') return '已完成'
+  return ''
+})
 
 // 删除确认
 const showDeleteConfirm = ref(false)
@@ -75,7 +85,7 @@ const showShareDropdown = ref(false)
 
 // APlayer
 const aplayerRef = ref<HTMLDivElement>()
-let aplayerInst: APlayer | null = null
+let aplayerInst: any = null
 const showAplayer = ref(false)
 const aplayerCollapsed = ref(true)
 const isDark = ref(document.documentElement.classList.contains('dark'))
@@ -266,9 +276,11 @@ function openAplayerWithFile(targetFile: FileItem) {
   showAplayer.value = true
   aplayerCollapsed.value = false
 
-  nextTick(() => {
+  nextTick(async () => {
     if (!aplayerRef.value) return
-    aplayerInst = new APlayer({
+    await import('aplayer/dist/APlayer.min.css')
+    const { default: APlayerClass } = await import('aplayer')
+    aplayerInst = new APlayerClass({
       container: aplayerRef.value,
       autoplay: !isMobileDevice,
       volume: 0.3,
@@ -458,8 +470,12 @@ async function handleCreateFolder() {
 async function handleUpload(fileList: FileList) {
   const arr = Array.from(fileList)
   if (arr.length === 0) return
+  pendingUploadFiles.value = arr
+  showUpload.value = true
   showUploadProgress.value = true
+  uploadStatus.value = 'uploading'
   uploadProgress.value = arr.map(f => ({ file: f.name, percent: 0 }))
+  activeUploads.value = []
 
   for (let i = 0; i < arr.length; i++) {
     const file = arr[i]
@@ -470,12 +486,16 @@ async function handleUpload(fileList: FileList) {
       if (currentPath.value) formData.append('dirPath', currentPath.value)
 
       const xhr = new XMLHttpRequest()
+      activeUploads.value.push(xhr)
       const params = new URLSearchParams({ filename: file.name })
       if (currentPath.value) params.set('dirPath', currentPath.value)
       await new Promise<void>((resolve, reject) => {
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             uploadProgress.value[i].percent = Math.round((e.loaded / e.total) * 100)
+            if (e.loaded === e.total) {
+              uploadStatus.value = 'processing'
+            }
           }
         }
         xhr.onload = () => {
@@ -485,16 +505,50 @@ async function handleUpload(fileList: FileList) {
           } else reject(new Error(xhr.statusText))
         }
         xhr.onerror = () => reject(new Error('上传失败'))
+        xhr.onabort = () => reject(new Error('上传已取消'))
         xhr.open('POST', `/api/guest/${username.value}/${shareId.value}/upload?${params}`)
         xhr.send(formData)
       })
     } catch (err: any) {
+      if (err.message === '上传已取消') {
+        uploadStatus.value = 'cancelled'
+        break
+      }
       uploadError.value = err.message
     }
   }
 
-  await fetchFiles()
-  setTimeout(() => { showUploadProgress.value = false }, 2000)
+  activeUploads.value = []
+  if (uploadStatus.value !== 'cancelled') {
+    uploadStatus.value = 'completed'
+    setTimeout(() => {
+      showUploadProgress.value = false
+      uploadStatus.value = ''
+      showUpload.value = false
+      pendingUploadFiles.value = []
+    }, 2000)
+  }
+  fetchFiles().catch(() => {})
+}
+
+function cancelUploads() {
+  if (activeUploads.value.length === 0) {
+    showUploadProgress.value = false
+    uploadStatus.value = ''
+    return
+  }
+  uploadStatus.value = 'cancelled'
+  activeUploads.value.forEach(xhr => {
+    try { xhr.abort() } catch {}
+  })
+  activeUploads.value = []
+  setTimeout(() => {
+    showUploadProgress.value = false
+    uploadStatus.value = ''
+    uploadProgress.value = []
+    showUpload.value = false
+    pendingUploadFiles.value = []
+  }, 300)
 }
 
 // 拖拽上传
@@ -516,7 +570,10 @@ function handleDrop(e: DragEvent) {
   e.preventDefault()
   dragCounter = 0
   isDragging.value = false
-  if (e.dataTransfer?.files.length) handleUpload(e.dataTransfer.files)
+  if (e.dataTransfer?.files.length) {
+    pendingUploadFiles.value = Array.from(e.dataTransfer.files)
+    showUpload.value = true
+  }
 }
 
 function formatDate(dateStr: string): string {
@@ -692,11 +749,10 @@ const permLabels: Record<string, string> = {
                 <span class="hidden sm:inline">新建</span>
               </button>
 
-              <label v-if="hasPermission('upload')" class="btn-primary text-sm flex items-center gap-1 cursor-pointer">
+              <button v-if="hasPermission('upload')" @click="showUpload = true" class="btn-primary text-sm flex items-center gap-1">
                 <Icon name="upload" class="w-4 h-4" />
                 <span class="hidden sm:inline">上传</span>
-                <input type="file" class="hidden" multiple @change="handleUpload(($event.target as HTMLInputElement).files!)" />
-              </label>
+              </button>
             </div>
           </div>
 
@@ -726,19 +782,6 @@ const permLabels: Record<string, string> = {
             <button @click="uploadError = ''" class="text-red-400 hover:text-red-600">
               <Icon name="xmark" class="w-4 h-4" />
             </button>
-          </div>
-
-          <!-- 上传进度 -->
-          <div v-if="showUploadProgress" class="mb-3 p-3 rounded-lg border" style="background-color: var(--card-color); border-color: var(--border-color)">
-            <div v-for="(item, index) in uploadProgress" :key="index" class="mb-2 last:mb-0">
-              <div class="flex items-center justify-between text-xs mb-1">
-                <span class="truncate max-w-[150px] sm:max-w-[200px]" style="color: var(--text-color)">{{ item.file }}</span>
-                <span class="flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">{{ item.percent }}%</span>
-              </div>
-              <div class="w-full rounded-full h-2" style="background-color: var(--hover-color)">
-                <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
-              </div>
-            </div>
           </div>
 
           <!-- 文件列表 -->
@@ -843,8 +886,52 @@ const permLabels: Record<string, string> = {
       </div>
     </Teleport>
 
+    <UploadDialog
+      v-if="hasPermission('upload')"
+      :show="showUpload"
+      :current-path="currentPath"
+      :pending-files="pendingUploadFiles"
+      :uploading="isUploadBusy"
+      :upload-progress="uploadProgress"
+      :upload-status="uploadStatus"
+      @close="showUpload = false; pendingUploadFiles = []"
+      @upload="handleUpload"
+      @cancel="cancelUploads"
+    />
+
     <!-- APlayer 浮动播放器 -->
     <Teleport to="body">
+      <div v-if="showUploadProgress" class="fixed right-4 bottom-4 z-50 w-[min(420px,calc(100vw-2rem))] rounded-xl border shadow-sm"
+        style="background-color: var(--card-color); border-color: var(--border-color)">
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b"
+          style="border-color: var(--border-color); background-color: var(--surface-color)">
+          <h4 class="text-sm font-semibold" style="color: var(--text-color)">
+            上传进度
+            <span v-if="uploadStatusLabel" class="ml-2 text-xs" :class="uploadStatus === 'cancelled' ? 'text-red-500' : 'text-amber-500'">{{ uploadStatusLabel }}</span>
+          </h4>
+          <button v-if="uploadStatus === 'uploading'" @click="cancelUploads" class="btn-secondary text-xs px-3 py-1">
+            取消上传
+          </button>
+          <button v-else @click="showUploadProgress = false" class="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+            style="color: var(--text-secondary-color)">
+            <Icon name="xmark" class="w-4 h-4" />
+          </button>
+        </div>
+        <div class="p-4 max-h-[40vh] overflow-y-auto">
+          <div v-for="(item, index) in uploadProgress" :key="index" class="mb-3 last:mb-0">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="truncate max-w-[220px]" style="color: var(--text-color)">{{ item.file }}</span>
+              <span class="flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">
+                {{ uploadStatus === 'processing' && item.percent >= 100 ? '处理中' : `${item.percent}%` }}
+              </span>
+            </div>
+            <div class="w-full rounded-full h-2" style="background-color: var(--hover-color)">
+              <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="showAplayer" class="aplayer-float" :class="{ 'aplayer-mobile': isMobileDevice }">
         <div v-if="aplayerCollapsed"
           @click="toggleAplayerCollapse"
