@@ -80,6 +80,7 @@ async function processTask(task: DownloadTaskRow) {
         for await (const chunk of response.body as any) {
           const buffer = Buffer.from(chunk)
           downloadedBytes += buffer.length
+          const effectiveTotalBytes = totalBytes ? Math.max(totalBytes, downloadedBytes) : null
 
           const current = db.prepare('SELECT status FROM offline_download_tasks WHERE id = ?').get(task.id) as { status: TaskStatus } | undefined
           if (!current || current.status === 'cancelled') {
@@ -90,7 +91,8 @@ async function processTask(task: DownloadTaskRow) {
           trackedStream.push(buffer)
           updateTask(task.id, {
             downloaded_bytes: downloadedBytes,
-            progress: totalBytes ? Math.min(99, Math.round(downloadedBytes / totalBytes * 100)) : 0
+            total_bytes: effectiveTotalBytes,
+            progress: effectiveTotalBytes ? Math.min(99, Math.round(downloadedBytes / effectiveTotalBytes * 100)) : 0
           })
         }
         trackedStream.push(null)
@@ -113,7 +115,7 @@ async function processTask(task: DownloadTaskRow) {
       status: 'completed',
       progress: 100,
       downloaded_bytes: downloadedBytes,
-      total_bytes: totalBytes ?? downloadedBytes
+      total_bytes: Math.max(totalBytes ?? 0, downloadedBytes) || downloadedBytes
     })
   } catch (err: any) {
     const current = db.prepare('SELECT status FROM offline_download_tasks WHERE id = ?').get(task.id) as { status: TaskStatus } | undefined
@@ -199,4 +201,13 @@ export function retryOfflineDownloadTask(userId: number, taskId: number) {
     error_message: ''
   })
   processQueue().catch(() => {})
+}
+
+export function clearFinishedOfflineDownloadTasks(userId: number) {
+  ensureTable()
+  db.prepare(`
+    DELETE FROM offline_download_tasks
+    WHERE user_id = ?
+      AND status IN ('completed', 'failed', 'cancelled')
+  `).run(userId)
 }

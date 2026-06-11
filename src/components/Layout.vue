@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import Icon from '@/components/Icon.vue'
+import { headerLinks } from '@/app/modules'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -34,25 +35,13 @@ function handleMoreMenuOutside(e: MouseEvent) {
 onMounted(() => document.addEventListener('click', handleMoreMenuOutside))
 onUnmounted(() => document.removeEventListener('click', handleMoreMenuOutside))
 
-const pageTitleMap: Record<string, string> = {
-  '/': '文件管理',
-  '/favourites': '我的收藏',
-  '/my-shares': '我的分享',
-  '/trash': '回收站',
-  '/storage-pools': '存储池管理',
-  '/settings': '设置',
-  '/apikeys': 'API Keys',
-  '/admin': '管理面板',
-  '/api-docs': 'API 文档',
-  '/themes': '主题管理',
-  '/theme-docs': '主题开发文档',
-}
+const sortedHeaderLinks = computed(() => [...headerLinks].sort((a, b) => a.order - b.order))
 
 const pageTitle = ref('')
 const pageTitleKey = ref(0)
 
 watch(() => route.path, (path) => {
-  const newTitle = pageTitleMap[path] || (route.meta.pluginTitle as string) || ''
+  const newTitle = (route.meta.pageTitle as string) || ''
   if (newTitle !== pageTitle.value) {
     pageTitleKey.value++
     pageTitle.value = newTitle
@@ -122,13 +111,16 @@ onUnmounted(() => {
       <div class="flex items-center gap-2 flex-shrink-0">
         <!-- 桌面端：直接显示链接 -->
         <template v-if="!isMobile">
-          <router-link to="/api-docs" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:opacity-80 transition-opacity" title="API 文档" style="color: var(--text-secondary-color)">
-            <Icon name="book-open" class="w-5 h-5" />
-            <span class="text-sm font-medium">API 文档</span>
-          </router-link>
-          <router-link to="/theme-docs" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:opacity-80 transition-opacity" title="主题开发" style="color: var(--text-secondary-color)">
-            <Icon name="palette" class="w-5 h-5" />
-            <span class="text-sm font-medium">主题开发</span>
+          <router-link
+            v-for="link in sortedHeaderLinks"
+            :key="link.to"
+            :to="link.to"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
+            :title="link.label"
+            style="color: var(--text-secondary-color)"
+          >
+            <Icon :name="link.icon" class="w-5 h-5" />
+            <span class="text-sm font-medium">{{ link.label }}</span>
           </router-link>
           <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="p-1.5 rounded-lg hover:opacity-80 transition-opacity" title="GitHub" style="color: var(--text-secondary-color)">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -161,17 +153,15 @@ onUnmounted(() => {
               <div v-if="showMoreMenu"
                 class="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border py-1 shadow-sm"
                 style="background-color: var(--card-color); border-color: var(--border-color)">
-                <router-link to="/api-docs" @click="showMoreMenu = false"
+                <router-link
+                  v-for="link in sortedHeaderLinks"
+                  :key="link.to"
+                  :to="link.to"
+                  @click="showMoreMenu = false"
                   class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
                   style="color: var(--text-color)">
-                  <Icon name="book-open" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                  API 文档
-                </router-link>
-                <router-link to="/theme-docs" @click="showMoreMenu = false"
-                  class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                  style="color: var(--text-color)">
-                  <Icon name="palette" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                  主题开发
+                  <Icon :name="link.icon" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+                  {{ link.label }}
                 </router-link>
                 <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" @click="showMoreMenu = false"
                   class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"

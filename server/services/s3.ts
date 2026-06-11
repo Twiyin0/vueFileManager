@@ -51,6 +51,14 @@ export class S3Storage implements StorageProvider {
     return Buffer.concat(chunks)
   }
 
+  private encodeCopySource(key: string): string {
+    const encodedKey = key
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    return `${this.bucket}/${encodedKey}`
+  }
+
   async list(prefix: string): Promise<FileInfo[]> {
     const fullPrefix = this.fullKey(prefix || '')
     const delimiter = '/'
@@ -212,7 +220,7 @@ export class S3Storage implements StorageProvider {
 
     await this.client.send(new CopyObjectCommand({
       Bucket: this.bucket,
-      CopySource: `${this.bucket}/${oldKey}`,
+      CopySource: this.encodeCopySource(oldKey),
       Key: newKey,
     }))
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: oldKey }))
@@ -224,7 +232,7 @@ export class S3Storage implements StorageProvider {
 
     await this.client.send(new CopyObjectCommand({
       Bucket: this.bucket,
-      CopySource: `${this.bucket}/${srcKey}`,
+      CopySource: this.encodeCopySource(srcKey),
       Key: destKey,
     }))
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: srcKey }))
@@ -236,7 +244,7 @@ export class S3Storage implements StorageProvider {
 
     await this.client.send(new CopyObjectCommand({
       Bucket: this.bucket,
-      CopySource: `${this.bucket}/${srcKey}`,
+      CopySource: this.encodeCopySource(srcKey),
       Key: destKey,
     }))
   }

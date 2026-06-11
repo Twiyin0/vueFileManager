@@ -143,6 +143,10 @@ function getPreviewUrlForFile(file: any): string {
   return `/api/share/preview/${shareCode.value}?${params.toString()}`
 }
 
+function getCurrentPreviewUrl(file: any): string {
+  return file?._sharePath || getPreviewUrlForFile(file)
+}
+
 function handleDownloadFile(file: any) {
   const params = new URLSearchParams()
   const relPath = currentSubPath.value ? `${currentSubPath.value}/${file.name}` : file.name
@@ -163,11 +167,14 @@ function handleDownloadSingle() {
 
 function previewSingleFile() {
   const p = new URLSearchParams()
-  p.set('path', shareInfo.value.filePath)
   if (sign.value) p.set('sign', sign.value)
   if (timestamp.value) p.set('t', timestamp.value)
   if (password.value) p.set('password', password.value)
-  fileToPreview.value = { name: shareInfo.value.fileName, _sharePath: `/api/share/preview/${shareCode.value}?${p.toString()}` }
+  fileToPreview.value = {
+    name: shareInfo.value.fileName,
+    path: shareInfo.value.filePath,
+    _sharePath: `/api/share/preview/${shareCode.value}?${p.toString()}`
+  }
   showPreview.value = true
 }
 
@@ -301,7 +308,8 @@ function submitPassword() {
     <FilePreview
       v-if="fileToPreview && sign"
       :show="showPreview"
-      :file-path="fileToPreview._sharePath || getPreviewUrlForFile(fileToPreview)"
+      :file-path="fileToPreview.path || fileToPreview.name"
+      :file-url="getCurrentPreviewUrl(fileToPreview)"
       :file-name="fileToPreview.name"
       @close="showPreview = false; fileToPreview = null"
     />

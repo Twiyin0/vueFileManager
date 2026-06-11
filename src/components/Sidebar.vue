@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/Icon.vue'
+import { getSidebarSections } from '@/app/modules'
 
 const props = defineProps<{
   collapsed?: boolean
@@ -51,20 +52,7 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', onDragEnd)
 })
 
-const navItems = [
-  { path: '/', label: '文件管理', icon: 'folder' },
-  { path: '/favourites', label: '我的收藏', icon: 'star-sharp' },
-  { path: '/my-shares', label: '我的分享', icon: 'link' },
-  { path: '/trash', label: '回收站', icon: 'trash' },
-  { path: '/storage-pools', label: '存储池', icon: 'server' },
-  { path: '/settings', label: '设置', icon: 'gear' },
-  { path: '/apikeys', label: 'API Keys', icon: 'key' },
-  { path: '/themes', label: '主题', icon: 'palette' },
-]
-
-const adminItems = [
-  { path: '/admin', label: '管理面板', icon: 'users' },
-]
+const sections = computed(() => getSidebarSections(authStore.isAdmin))
 
 function isActive(path: string) {
   return route.path === path
@@ -90,27 +78,13 @@ function isActive(path: string) {
     </div>
 
     <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
-      <router-link
-        v-for="item in navItems"
-        :key="item.path"
-        :to="item.path"
-        class="sidebar-item flex items-center text-sm transition-all duration-150 relative"
-        :class="[
-          collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5',
-          isActive(item.path) ? 'sidebar-item-active' : ''
-        ]"
-        :title="collapsed ? item.label : undefined"
-      >
-        <Icon :name="item.icon" class="w-5 h-5 flex-shrink-0" />
-        <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
-      </router-link>
-
-      <template v-if="authStore.isAdmin">
-        <div class="sidebar-divider my-2 mx-1">
-          <p v-if="!collapsed" class="px-2 pt-1 pb-0.5 text-xs uppercase tracking-wider" style="color: var(--text-secondary-color); opacity: 0.6">管理</p>
+      <template v-for="section in sections" :key="section.id">
+        <div v-if="section.title" class="sidebar-divider my-2 mx-1">
+          <p v-if="!collapsed" class="px-2 pt-1 pb-0.5 text-xs uppercase tracking-wider" style="color: var(--text-secondary-color); opacity: 0.6">{{ section.title }}</p>
         </div>
+
         <router-link
-          v-for="item in adminItems"
+          v-for="item in section.items"
           :key="item.path"
           :to="item.path"
           class="sidebar-item flex items-center text-sm transition-all duration-150 relative"

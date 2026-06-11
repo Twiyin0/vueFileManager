@@ -1,10 +1,48 @@
 import { Router, Response, Request } from 'express'
 import crypto from 'crypto'
+import fs from 'fs/promises'
+import fsSync from 'fs'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getStorage, getStorageByPoolId } from '../services/factory'
+import {
+  isJunkFile,
+  isTemporaryUploadFile,
+  resolveLocalMediaPath,
+} from './files/shared'
 
 const router = Router()
+
+const previewMimeTypes: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp',
+  bmp: 'image/bmp', ico: 'image/x-icon',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska',
+  ogg: 'audio/ogg', mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac',
+  aac: 'audio/aac', m4a: 'audio/mp4',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+  csv: 'text/csv; charset=utf-8',
+  txt: 'text/plain; charset=utf-8',
+  md: 'text/markdown; charset=utf-8',
+  markdown: 'text/markdown; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  js: 'text/javascript; charset=utf-8',
+  ts: 'text/typescript; charset=utf-8',
+  html: 'text/html; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  xml: 'text/xml; charset=utf-8',
+  yaml: 'text/yaml; charset=utf-8',
+  yml: 'text/yaml; charset=utf-8',
+  py: 'text/x-python; charset=utf-8',
+  java: 'text/x-java; charset=utf-8',
+  go: 'text/x-go; charset=utf-8',
+  rs: 'text/x-rust; charset=utf-8',
+  vue: 'text/x-vue; charset=utf-8',
+  sh: 'text/x-shellscript; charset=utf-8',
+}
 
 // 生成 signToken
 function generateSignToken(username: string, signKey: string): { sign: string; timestamp: number } {
@@ -189,7 +227,8 @@ router.get('/list/:code', async (req: Request, res: Response) => {
     const fullPath = share.file_path ? (subPath ? `${share.file_path}/${subPath}` : share.file_path) : subPath
 
     const files = await storage.list(fullPath)
-    res.json({ files, sharePath: share.file_path, subPath })
+    const filteredFiles = files.filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
+    res.json({ files: filteredFiles, sharePath: share.file_path, subPath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -294,21 +333,68 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    // 支持文件夹内文件预览：path 参数指定子路径
     const subPath = req.query.path as string
     const previewPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
-    const data = await storage.download(previewPath)
-    const ext = previewPath.split('.').pop()?.toLowerCase() || ''
-    const mimeTypes: Record<string, string> = {
-      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
-      'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
-      'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
-      'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'flac': 'audio/flac',
-      'pdf': 'application/pdf',
-      'txt': 'text/plain', 'md': 'text/markdown', 'json': 'application/json',
+    const fileInfo = await storage.info(previewPath)
+    if (fileInfo.type !== 'file') {
+      return res.status(400).json({ error: '不支持预览文件夹' })
     }
-    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
+
+    const fileName = previewPath.split('/').pop() || share.file_path.split('/').pop() || 'file'
+    const ext = fileName.split('.').pop()?.toLowerCase() || ''
+    const contentType = previewMimeTypes[ext] || 'application/octet-stream'
+    const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
+    const localMediaPath = isMedia ? await resolveLocalMediaPath(storage as any, previewPath) : null
+
+    if (isMedia && localMediaPath) {
+      const stat = await fs.stat(localMediaPath)
+      const fileSize = stat.size
+      const etag = `"${fileSize}-${stat.mtimeMs}"`
+      const range = req.headers.range
+
+      if (!range && req.headers['if-none-match'] === etag) {
+        res.status(304).end()
+        return
+      }
+
+      res.setHeader('Accept-Ranges', 'bytes')
+      res.setHeader('Content-Type', contentType)
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
+      res.setHeader('ETag', etag)
+      res.setHeader('Cache-Control', 'public, max-age=3600')
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-')
+        const start = parseInt(parts[0], 10)
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+        const chunkSize = end - start + 1
+
+        res.status(206)
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+        res.setHeader('Content-Length', chunkSize)
+
+        const stream = fsSync.createReadStream(localMediaPath, { start, end })
+        stream.pipe(res)
+      } else {
+        res.setHeader('Content-Length', fileSize)
+        const stream = fsSync.createReadStream(localMediaPath)
+        stream.pipe(res)
+      }
+      return
+    }
+
+    const data = await storage.download(previewPath)
+    const etag = `"${data.length}"`
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end()
+      return
+    }
+
+    res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Length', data.length)
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
+    res.setHeader('ETag', etag)
+    res.setHeader('Cache-Control', 'public, max-age=3600')
     res.send(data)
   } catch (err: any) {
     res.status(500).json({ error: err.message })

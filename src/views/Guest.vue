@@ -13,6 +13,7 @@ import UploadDialog from '@/components/UploadDialog.vue'
 import Icon from '@/components/Icon.vue'
 import DirectoryReadme from '@/components/DirectoryReadme.vue'
 import { useAuthStore } from '@/stores/auth'
+import { fetchAudioBlobUrl, revokeAudioBlobUrls, type ResolvedAudioTrack } from '@/utils/audio'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,6 +93,8 @@ const aplayerRef = ref<HTMLDivElement>()
 let aplayerInst: any = null
 const showAplayer = ref(false)
 const aplayerCollapsed = ref(true)
+let resolvedAudioTracks: ResolvedAudioTrack[] = []
+let audioBlobCleanupTimer: ReturnType<typeof setTimeout> | null = null
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const themeObserver = new MutationObserver(() => {
   isDark.value = document.documentElement.classList.contains('dark')
@@ -252,31 +255,98 @@ function getFilePreviewUrl(file: FileItem): string {
 
 function buildAudioList() {
   return files.value.filter(f => isAudioFile(f)).map(f => ({
-    name: f.name.replace(/\.[^.]+$/, ''),
+    name: f.name,
     url: getFilePreviewUrl(f),
     artist: `${owner.value} 的文件`,
   }))
 }
 
+async function resolveAudioList() {
+  const audioList = buildAudioList()
+  return Promise.all(audioList.map((item) => fetchAudioBlobUrl(item)))
+}
+
+function replaceResolvedAudioTracks(nextTracks: ResolvedAudioTrack[]) {
+  const previousTracks = resolvedAudioTracks
+  resolvedAudioTracks = nextTracks
+
+  if (audioBlobCleanupTimer) {
+    clearTimeout(audioBlobCleanupTimer)
+  }
+
+  audioBlobCleanupTimer = setTimeout(() => {
+    revokeAudioBlobUrls(previousTracks)
+    audioBlobCleanupTimer = null
+  }, 1500)
+}
+
+function toAplayerAudioList(audioList: ResolvedAudioTrack[]) {
+  return audioList.map((item) => ({
+    name: item.name.replace(/\.[^.]+$/, ''),
+    url: item.blobUrl,
+    artist: item.artist,
+  }))
+}
+
+async function refreshAplayerList(targetUrl?: string) {
+  const audioList = await resolveAudioList()
+  if (audioList.length === 0 || !aplayerInst) {
+    destroyAplayer()
+    return { audioList, targetIndex: -1 }
+  }
+
+  const targetIndex = targetUrl
+    ? audioList.findIndex((item) => item.url === targetUrl)
+    : Math.max(aplayerInst.list.index ?? 0, 0)
+
+  const playerAudioList = toAplayerAudioList(audioList)
+  aplayerInst.list.clear()
+  playerAudioList.forEach((item) => aplayerInst!.list.add(item))
+  replaceResolvedAudioTracks(audioList)
+
+  if (targetIndex >= 0 && targetIndex < playerAudioList.length) {
+    aplayerInst.list.switch(targetIndex)
+  }
+
+  return { audioList, targetIndex }
+}
+
 function destroyAplayer() {
   if (aplayerInst) { try { aplayerInst.destroy() } catch {} aplayerInst = null }
+  if (audioBlobCleanupTimer) {
+    clearTimeout(audioBlobCleanupTimer)
+    audioBlobCleanupTimer = null
+  }
+  revokeAudioBlobUrls(resolvedAudioTracks)
+  resolvedAudioTracks = []
   showAplayer.value = false
 }
 
 // 移动端检测
 const isMobileDevice = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
 
-function openAplayerWithFile(targetFile: FileItem) {
-  const audioList = buildAudioList()
+async function openAplayerWithFile(targetFile: FileItem) {
+  const targetUrl = getFilePreviewUrl(targetFile)
+  let audioList: ResolvedAudioTrack[]
+  let targetIndex = -1
+
+  try {
+    if (aplayerInst && showAplayer.value) {
+      const refreshed = await refreshAplayerList(targetUrl)
+      audioList = refreshed.audioList
+      targetIndex = refreshed.targetIndex
+    } else {
+      audioList = await resolveAudioList()
+      targetIndex = audioList.findIndex(a => a.url === targetUrl)
+    }
+  } catch (err: any) {
+    error.value = `音频加载失败：${err.message || '无法读取音频文件'}`
+    return
+  }
+
   if (audioList.length === 0) return
 
-  const targetUrl = getFilePreviewUrl(targetFile)
-  const targetIndex = audioList.findIndex(a => a.url === targetUrl)
-
   if (aplayerInst && showAplayer.value) {
-    aplayerInst.list.clear()
-    audioList.forEach(a => aplayerInst!.list.add(a))
-    if (targetIndex >= 0) aplayerInst.list.switch(targetIndex)
     aplayerInst.play()
     return
   }
@@ -287,6 +357,7 @@ function openAplayerWithFile(targetFile: FileItem) {
 
   nextTick(async () => {
     if (!aplayerRef.value) return
+    const playerAudioList = toAplayerAudioList(audioList)
     await import('aplayer/dist/APlayer.min.css')
     const { default: APlayerClass } = await import('aplayer')
     aplayerInst = new APlayerClass({
@@ -294,10 +365,11 @@ function openAplayerWithFile(targetFile: FileItem) {
       autoplay: !isMobileDevice,
       volume: 0.3,
       theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-      audio: audioList,
+      audio: playerAudioList,
     })
-    if (targetIndex > 0) aplayerInst.list.switch(targetIndex)
-    if (isMobileDevice) aplayerInst.play()
+    replaceResolvedAudioTracks(audioList)
+    if (targetIndex >= 0) aplayerInst.list.switch(targetIndex)
+    try { aplayerInst.play() } catch {}
   })
 }
 
@@ -309,13 +381,9 @@ function toggleAplayerCollapse() {
 watch(currentPath, () => {
   if (showAplayer.value) {
     nextTick(() => {
-      const audioList = buildAudioList()
-      if (audioList.length > 0 && aplayerInst) {
-        aplayerInst.list.clear()
-        audioList.forEach(a => aplayerInst!.list.add(a))
-      } else if (audioList.length === 0) {
-        destroyAplayer()
-      }
+      refreshAplayerList().catch((err: any) => {
+        error.value = `音频加载失败：${err.message || '无法刷新播放列表'}`
+      })
     })
   }
 })

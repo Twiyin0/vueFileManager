@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import Icon from '@/components/Icon.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
 
 const props = defineProps<{
   src?: string
@@ -11,13 +10,14 @@ const props = defineProps<{
 
 const loading = ref(false)
 const error = ref('')
-const html = ref('')
+const markdown = ref('')
+const collapsed = ref(true)
 
 const heading = computed(() => props.title || '目录说明')
 
 watchEffect(async () => {
   if (!props.src) {
-    html.value = ''
+    markdown.value = ''
     error.value = ''
     return
   }
@@ -29,12 +29,10 @@ watchEffect(async () => {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
-    const markdown = await response.text()
-    const rendered = await marked(markdown)
-    html.value = DOMPurify.sanitize(rendered)
+    markdown.value = await response.text()
   } catch (err: any) {
     error.value = err.message || '加载 README 失败'
-    html.value = ''
+    markdown.value = ''
   } finally {
     loading.value = false
   }
@@ -43,58 +41,24 @@ watchEffect(async () => {
 
 <template>
   <section class="card mb-4 overflow-hidden">
-    <div class="flex items-center gap-2 px-4 py-3 border-b" style="border-color: var(--border-color)">
+    <button
+      class="flex w-full items-center gap-2 px-4 py-3 border-b text-left transition-colors"
+      style="border-color: var(--border-color)"
+      @click="collapsed = !collapsed"
+    >
       <Icon name="file-alt" class="w-4 h-4" style="color: var(--accent-color)" />
-      <span class="text-sm font-semibold" style="color: var(--text-color)">{{ heading }}</span>
-    </div>
-    <div v-if="loading" class="px-4 py-6 text-sm" style="color: var(--text-secondary-color)">
+      <span class="text-sm font-semibold flex-1" style="color: var(--text-color)">{{ heading }}</span>
+      <span v-if="collapsed" class="text-xs" style="color: var(--text-secondary-color)">README 已收起</span>
+      <Icon :name="collapsed ? 'chevron-down' : 'chevron-up'" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+    </button>
+    <div v-if="!collapsed && loading" class="px-4 py-6 text-sm" style="color: var(--text-secondary-color)">
       正在加载 README...
     </div>
-    <div v-else-if="error" class="px-4 py-6 text-sm text-red-500">
+    <div v-else-if="!collapsed && error" class="px-4 py-6 text-sm text-red-500">
       {{ error }}
     </div>
-    <article v-else class="readme-content px-4 py-4" v-html="html" />
+    <div v-else-if="!collapsed" class="px-4 py-4">
+      <MarkdownContent :source="markdown" />
+    </div>
   </section>
 </template>
-
-<style scoped>
-.readme-content :deep(h1),
-.readme-content :deep(h2),
-.readme-content :deep(h3) {
-  color: var(--text-color);
-  margin-bottom: 0.75rem;
-}
-
-.readme-content :deep(h1) {
-  font-size: 1.5rem;
-}
-
-.readme-content :deep(h2) {
-  font-size: 1.2rem;
-  margin-top: 1.25rem;
-}
-
-.readme-content :deep(p),
-.readme-content :deep(li),
-.readme-content :deep(blockquote) {
-  color: var(--text-color);
-  line-height: 1.75;
-}
-
-.readme-content :deep(pre) {
-  overflow-x: auto;
-  padding: 0.9rem;
-  border-radius: 0.75rem;
-  background: var(--surface-color);
-}
-
-.readme-content :deep(code) {
-  padding: 0.12rem 0.35rem;
-  border-radius: 0.35rem;
-  background: var(--hover-color);
-}
-
-.readme-content :deep(a) {
-  color: var(--accent-color);
-}
-</style>

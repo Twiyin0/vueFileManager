@@ -12,6 +12,7 @@ import fs from 'fs/promises'
 import fsSync from 'fs'
 import { LocalStorage } from '../services/local'
 import { PrefixStorage } from '../services/prefix'
+import { isJunkFile } from './files/shared'
 
 const router = Router()
 const TEMP_UPLOAD_PREFIX = '.temp_'
@@ -20,7 +21,7 @@ const TEMP_UPLOAD_PREFIX = '.temp_'
 const mimeTypes: Record<string, string> = {
   'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
   'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
-  'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
+  'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'audio/ogg',
   'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'flac': 'audio/flac',
   'aac': 'audio/aac', 'm4a': 'audio/mp4',
   'pdf': 'application/pdf',
@@ -132,7 +133,7 @@ function isTemporaryUploadFile(filename: string): boolean {
 }
 
 function shouldUseAtomicTempUpload(storageType?: string): boolean {
-  return storageType === 'local' || storageType === 'ftp' || storageType === 'upyun'
+  return storageType === 'local' || storageType === 'ftp'
 }
 
 function buildTemporaryUploadPath(filePath: string): string {
@@ -233,7 +234,7 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
     // 过滤路径前缀，返回给访客的是相对于 basePath 的路径
     const prefix = basePath ? basePath + '/' : ''
     const result = files
-      .filter(f => !/^\._/.test(f.name) && f.name !== '.DS_Store' && !isTemporaryUploadFile(f.name))
+      .filter(f => !isJunkFile(f.name) && !isTemporaryUploadFile(f.name))
       .map(f => ({
         ...f,
         path: prefix ? (f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path) : f.path

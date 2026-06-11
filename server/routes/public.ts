@@ -14,7 +14,7 @@ function getUserByUsername(username: string) {
 const mimeTypes: Record<string, string> = {
   'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
   'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
-  'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg',
+  'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'audio/ogg',
   'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'flac': 'audio/flac',
   'pdf': 'application/pdf',
   'txt': 'text/plain', 'md': 'text/markdown', 'json': 'application/json',

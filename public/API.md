@@ -78,7 +78,7 @@ X-API-Key: <your-api-key>
 ### GET `/api/files/list?path=&poolId=` — 文件列表
 权限：`read`
 
-> 注意：`._` 开头的 macOS 系统文件、`.DS_Store` 等会在服务端自动过滤，不会出现在列表中。
+> 注意：`._` 开头的 macOS 系统文件、`.DS_Store`、`.trash` 等系统文件/目录会在服务端自动过滤，不会出现在列表中。
 
 当不传 `poolId` 且不传 `path` 时，返回所有存储池作为虚拟文件夹（`isPool: true`）。
 ```json
@@ -186,6 +186,10 @@ Response: 文件流（Content-Disposition: attachment）
 Response: 文件流（对应 MIME 类型，浏览器可直接显示）
 支持：图片/视频/音频/PDF/文本/代码
 ```
+补充说明：
+- 本地音频/视频文件支持 `Range` 请求，适合移动端播放和拖动进度条
+- 响应包含 `ETag`，命中缓存时会返回 `304 Not Modified`
+- 已补充 `aac` / `m4a` MIME 类型
 
 ### DELETE or POST `/api/files/delete` — 删除文件/文件夹
 权限：`delete`
@@ -327,6 +331,63 @@ DELETE /api/files/delete?path=file.txt&poolId=1&permanent=false
 { "url": "https://example.com/file.zip", "dirPath": "target-dir", "poolId": 1 }
 // Response
 { "message": "远程上传成功", "path": "target-dir/file.zip", "poolId": 1, "storageType": "local", "directUrl": "/api/files/preview?path=target-dir%2Ffile.zip&poolId=1&token=...", "fileUrl": "/api/files/preview?path=target-dir%2Ffile.zip&poolId=1&token=..." }
+```
+
+### POST `/api/files/offline-download` — 创建后台离线下载任务
+权限：`write`
+```json
+// Request Body
+{ "url": "https://example.com/file.zip", "dirPath": "target-dir", "poolId": 1 }
+// Response
+{ "message": "离线下载任务已创建", "taskId": 12 }
+```
+说明：
+- 任务会由服务端后台 worker 下载并写入指定存储池
+- 建议只在已进入具体存储池时使用，避免误以为文件会落到默认池以外的位置
+
+### GET `/api/files/offline-download/tasks` — 获取离线任务列表
+权限：`write`
+```json
+// Response
+{
+  "tasks": [
+    {
+      "id": 12,
+      "user_id": 1,
+      "pool_id": 1,
+      "pool_name": "本地存储",
+      "url": "https://example.com/file.zip",
+      "dir_path": "target-dir",
+      "file_name": "file.zip",
+      "status": "running",
+      "progress": 56,
+      "total_bytes": 1048576,
+      "downloaded_bytes": 589824,
+      "error_message": ""
+    }
+  ]
+}
+```
+
+### POST `/api/files/offline-download/tasks/:id/cancel` — 取消离线任务
+权限：`write`
+```json
+// Response
+{ "message": "任务已取消" }
+```
+
+### POST `/api/files/offline-download/tasks/:id/retry` — 重试离线任务
+权限：`write`
+```json
+// Response
+{ "message": "任务已重新加入队列" }
+```
+
+### POST `/api/files/offline-download/tasks/clear-finished` — 清空已结束离线任务
+权限：`write`
+```json
+// Response
+{ "message": "已清空已结束任务" }
 ```
 
 ### GET `/api/files/storage-stats?poolId=` — 存储统计（需认证）
@@ -567,6 +628,10 @@ Response: 文件流
 ```
 Response: 文件流（对应 MIME 类型）
 ```
+补充说明：
+- 分享预览已支持更多 MIME：`aac`、`m4a`、`docx`、`xlsx`、`csv`
+- 本地音视频分享预览支持 `Range`
+- 响应带 `ETag`，命中缓存时会返回 `304`
 
 ### 签名机制
 
@@ -818,12 +883,17 @@ Response: 文件流（对应 MIME 类型）
 // Response
 { "files": [{ "name": "file.txt", "type": "file", "size": 1024, "modified": "...", "path": "file.txt" }], "owner": "admin", "shareLabel": "照片", "permissions": "preview,download" }
 ```
+补充说明：
+- `._*`、`.DS_Store`、`.trash`、临时上传文件不会出现在访客列表中
 
 ### GET `/api/guest/:username/:shareId/preview?path=` — 访客预览
 需 `preview` 权限。
 ```
 Response: 文件流（对应 MIME 类型，Content-Disposition: inline）
 ```
+补充说明：
+- 本地音频/视频预览支持 `Range`
+- 响应带 `ETag`，命中缓存时会返回 `304`
 
 ### GET `/api/guest/:username/:shareId/download?path=` — 访客下载
 需 `download` 权限。
@@ -907,6 +977,36 @@ Response: 文件流（Content-Disposition: inline，带 Cache-Control: 86400s）
 
 ---
 
+## WebDAV `/dav`（需认证）
+
+支持以下认证方式：
+- Basic Auth（用户名/密码）
+- `Authorization: Bearer <token>`
+- `X-API-Key: <key>`
+- 浏览器测试可使用 `?token=` 或 `?apiKey=`
+
+推荐客户端地址：
+- 默认存储池：`http://host:3000/dav`
+- 指定存储池：`http://host:3000/dav/pool/:id`
+
+### OPTIONS `/dav/pool/:id`
+```
+Response Headers:
+  Allow: OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE
+  DAV: 1, 2
+  MS-Author-Via: DAV
+```
+
+### PROPFIND `/dav/pool/:id/*`
+```
+Response: WebDAV Multi-Status XML
+```
+补充说明：
+- WebDAV 根地址 `GET /dav/pool/:id` 仅用于连通性提示，不等同于普通浏览器目录浏览
+- Finder / Cyberduck 等客户端优先使用 `/dav/pool/:id`，不要依赖旧的 `?poolId=` 查询参数形式
+
+---
+
 ## 主题 API `/api/themes`（公开/需认证）
 
 ### GET `/api/themes/styles` — 获取已启用主题的 CSS 路径（公开）
@@ -927,6 +1027,40 @@ Response: 文件流（Content-Disposition: inline，带 Cache-Control: 86400s）
 { "enabled": false }
 // Response
 { "message": "主题已禁用（重启后生效）" }
+```
+
+---
+
+## 插件 API `/api/plugins`（公开/需认证）
+
+### GET `/api/plugins/list` — 获取所有插件列表（公开）
+```json
+// Response
+{
+  "plugins": [
+    {
+      "id": "example-feature",
+      "name": "example-feature",
+      "version": "1.0.0",
+      "description": "功能插件示例",
+      "author": "VueFileManager",
+      "enabled": false,
+      "kind": "feature",
+      "capabilities": ["offline-task-hooks", "admin-panel-link"],
+      "docs": "/plugins/example-feature/docs.md",
+      "entry": "/plugins/example-feature/entry.js",
+      "assetBasePath": "/plugins/example-feature"
+    }
+  ]
+}
+```
+
+### PUT `/api/plugins/:name/toggle` — 切换功能插件启用/禁用（需认证）
+```json
+// Request Body
+{ "enabled": true }
+// Response
+{ "message": "插件已启用（重启后生效）" }
 ```
 
 ---

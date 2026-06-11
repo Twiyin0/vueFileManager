@@ -1,6 +1,27 @@
 # VueFileManager
 
-一个类似 AList 的网页文件管理系统，支持本地存储、Upyun 云存储、FTP、S3/OSS，支持多存储池管理。
+一个类似 AList 的网页文件管理系统，支持本地存储、Upyun 云存储、FTP、S3/OSS，支持多存储池管理，并已整理为“框架 + 插件”式结构，方便后续继续扩展主题、功能模块和第三方集成。
+
+## 📦 v1.0.1-preview
+
+当前预览版聚焦三件事：稳定预览链路、补齐后台任务与 WebDAV、把项目逐步整理成可维护的插件式结构。
+
+### 本次更新摘要
+
+- 🧩 插件架构整理：新增 `server/app/`、`server/plugins/`、`src/app/` 等模块化入口，主题插件与功能插件统一到 `plugins/` 目录管理
+- 📘 新增和补全文档：插件开发文档、WebDAV 使用说明、离线任务说明、分享/访客预览能力说明
+- 🎵 预览链路修复：APlayer blob URL、分享页单文件音频/Office 预览、访客音频 Range 请求、`aac/m4a` MIME
+- 🧠 预览缓存增强：文件预览、访客预览、分享预览加入 ETag/304 验证；本地音视频支持 Range/断点播放
+- 📥 离线任务完善：新增后台离线任务页、任务清空/隐藏、首页自动轮询、创建任务后明确提示保存位置
+- 🌐 WebDAV 可用性增强：支持 `/dav/pool/:id` 路径式入口，补齐 Finder/Cyberduck 更依赖的 `OPTIONS` / `DAV` / `Allow` / `MS-Author-Via` 握手
+- 🧹 系统目录隐藏：`.trash`、`._*`、`.DS_Store` 等系统文件/目录统一隐藏，避免误删和误操作
+- ☁️ 存储细节修复：Upyun 中文文件名移动问题、S3 `CopySource` 编码问题
+
+### 升级提醒
+
+- WebDAV 客户端现在推荐使用 `http://<host>:3000/dav/pool/<poolId>`，不要再依赖 `?poolId=` 查询参数形式
+- “远程上传 / 离线下载”入口现在只会在已进入具体存储池时显示，避免任务落到默认池却误以为在当前目录
+- `.trash` 目录现在属于系统保留目录，不会出现在普通列表、访客列表和分享列表中
 
 ## ✨ 功能特性
 
@@ -16,6 +37,7 @@
 - ⌘ Spotlight 全局搜索 (Ctrl+K)
 - 📦 ZIP 打包下载
 - 📡 远程 URL 上传
+- 🗂️ 后台离线下载任务（排队/取消/重试/清空已结束/首页隐藏）
 - 📥 拖拽上传 + 上传进度条 + 上传中取消
 - ⚡ 流式上传 + 断点续传（支持缓存过期自动清理）
 - 🔗 文件列表 / 文件信息 / 上传结果直接返回 `directUrl` / `fileUrl`
@@ -75,14 +97,23 @@
 - 🚪 访客模式（多文件夹分享，右键菜单一键分享，四级权限：读取/写入/删除/文件编辑，APlayer 音乐播放，搜索功能，复选框批量操作）
 - 🛡️ 管理员面板
 
-### 主题系统
-- 🎨 自定义 CSS 主题，放在 `plugins/` 目录下
-- 📦 每个主题含 `manifest.json` + `style.css`
-- 🔧 覆盖 CSS 变量即可自定义颜色，支持亮/暗模式
-- 🔄 主题可开关，`/themes` 页面管理
+### 插件系统
+- 🎨 主题插件与功能插件统一放在 `plugins/` 目录下
+- 📦 向后兼容主题插件：`manifest.json` + `style.css`
+- 🧩 新增功能插件 manifest 约定：支持 `kind`、`entry`、`docs`、`capabilities`
+- 🔧 主题插件覆盖 CSS 变量即可自定义颜色，支持亮/暗模式
+- 🔄 插件可开关，`/themes` 页面作为插件中心统一管理
+- 📘 提供插件开发文档与示例插件，方便第三方自行扩展
+
+### WebDAV / 集成
+- 🌐 WebDAV 支持路径式存储池入口：`/dav/pool/:id`
+- 🔐 WebDAV 支持用户名/密码 Basic Auth、JWT Token、API Key
+- 🖥️ 补齐 Finder / Cyberduck 更依赖的 `OPTIONS`、`HEAD`、`PROPFIND` 握手
+- 📋 WebDAV 页面统一生成可直接复制的客户端地址和浏览器测试地址
 
 ### 兼容性
 - 🍎 macOS 资源分支文件 (`._*`) 自动过滤（服务端/客户端/Multer 三重防护）
+- 🗑️ `.trash` 系统目录统一隐藏，避免误删回收站内部数据
 - 🔧 外置硬盘乱码文件名修复（resolvePath 回退, DELETE 走 POST body）
 
 ### 界面
@@ -212,34 +243,47 @@ vueFileManager/
 ├── config.yml                  # 配置文件
 ├── .env                        # 环境变量（测试用）
 ├── server/                     # Express 后端
-│   ├── index.ts               # 入口
+│   ├── index.ts               # 启动入口（已瘦身）
+│   ├── app/                   # 应用装配层：中间件、路由、启动、特性注册
 │   ├── config.ts              # 配置加载
-│   ├── db.ts                  # SQLite 数据库
+│   ├── db.ts                  # 数据库访问（待继续拆分）
 │   ├── middleware/            # 中间件
 │   │   ├── auth.ts           # JWT 认证 + 封禁检查
 │   │   └── apikey.ts         # API Key 认证
+│   ├── plugins/              # 插件注册表、类型、兼容加载器
 │   ├── routes/               # API 路由
 │   │   ├── auth.ts           # 认证
 │   │   ├── files.ts          # 文件操作
 │   │   ├── user.ts           # 用户设置 + API Key
-│   │   ├── admin.ts          # 管理面板
+│   │   ├── admin.ts          # 管理面板入口
+│   │   ├── admin/            # 管理面板子路由
 │   │   ├── guest.ts          # 访客
 │   │   ├── share.ts          # 分享
 │   │   ├── storage-pools.ts  # 存储池管理
 │   │   ├── trash.ts          # 回收站
 │   │   ├── favourites.ts     # 收藏
 │   │   └── public.ts         # 公开文件访问
+│   │   └── files/            # 文件路由子模块
 │   └── services/             # 存储服务
 │       ├── storage.ts        # 接口定义
 │       ├── local.ts          # 本地存储
 │       ├── upyun.ts          # Upyun 存储
 │       ├── prefix.ts         # 路径前缀包装器
 │       └── factory.ts        # 工厂模式（含存储池缓存）
+├── plugins/                    # 外部插件目录（主题 / 功能插件）
+│   ├── example-theme/         # 主题插件示例
+│   └── example-feature/       # 功能插件示例
+├── public/                     # 静态文档
+│   ├── API.md                 # API 文档
+│   ├── Plugins.md             # 插件开发文档
+│   └── Themes.md              # 旧版主题文档（兼容保留）
 ├── src/                        # Vue 前端
 │   ├── main.ts               # 入口
+│   ├── app/                  # 路由 / 导航注册中心
 │   ├── router/               # 路由
 │   ├── stores/               # 状态管理
 │   ├── api/                  # API 封装
+│   ├── composables/          # 页面状态逻辑
 │   ├── components/           # 组件
 │   │   ├── Icon.vue          # 统一图标组件（加载 iconlib SVG）
 │   │   ├── Sidebar.vue       # 侧边栏（功能导航）
@@ -255,6 +299,7 @@ vueFileManager/
 │   │   ├── FilePreview.vue   # 文件预览（毛玻璃头部, ArtPlayer/APlayer/ViewerJS/CodeMirror 6）
 │   │   ├── Toast.vue         # Toast 通知
 │   │   ├── ConfirmDialog.vue # 确认弹窗
+│   │   ├── admin/            # 管理页分区组件
 │   │   └── ThemeToggle.vue   # 主题切换（放大图标）
 │   └── views/                # 页面
 │       ├── Home.vue          # 文件管理主页
@@ -286,6 +331,9 @@ npm run dev:server
 # 运行 API 全流程测试（另开终端）
 npx tsx test/workflows.ts
 
+# 运行 SMTP 连通性测试
+npx tsx test/smtp.ts your@email.com
+
 # 运行 Upyun 存储测试
 npx tsx test/upyun.ts
 ```
@@ -299,6 +347,7 @@ npx tsx test/upyun.ts
 - ✅ 分享 API（创建/密码分享/列表/访问/签名验证）
 - ✅ 流式上传 API（chunked transfer）
 - ✅ 断点续传 API（初始化/分片/状态/合并）
+- ✅ SMTP 连通性测试脚本（配置验证 + 试发邮件）
 - ✅ 匿名公网访问 API（路径越权防护）
 - ✅ API Key API（创建/列表/认证/删除）
 - ✅ 用户设置 API（获取/更新/恢复默认）
@@ -353,6 +402,11 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 文件 | `GET /api/files/storage-stats` | 存储统计 |
 | 文件 | `POST /api/files/download-zip` | ZIP打包下载 |
 | 文件 | `POST /api/files/remote-upload` | 远程URL上传 |
+| 文件 | `POST /api/files/offline-download` | 创建后台离线下载任务 |
+| 文件 | `GET /api/files/offline-download/tasks` | 离线任务列表 |
+| 文件 | `POST /api/files/offline-download/tasks/:id/cancel` | 取消离线任务 |
+| 文件 | `POST /api/files/offline-download/tasks/:id/retry` | 重试离线任务 |
+| 文件 | `POST /api/files/offline-download/tasks/clear-finished` | 清空已结束离线任务 |
 | 文件 | `POST /api/files/write` | 保存文本/代码 (30s超时) |
 | 存储池 | `GET /api/storage-pools` | 存储池列表 |
 | 存储池 | `POST /api/storage-pools` | 创建存储池 |
@@ -376,6 +430,8 @@ curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
 | 分享 | `GET /api/share/preview/:code` | 预览分享文件（需签名） |
 | 公开 | `GET /f/:username/*` | 匿名访问文件 |
 | 访客 | `GET /api/guest/:username/:shareId/preview` | 访客预览文件 |
+| WebDAV | `OPTIONS /dav/pool/:id` | WebDAV 能力握手 |
+| WebDAV | `PROPFIND /dav/pool/:id/*` | WebDAV 列目录 |
 | 访客 | `POST /api/guest/:username/:shareId/upload` | 访客上传文件 |
 | 访客 | `POST /api/guest/:username/:shareId/write` | 访客编辑文件内容 |
 | 访客 | `POST /api/guest/:username/:shareId/delete` | 访客删除文件 |

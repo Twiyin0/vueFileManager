@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { api } from '@/api'
-import type ArtPlayer from 'artplayer'
-import type APlayer from 'aplayer'
-import type Viewer from 'viewerjs'
+import { reactive } from 'vue'
 import Icon from '@/components/Icon.vue'
+import { useFilePreview } from '@/composables/useFilePreview'
+import MarkdownContent from '@/components/MarkdownContent.vue'
 
 const props = defineProps<{
   show: boolean
@@ -27,636 +25,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-// ---- URL helpers ----
-const previewUrl = computed(() => {
-  if (props.fileUrl) return props.fileUrl
-  if (!props.filePath) return ''
-  if (props.filePath.startsWith('/api/')) return props.filePath
-  if (props.guestBaseUrl) {
-    return `${props.guestBaseUrl}?path=${encodeURIComponent(props.filePath)}`
-  }
-  const base = '/api/files/preview'
-  const params = new URLSearchParams({ path: props.filePath })
-  if (props.poolId) params.set('poolId', String(props.poolId))
-  const token = localStorage.getItem('token')
-  if (token) params.set('token', token)
-  return `${base}?${params.toString()}`
-})
-
-/** Generate preview URL for any file path (used for gallery images) */
-function getImagePreviewUrl(file: { path: string; poolId?: number }): string {
-  if (file.path.startsWith('/api/')) return file.path
-  if (props.guestBaseUrl) {
-    return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
-  }
-  const base = '/api/files/preview'
-  const params = new URLSearchParams({ path: file.path })
-  const pid = file.poolId || props.poolId
-  if (pid) params.set('poolId', String(pid))
-  const token = localStorage.getItem('token')
-  if (token) params.set('token', token)
-  return `${base}?${params.toString()}`
-}
-
-const fileType = computed(() => {
-  const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
-  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext)) return 'image'
-  if (['mp4', 'webm', 'mov', 'mkv'].includes(ext)) return 'video'
-  if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg'].includes(ext)) return 'audio'
-  if (ext === 'pdf') return 'pdf'
-  if (['md', 'markdown'].includes(ext)) return 'markdown'
-  if (['txt', 'json', 'js', 'ts', 'html', 'css', 'xml', 'yaml', 'yml', 'py', 'java', 'go', 'rs', 'vue', 'sh', 'bat', 'ps1', 'php', 'sql', 'toml', 'ini', 'cfg', 'log', 'env', 'gitignore', 'dockerfile'].includes(ext)) return 'text'
-  if (ext === 'doc') return 'doc-legacy'
-  if (ext === 'docx') return 'docx'
-  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xlsx'
-  if (['ppt', 'pptx'].includes(ext)) return 'ppt-legacy'
-  return 'unknown'
-})
-
-const isDark = ref(document.documentElement.classList.contains('dark'))
-const themeObserver = new MutationObserver(() => {
-  isDark.value = document.documentElement.classList.contains('dark')
-})
-themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-
-// ---- Player instances ----
-let artPlayer: ArtPlayer | null = null
-let aplayerInst: APlayer | null = null
-let viewer: Viewer | null = null
-
-// ---- Blob URL tracking ----
-let imageBlobUrl: string | null = null
-let pdfBlobUrl: string | null = null
-
-// ---- Office state ----
-const docxContainer = ref<HTMLDivElement>()
-const excelSheets = ref<{ name: string; html: string }[]>([])
-const excelActiveSheet = ref(0)
-
-// ---- ViewerJS re-entrancy guard ----
-let isProgrammaticDestroy = false
-
-// ---- DOM refs ----
-const imageContainer = ref<HTMLDivElement>()
-const videoContainer = ref<HTMLDivElement>()
-const audioContainer = ref<HTMLDivElement>()
-const pdfCanvas = ref<HTMLCanvasElement>()
-
-// ---- Loading ----
-const loading = ref(true)
-
-// ---- Fullscreen ----
-const isFullscreen = ref(false)
-
-// ---- Image gallery (for floating header counter + prev/next navigation) ----
-const galleryFiles = ref<{ path: string; name: string; poolId?: number }[]>([])
-const galleryIndex = ref(0)
-
-// ---- PDF state ----
-const pdfPageNum = ref(1)
-const pdfTotalPages = ref(0)
-const pdfScale = ref(1.5)
-const pdfLoading = ref(false)
-let pdfDoc: any = null
-
-async function loadPdfJs(): Promise<any> {
-  const w = window as any
-  if (w.pdfjsLib) return w.pdfjsLib
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs'
-    script.type = 'module'
-    script.onload = () => {
-      w.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs'
-      resolve(w.pdfjsLib)
-    }
-    script.onerror = () => reject(new Error('PDF.js CDN 加载失败'))
-    document.head.appendChild(script)
-  })
-}
-
-async function renderPdfPage() {
-  if (!pdfDoc || !pdfCanvas.value) return
-  pdfLoading.value = true
-  try {
-    const page = await pdfDoc.getPage(pdfPageNum.value)
-    const viewport = page.getViewport({ scale: pdfScale.value })
-    const canvas = pdfCanvas.value
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.floor(viewport.width * dpr)
-    canvas.height = Math.floor(viewport.height * dpr)
-    canvas.style.width = Math.floor(viewport.width) + 'px'
-    canvas.style.height = Math.floor(viewport.height) + 'px'
-    const ctx = canvas.getContext('2d')!
-    ctx.scale(dpr, dpr)
-    await page.render({ canvasContext: ctx, viewport }).promise
-  } catch (err) { console.error('PDF render error:', err) }
-  pdfLoading.value = false
-}
-
-function pdfPrevPage() { if (pdfPageNum.value > 1) { pdfPageNum.value--; renderPdfPage() } }
-function pdfNextPage() { if (pdfPageNum.value < pdfTotalPages.value) { pdfPageNum.value++; renderPdfPage() } }
-function pdfZoomIn() { pdfScale.value = Math.min(5, pdfScale.value + 0.5); renderPdfPage() }
-function pdfZoomOut() { pdfScale.value = Math.max(0.5, pdfScale.value - 0.5); renderPdfPage() }
-function pdfResetZoom() { pdfScale.value = 1.5; renderPdfPage() }
-
-// ---- Text/Code state ----
-const textContent = ref('')
-const isSaving = ref(false)
-const saveMsg = ref('')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-async function saveTextFile() {
-  if (isSaving.value) return
-  isSaving.value = true
-  saveMsg.value = '保存中...'
-  try {
-    if (props.guestSaveUrl) {
-      await fetch(props.guestSaveUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: props.filePath, content: textContent.value })
-      }).then(async r => {
-        if (!r.ok) { const d = await r.json(); throw new Error(d.error || '保存失败') }
-      })
-    } else {
-      await api.post('/files/write', { path: props.filePath, content: textContent.value, poolId: props.poolId })
-    }
-    saveMsg.value = '已保存'
-  } catch (err: any) {
-    saveMsg.value = '保存失败'
-    console.error('Save error:', err)
-  } finally {
-    isSaving.value = false
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => { saveMsg.value = '' }, 2000)
-  }
-}
-
-// ---- CodeMirror state ----
-const editorContainer = ref<HTMLDivElement>()
-let cmView: any = null
-let themeCompartment: any = null
-
-const isEditorReadOnly = computed(() => props.guestBaseUrl ? !props.editable : false)
-
-const cmLanguageName = computed(() => {
-  const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
-  const map: Record<string, string> = {
-    js: 'JavaScript', jsx: 'JSX', ts: 'TypeScript', tsx: 'TSX',
-    html: 'HTML', css: 'CSS', scss: 'SCSS', less: 'LESS',
-    json: 'JSON', xml: 'XML', yaml: 'YAML', yml: 'YAML',
-    py: 'Python', java: 'Java', go: 'Go', rs: 'Rust',
-    vue: 'HTML', sql: 'SQL', md: 'Markdown', markdown: 'Markdown',
-    php: 'PHP', c: 'C', cpp: 'C++', rb: 'Ruby',
-    swift: 'Swift', kt: 'Kotlin', dart: 'Dart', lua: 'Lua',
-    sh: 'Shell', bat: 'Batch', ps1: 'PowerShell',
-  }
-  return map[ext] || 'Plain Text'
-})
-
-async function getLangExtension(ext: string): Promise<any> {
-  switch (ext) {
-    case 'js': case 'jsx': return (await import('@codemirror/lang-javascript')).javascript({ jsx: true })
-    case 'ts': case 'tsx': return (await import('@codemirror/lang-javascript')).javascript({ typescript: true, jsx: true })
-    case 'html': case 'vue': return (await import('@codemirror/lang-html')).html()
-    case 'css': case 'scss': case 'less': return (await import('@codemirror/lang-css')).css()
-    case 'json': return (await import('@codemirror/lang-json')).json()
-    case 'xml': return (await import('@codemirror/lang-xml')).xml()
-    case 'yaml': case 'yml': return (await import('@codemirror/lang-yaml')).yaml()
-    case 'py': return (await import('@codemirror/lang-python')).python()
-    case 'java': return (await import('@codemirror/lang-java')).java()
-    case 'go': return (await import('@codemirror/lang-go')).go()
-    case 'rs': return (await import('@codemirror/lang-rust')).rust()
-    case 'sql': return (await import('@codemirror/lang-sql')).sql()
-    case 'md': case 'markdown': return (await import('@codemirror/lang-markdown')).markdown()
-    case 'php': return (await import('@codemirror/lang-php')).php()
-    case 'c': case 'cpp': return (await import('@codemirror/lang-cpp')).cpp()
-    case 'sh': case 'bat': {
-      const { StreamLanguage } = await import('@codemirror/language')
-      const { shell } = await import('@codemirror/legacy-modes/mode/shell')
-      return StreamLanguage.define(shell)
-    }
-    case 'ps1': {
-      const { StreamLanguage } = await import('@codemirror/language')
-      const { powerShell } = await import('@codemirror/legacy-modes/mode/powershell')
-      return StreamLanguage.define(powerShell)
-    }
-    default: return []
-  }
-}
-
-async function getCmThemes(EditorView: any, HighlightStyle: any, tags: any) {
-  const lightHighlight = HighlightStyle.define([
-    { tag: tags.keyword, color: '#d73a49' },
-    { tag: tags.string, color: '#032f62' },
-    { tag: tags.number, color: '#005cc5' },
-    { tag: tags.comment, color: '#6a737d', fontStyle: 'italic' },
-    { tag: tags.variableName, color: '#24292e' },
-    { tag: tags.typeName, color: '#6f42c1' },
-    { tag: tags.tagName, color: '#22863a' },
-    { tag: tags.attributeName, color: '#6f42c1' },
-    { tag: tags.propertyName, color: '#005cc5' },
-    { tag: tags.heading, color: '#0f766e', fontWeight: '700' },
-    { tag: tags.emphasis, fontStyle: 'italic', color: '#7c3aed' },
-    { tag: tags.strong, fontWeight: '700', color: '#111827' },
-    { tag: tags.link, color: '#2563eb', textDecoration: 'underline' },
-    { tag: tags.monospace, color: '#b45309', backgroundColor: '#fef3c7' },
-    { tag: tags.list, color: '#0f766e' },
-  ])
-  const darkHighlight = HighlightStyle.define([
-    { tag: tags.keyword, color: '#c586c0' },
-    { tag: tags.string, color: '#ce9178' },
-    { tag: tags.number, color: '#b5cea8' },
-    { tag: tags.comment, color: '#6a9955', fontStyle: 'italic' },
-    { tag: tags.variableName, color: '#9cdcfe' },
-    { tag: tags.typeName, color: '#4ec9b0' },
-    { tag: tags.tagName, color: '#569cd6' },
-    { tag: tags.attributeName, color: '#9cdcfe' },
-    { tag: tags.propertyName, color: '#9cdcfe' },
-    { tag: tags.heading, color: '#4fd1c5', fontWeight: '700' },
-    { tag: tags.emphasis, fontStyle: 'italic', color: '#c4b5fd' },
-    { tag: tags.strong, fontWeight: '700', color: '#f8fafc' },
-    { tag: tags.link, color: '#60a5fa', textDecoration: 'underline' },
-    { tag: tags.monospace, color: '#fbbf24', backgroundColor: '#3f2d16' },
-    { tag: tags.list, color: '#4fd1c5' },
-  ])
-  const lightTheme = EditorView.theme({
-    '&': { backgroundColor: '#ffffff', color: '#24292e' },
-    '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '14px', caretColor: '#24292e' },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#24292e !important', borderLeftWidth: '2px' },
-    '.cm-gutters': { backgroundColor: '#f6f8fa', color: '#959da5', borderRight: '1px solid #e1e4e8' },
-    '&.cm-focused': { outline: 'none' },
-    '.cm-selectionBackground, ::selection': { backgroundColor: '#c8e1ff !important' },
-    '.cm-activeLine': { backgroundColor: '#f0f4f8' },
-    '.cm-activeLineGutter': { backgroundColor: '#e8ecf0' },
-  })
-  const darkTheme = EditorView.theme({
-    '&': { backgroundColor: '#1e1e1e', color: '#d4d4d4' },
-    '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '14px', caretColor: '#aeafad' },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#aeafad !important', borderLeftWidth: '2px' },
-    '.cm-gutters': { backgroundColor: '#1e1e1e', color: '#858585', borderRight: '1px solid #333' },
-    '&.cm-focused': { outline: 'none' },
-    '.cm-selectionBackground, ::selection': { backgroundColor: '#264f78 !important' },
-    '.cm-activeLine': { backgroundColor: '#2a2d2e' },
-    '.cm-activeLineGutter': { backgroundColor: '#2a2d2e' },
-  })
-  return { lightHighlight, darkHighlight, lightTheme, darkTheme }
-}
-
-async function initCodeMirror() {
-  if (!editorContainer.value) return
-
-  const [
-    { EditorView, keymap, lineNumbers },
-    { EditorState, Compartment },
-    { defaultKeymap, history, historyKeymap },
-    { bracketMatching, indentOnInput, syntaxHighlighting, HighlightStyle },
-    { tags },
-  ] = await Promise.all([
-    import('@codemirror/view'),
-    import('@codemirror/state'),
-    import('@codemirror/commands'),
-    import('@codemirror/language'),
-    import('@lezer/highlight'),
-  ])
-
-  const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
-  const langExt = await getLangExtension(ext)
-  const { lightHighlight, darkHighlight, lightTheme, darkTheme } = await getCmThemes(EditorView, HighlightStyle, tags)
-
-  themeCompartment = new Compartment()
-
-  const state = EditorState.create({
-    doc: textContent.value,
-    extensions: [
-      lineNumbers(),
-      history(),
-      bracketMatching(),
-      indentOnInput(),
-      EditorView.lineWrapping,
-      keymap.of([...defaultKeymap, ...historyKeymap, {
-        key: 'Mod-s',
-        run() { saveTextFile(); return true },
-      }]),
-      langExt,
-      syntaxHighlighting(isDark.value ? darkHighlight : lightHighlight),
-      themeCompartment.of(isDark.value ? darkTheme : lightTheme),
-      EditorView.updateListener.of(update => {
-        if (update.docChanged) {
-          textContent.value = update.state.doc.toString()
-        }
-      }),
-      isEditorReadOnly.value ? EditorState.readOnly.of(true) : [],
-    ],
-  })
-
-  cmView = new EditorView({ state, parent: editorContainer.value })
-}
-
-function destroyCodeMirror() {
-  if (cmView) { cmView.destroy(); cmView = null }
-}
-
-// Watch isDark to switch theme dynamically
-watch(isDark, async (dark) => {
-  if (cmView && themeCompartment) {
-    const [
-      { EditorView },
-      { syntaxHighlighting, HighlightStyle },
-      { tags },
-    ] = await Promise.all([
-      import('@codemirror/view'),
-      import('@codemirror/language'),
-      import('@lezer/highlight'),
-    ])
-    const { lightHighlight, darkHighlight, lightTheme, darkTheme } = await getCmThemes(EditorView, HighlightStyle, tags)
-    cmView.dispatch({
-      effects: themeCompartment.reconfigure(dark ? darkTheme : lightTheme),
-    })
-  }
-})
-
-async function loadTextContent() {
-  try {
-    const url = previewUrl.value + (previewUrl.value.includes('?') ? '&' : '?') + '_t=' + Date.now()
-    const resp = await fetch(url, { cache: 'no-store' })
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    textContent.value = await resp.text()
-  } catch { textContent.value = '// Failed to load file content' }
-  loading.value = false
-  await nextTick()
-  initCodeMirror()
-}
-
-function buildGallery() {
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico']
-  const fallbackFile = { path: props.filePath, name: props.fileName, poolId: props.poolId }
-  const list = (props.fileList || [fallbackFile])
-    .filter(f => {
-      const ext = f.name?.split('.').pop()?.toLowerCase() || ''
-      return imageExts.includes(ext)
-    })
-  if (!list.find(f => f.path === props.filePath)) list.push(fallbackFile)
-  const idx = list.findIndex(f => f.path === props.filePath)
-  galleryFiles.value = list
-  galleryIndex.value = idx >= 0 ? idx : 0
-}
-
-// ---- Initializers ----
-
-async function initImageViewer() {
-  if (!imageContainer.value) return
-  destroyImageViewer()
-  imageContainer.value.innerHTML = ''
-
-  const list = galleryFiles.value
-  if (!list.length) { loading.value = false; return }
-
-  // Create ALL images with visibility:hidden (NOT display:none).
-  // Browser loads visibility:hidden images → ViewerJS detects gallery.
-  // Stack them absolutely so they don't affect layout.
-  list.forEach((f, i) => {
-    const img = document.createElement('img')
-    img.alt = f.name
-    img.src = i === galleryIndex.value ? '' : getImagePreviewUrl(f) // current loads via blob below
-    Object.assign(img.style, {
-      position: 'absolute', top: '0', left: '0',
-      width: '1px', height: '1px',
-      visibility: 'hidden',
-    })
-    imageContainer.value!.appendChild(img)
-  })
-
-  await import('viewerjs/dist/viewer.css')
-  const { default: ViewerClass } = await import('viewerjs')
-
-  // Fetch current image as blob (anti iOS system preview), then create ViewerJS
-  const currentUrl = getImagePreviewUrl(list[galleryIndex.value])
-  fetch(currentUrl)
-    .then(resp => { if (!resp.ok) throw new Error(`HTTP ${resp.status}`); return resp.blob() })
-    .then(blob => {
-      if (imageBlobUrl) URL.revokeObjectURL(imageBlobUrl)
-      imageBlobUrl = URL.createObjectURL(blob)
-      // Set blob URL on current image
-      const allImgs = imageContainer.value!.querySelectorAll('img')
-      allImgs[galleryIndex.value].src = imageBlobUrl
-
-      viewer = new ViewerClass(imageContainer.value!, {
-        initialViewIndex: galleryIndex.value,
-        navbar: true,
-        toolbar: {
-          zoomIn: true, zoomOut: true, oneToOne: true, reset: true,
-          prev: false, play: false, next: false,
-          rotateLeft: true, rotateRight: true,
-          flipHorizontal: true, flipVertical: true,
-        },
-        title: [1, (_image: any, imageData: any) =>
-          `${imageData.alt || list[galleryIndex.value].name} (${imageData.width}×${imageData.height})`],
-        hidden: () => { if (!isProgrammaticDestroy) emit('close'); isProgrammaticDestroy = false },
-      })
-      viewer.show()
-      // Sync floating counter on ViewerJS internal navigation
-      imageContainer.value!.addEventListener('viewed', ((e: CustomEvent) => {
-        galleryIndex.value = e.detail?.index ?? galleryIndex.value
-      }) as EventListener)
-      loading.value = false
-    })
-    .catch(err => { console.error('Image load error:', err); loading.value = false })
-}
-
-function destroyImageViewer() {
-  if (viewer) { try { viewer.destroy() } catch {}; viewer = null }
-  if (imageBlobUrl) { URL.revokeObjectURL(imageBlobUrl); imageBlobUrl = null }
-}
-
-function navigateImage(dir: number) {
-  if (!viewer) return
-  const newIdx = galleryIndex.value + dir
-  if (newIdx < 0 || newIdx >= galleryFiles.value.length) return
-  galleryIndex.value = newIdx
-  viewer.view(newIdx)
-}
-
-async function initVideoPlayer() {
-  if (!videoContainer.value) return
-  try {
-    const { default: ArtPlayerClass } = await import('artplayer')
-    artPlayer = new ArtPlayerClass({
-      container: videoContainer.value,
-      url: previewUrl.value,
-      autoplay: false,
-      autoSize: false,
-      autoMini: true,
-      screenshot: true,
-      setting: true,
-      pip: true,
-      fullscreen: true,
-      playbackRate: true,
-      aspectRatio: true,
-      volume: 0.3,
-      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-      hotkey: true,
-      airplay: true,
-      playsInline: true,
-      lang: navigator.language.startsWith('zh') ? 'zh-cn' : 'en',
-    })
-    loading.value = false
-  } catch (err) { console.error('ArtPlayer init error:', err); loading.value = false }
-}
-
-async function initAudioPlayer() {
-  if (!audioContainer.value) return
-  try {
-    await import('aplayer/dist/APlayer.min.css')
-    const { default: APlayerClass } = await import('aplayer')
-    aplayerInst = new APlayerClass({
-      container: audioContainer.value,
-      autoplay: false,
-      volume: 0.3,
-      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-      audio: [{ name: props.fileName, url: previewUrl.value, artist: 'VueFileManager', cover: '' }],
-    })
-    loading.value = false
-  } catch (err) { console.error('APlayer init error:', err); loading.value = false }
-}
-
-async function initPdfViewer() {
-  try {
-    const pdfjs = await loadPdfJs()
-    const resp = await fetch(previewUrl.value)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const blob = await resp.blob()
-    pdfBlobUrl = URL.createObjectURL(blob)
-    const arrayBuf = await blob.arrayBuffer()
-    pdfDoc = await pdfjs.getDocument({ data: arrayBuf }).promise
-    pdfTotalPages.value = pdfDoc.numPages
-    pdfPageNum.value = 1
-    loading.value = false    // 先挂载 canvas DOM
-    await nextTick()          // 等 Vue 渲染完成
-    await renderPdfPage()     // 再绘制 PDF
-  } catch (err) { console.error('PDF init error:', err); loading.value = false }
-}
-
-async function initDocxViewer() {
-  try {
-    const resp = await fetch(previewUrl.value)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const blob = await resp.blob()
-    const docxPreview = await import('docx-preview')
-    loading.value = false
-    await nextTick()
-    if (docxContainer.value) {
-      await docxPreview.renderAsync(blob, docxContainer.value, undefined, { ignoreWidth: true, ignoreHeight: true })
-    }
-  } catch (err) { console.error('DOCX viewer init error:', err); loading.value = false }
-}
-
-async function initExcelViewer() {
-  try {
-    const resp = await fetch(previewUrl.value)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const arrayBuf = await resp.arrayBuffer()
-    const ExcelJS = await import('exceljs')
-    const wb = new ExcelJS.Workbook()
-    await wb.xlsx.load(arrayBuf)
-
-    excelSheets.value = wb.worksheets.map(ws => {
-      // 获取实际使用的范围
-      const rows: string[][] = []
-      ws.eachRow({ includeEmpty: false }, (row) => {
-        const cells: string[] = []
-        row.eachCell({ includeEmpty: true }, (_cell, colNumber) => {
-          const cell = row.getCell(colNumber)
-          cells[colNumber - 1] = cell.value != null ? String(cell.value) : ''
-        })
-        rows.push(cells)
-      })
-
-      if (rows.length === 0) return { name: ws.name, html: '<p class="text-sm p-4" style="color:var(--text-secondary-color)">空工作表</p>' }
-
-      // 确定最大列数
-      const maxCols = Math.max(...rows.map(r => r.length))
-      // 补齐列
-      rows.forEach(r => { while (r.length < maxCols) r.push('') })
-
-      // 第一行作为表头
-      const header = rows[0]
-      const body = rows.slice(1)
-
-      let html = '<table>'
-      html += '<thead><tr>' + header.map(h => `<th>${h || ''}</th>`).join('') + '</tr></thead>'
-      html += '<tbody>' + body.map(row =>
-        '<tr>' + row.map(c => `<td>${c || ''}</td>`).join('') + '</tr>'
-      ).join('') + '</tbody>'
-      html += '</table>'
-
-      return { name: ws.name, html }
-    })
-
-    excelActiveSheet.value = 0
-    loading.value = false
-  } catch (err) { console.error('Excel viewer init error:', err); loading.value = false }
-}
-
-
-// ---- Cleanup ----
-
-function destroyPlayers() {
-  loading.value = true
-  isProgrammaticDestroy = true
-  if (artPlayer) { try { artPlayer.destroy() } catch {}; artPlayer = null }
-  if (aplayerInst) { try { aplayerInst.destroy() } catch {}; aplayerInst = null }
-  destroyImageViewer()
-  destroyCodeMirror()
-  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null }
-  pdfDoc = null; pdfTotalPages.value = 0; pdfPageNum.value = 1
-  galleryFiles.value = []; galleryIndex.value = 0
-  textContent.value = ''
-  excelSheets.value = []; excelActiveSheet.value = 0
-  if (docxContainer.value) docxContainer.value.innerHTML = ''
-}
-
-function initPlayer() {
-  loading.value = true
-  const ft = fileType.value
-  if (ft === 'video') nextTick().then(initVideoPlayer)
-  else if (ft === 'audio') nextTick().then(initAudioPlayer)
-  else if (ft === 'image') { buildGallery(); nextTick().then(initImageViewer) }
-  else if (ft === 'text' || ft === 'markdown') loadTextContent()
-  else if (ft === 'pdf') initPdfViewer()
-  else if (ft === 'docx') initDocxViewer()
-  else if (ft === 'xlsx') initExcelViewer()
-  else loading.value = false
-}
-
-// ---- Lifecycle ----
-
-const showVideo = ref(false)
-
-onMounted(() => {
-  if (props.show) {
-    if (fileType.value === 'video') { showVideo.value = true; nextTick().then(() => nextTick().then(initPlayer)) }
-    else nextTick().then(initPlayer)
-  }
-})
-
-watch([() => props.show, () => props.filePath], async ([show, filePath], [oldShow, oldFilePath]) => {
-  if (show) {
-    // Always destroy previous state when opening to ensure fresh content
-    if (oldShow) { destroyPlayers(); showVideo.value = false; await nextTick() }
-    if (fileType.value === 'video') { showVideo.value = true; await nextTick(); await nextTick() }
-    else showVideo.value = false
-    await nextTick()
-    initPlayer()
-  } else {
-    destroyPlayers()
-    showVideo.value = false
-    isFullscreen.value = false
-  }
-})
-
-onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
+const state = reactive(useFilePreview(props, emit))
 </script>
 
 <template>
@@ -664,19 +33,19 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
     <!-- ============================================================ -->
     <!-- IMAGE: ViewerJS 全屏接管，去掉 modal，只放浮层关闭按钮        -->
     <!-- ============================================================ -->
-    <template v-if="show && fileType === 'image'">
+    <template v-if="show && state.fileType === 'image'">
       <!-- ViewerJS injects here (creates canvas + toolbar at z-index 2015) -->
-      <div ref="imageContainer" />
+      <div :ref="state.setImageContainer" />
 
       <!-- Floating header bar above ViewerJS (z-index: 3000 > ViewerJS 2015) -->
       <div class="fixed top-0 left-0 right-0 z-[3000] flex items-center justify-between px-4 py-2 transition-opacity"
         style="background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)">
         <h3 class="font-medium truncate text-white text-sm flex-1 mr-4">
           {{ fileName }}
-          <span v-if="galleryFiles.length > 1" class="text-white/60 ml-2">{{ galleryIndex + 1 }} / {{ galleryFiles.length }}</span>
+          <span v-if="state.galleryFiles.length > 1" class="text-white/60 ml-2">{{ state.galleryIndex + 1 }} / {{ state.galleryFiles.length }}</span>
         </h3>
         <div class="flex items-center gap-2">
-          <a :href="previewUrl" :download="fileName"
+          <a :href="state.previewUrl" :download="fileName"
             class="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/90"
             title="下载">
             <Icon name="download" class="w-5 h-5" />
@@ -689,12 +58,12 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
       </div>
 
       <!-- Prev/Next arrows (only when multiple images in gallery) -->
-      <button v-if="galleryFiles.length > 1" @click="navigateImage(-1)"
+      <button v-if="state.galleryFiles.length > 1" @click="state.navigateImage(-1)"
         class="gallery-nav-btn fixed top-1/2 -translate-y-1/2 left-4 z-[3000]"
         title="上一张 (←)">
         <Icon name="chevron-left" class="w-5 h-5" />
       </button>
-      <button v-if="galleryFiles.length > 1" @click="navigateImage(1)"
+      <button v-if="state.galleryFiles.length > 1" @click="state.navigateImage(1)"
         class="gallery-nav-btn fixed top-1/2 -translate-y-1/2 right-4 z-[3000]"
         title="下一张 (→)">
         <Icon name="chevron-right" class="w-5 h-5" />
@@ -704,22 +73,18 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
     <!-- ============================================================ -->
     <!-- VIDEO / AUDIO / PDF / TEXT: 标准 modal 对话框                -->
     <!-- ============================================================ -->
-    <div v-else-if="show" :class="isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4'">
-      <div v-if="!isFullscreen" class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
+    <div v-else-if="show" :class="state.isFullscreen ? 'fixed inset-0 z-50' : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4'">
+      <div v-if="!state.isFullscreen" class="absolute inset-0 bg-black/70 dark:bg-black/80" @click="emit('close')" />
 
-      <div :class="[
-        'relative w-full flex flex-col overflow-hidden',
-        isFullscreen ? 'h-full rounded-none' : 'rounded-xl',
-        fileType === 'video' ? 'max-w-7xl' : (isFullscreen ? '' : 'max-w-5xl')
-      ]" :style="{ backgroundColor: 'var(--surface-color)', height: isFullscreen ? '100dvh' : '90dvh' }">
+      <div :class="state.dialogClass" :style="state.dialogStyle">
         <!-- Header: 半透明毛玻璃 -->
         <div class="flex items-center justify-between px-2.5 py-1 border-b flex-shrink-0 backdrop-blur-md" style="border-color: var(--border-color); background-color: color-mix(in srgb, var(--surface-color) 75%, transparent)">
           <h3 class="text-xs font-medium truncate flex-1 mr-2" style="color: var(--text-color)">{{ fileName }}</h3>
           <div class="flex items-center gap-0.5">
-            <button @click="isFullscreen = !isFullscreen" class="p-1 rounded hover:opacity-80 transition-colors" :title="isFullscreen ? '退出全屏' : '全屏'">
-              <Icon :name="isFullscreen ? 'compress-alt' : 'expand-alt'" class="w-3.5 h-3.5" style="color: var(--text-color)" />
+            <button @click="state.isFullscreen = !state.isFullscreen" class="p-1 rounded hover:opacity-80 transition-colors" :title="state.isFullscreen ? '退出全屏' : '全屏'">
+              <Icon :name="state.isFullscreen ? 'compress-alt' : 'expand-alt'" class="w-3.5 h-3.5" style="color: var(--text-color)" />
             </button>
-            <a :href="previewUrl" :download="fileName" class="p-1 rounded hover:opacity-80 transition-colors" title="下载">
+            <a :href="state.previewUrl" :download="fileName" class="p-1 rounded hover:opacity-80 transition-colors" title="下载">
               <Icon name="download" class="w-3.5 h-3.5" style="color: var(--text-color)" />
             </a>
             <button @click="emit('close')" class="p-1 rounded hover:opacity-80 transition-colors">
@@ -729,10 +94,22 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
         </div>
 
         <!-- Content -->
-        <div :class="['flex-1', isFullscreen ? 'flex flex-col overflow-hidden' : 'overflow-auto']" style="background-color: var(--surface-color); touch-action: manipulation" @contextmenu.prevent>
+        <div
+          :class="[
+            state.fileType === 'video' ? 'flex-1 flex items-center justify-center p-2 sm:p-4' : 'flex-1',
+            state.isFullscreen ? 'flex flex-col overflow-hidden' : state.fileType === 'video' ? '' : 'overflow-auto'
+          ]"
+          style="background-color: var(--surface-color); touch-action: manipulation"
+          @contextmenu.prevent
+        >
 
           <!-- LOADING -->
-          <div v-if="loading" class="flex items-center justify-center py-20">
+          <div
+            v-if="state.loading"
+            :class="state.fileType === 'video'
+              ? 'absolute inset-0 z-10 flex items-center justify-center pointer-events-none'
+              : 'flex items-center justify-center py-20'"
+          >
             <svg class="animate-spin h-8 w-8" style="color: var(--accent-color)" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
@@ -740,110 +117,139 @@ onUnmounted(() => { themeObserver.disconnect(); destroyPlayers() })
           </div>
 
           <!-- VIDEO: ArtPlayer (mount immediately, loading spinner shown separately) -->
-          <div v-if="fileType === 'video' && showVideo" ref="videoContainer"
-            class="w-full rounded-lg overflow-hidden" style="background-color: #000; aspect-ratio: 16 / 9; max-height: 75vh" />
+          <div
+            v-if="state.fileType === 'video' && state.showVideo"
+            :ref="state.setVideoContainer"
+            class="rounded-lg overflow-hidden"
+            :style="state.videoContainerStyle"
+          />
 
           <!-- AUDIO: APlayer (mount immediately) -->
-          <div v-if="fileType === 'audio'" ref="audioContainer"
+          <div v-if="state.fileType === 'audio'" :ref="state.setAudioContainer"
             class="flex items-center justify-center py-8 px-4" />
 
           <!-- PDF: PDF.js CDN canvas + toolbar -->
-          <div v-if="!loading && fileType === 'pdf'" class="flex flex-col flex-1 min-h-0">
+          <div v-if="!state.loading && state.fileType === 'pdf'" class="flex flex-col flex-1 min-h-0">
             <!-- PDF Toolbar -->
             <div class="flex items-center gap-1.5 px-2.5 py-1 border-b flex-shrink-0 flex-wrap"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
-              <button @click="pdfPrevPage" :disabled="pdfPageNum <= 1" class="toolbar-btn" title="上一页">
+              <button @click="state.pdfPrevPage" :disabled="state.pdfPageNum <= 1" class="toolbar-btn" title="上一页">
                 <Icon name="chevron-left" class="w-4 h-4" />
               </button>
-              <span class="text-sm font-mono" style="color: var(--text-color)">{{ pdfPageNum }} / {{ pdfTotalPages }}</span>
-              <button @click="pdfNextPage" :disabled="pdfPageNum >= pdfTotalPages" class="toolbar-btn" title="下一页">
+              <span class="text-sm font-mono" style="color: var(--text-color)">{{ state.pdfPageNum }} / {{ state.pdfTotalPages }}</span>
+              <button @click="state.pdfNextPage" :disabled="state.pdfPageNum >= state.pdfTotalPages" class="toolbar-btn" title="下一页">
                 <Icon name="chevron-right" class="w-4 h-4" />
               </button>
               <span class="w-px h-5 mx-1" style="background: var(--border-color)" />
-              <button @click="pdfZoomOut" class="toolbar-btn" title="缩小">
+              <button @click="state.pdfZoomOut" class="toolbar-btn" title="缩小">
                 <Icon name="minus" class="w-4 h-4" />
               </button>
-              <button @click="pdfResetZoom" class="toolbar-btn text-xs font-mono px-1.5" title="重置缩放">
-                {{ Math.round(pdfScale * 100) }}%
+              <button @click="state.pdfResetZoom" class="toolbar-btn text-xs font-mono px-1.5" title="重置缩放">
+                {{ Math.round(state.pdfScale * 100) }}%
               </button>
-              <button @click="pdfZoomIn" class="toolbar-btn" title="放大">
+              <button @click="state.pdfZoomIn" class="toolbar-btn" title="放大">
                 <Icon name="plus" class="w-4 h-4" />
               </button>
               <span class="flex-1" />
-              <a :href="previewUrl" :download="fileName" class="toolbar-btn text-xs">下载</a>
+              <a :href="state.previewUrl" :download="fileName" class="toolbar-btn text-xs">下载</a>
             </div>
             <!-- PDF Canvas -->
             <div class="flex-1 min-h-0 overflow-auto p-4" style="background: #525659; text-align: center">
-              <div v-if="pdfLoading" class="flex items-center justify-center py-12">
+              <div v-if="state.pdfLoading" class="flex items-center justify-center py-12">
                 <svg class="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                 </svg>
               </div>
-              <canvas ref="pdfCanvas" class="shadow-lg inline-block" />
+              <canvas :ref="state.setPdfCanvas" class="shadow-lg inline-block" />
             </div>
           </div>
 
           <!-- TEXT/CODE: CodeMirror Editor + Save -->
-          <div v-if="!loading && (fileType === 'text' || fileType === 'markdown')" class="flex flex-col flex-1 min-h-0">
+          <div v-if="!state.loading && (state.fileType === 'text' || state.fileType === 'markdown')" class="flex flex-col flex-1 min-h-0">
             <div class="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
               style="border-color: var(--border-color); background-color: var(--hover-color)">
-              <span class="text-xs" style="color: var(--text-secondary-color)">{{ cmLanguageName }}</span>
+              <span class="text-xs" style="color: var(--text-secondary-color)">{{ state.cmLanguageName }}</span>
+              <div v-if="state.fileType === 'markdown'" class="flex items-center gap-1 rounded-lg p-1" style="background-color: var(--surface-color)">
+                <button
+                  class="px-2 py-1 rounded text-xs transition-colors"
+                  :style="{
+                    backgroundColor: state.markdownPreviewMode === 'rendered' ? 'var(--accent-color)' : 'transparent',
+                    color: state.markdownPreviewMode === 'rendered' ? '#fff' : 'var(--text-secondary-color)'
+                  }"
+                  @click="state.setMarkdownPreviewMode('rendered')"
+                >
+                  渲染
+                </button>
+                <button
+                  class="px-2 py-1 rounded text-xs transition-colors"
+                  :style="{
+                    backgroundColor: state.markdownPreviewMode === 'text' ? 'var(--accent-color)' : 'transparent',
+                    color: state.markdownPreviewMode === 'text' ? '#fff' : 'var(--text-secondary-color)'
+                  }"
+                  @click="state.setMarkdownPreviewMode('text')"
+                >
+                  文本
+                </button>
+              </div>
               <span class="flex-1" />
-              <button v-if="!isEditorReadOnly" @click="saveTextFile"
-                :disabled="isSaving"
+              <button v-if="!state.isEditorReadOnly && (!state.isMarkdownRenderedMode || state.fileType !== 'markdown')" @click="state.saveTextFile"
+                :disabled="state.isSaving"
                 class="px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-50"
                 style="background-color: var(--accent-color); color: #fff">
-                {{ isSaving ? '保存中...' : '保存' }}
+                {{ state.isSaving ? '保存中...' : '保存' }}
               </button>
             </div>
-            <div class="flex-1 min-h-0 rounded-b-lg border-t-0 relative" style="border-color: var(--border-color)">
-              <div ref="editorContainer" class="h-full" />
+            <div v-if="state.isMarkdownRenderedMode" class="flex-1 min-h-0 overflow-auto px-4 py-4">
+              <MarkdownContent :source="state.textContent" />
+            </div>
+            <div v-else class="flex-1 min-h-0 rounded-b-lg border-t-0 relative" style="border-color: var(--border-color)">
+              <div :ref="state.setEditorContainer" class="h-full" />
             </div>
             <!-- Save toast: centered overlay with auto-dismiss -->
             <Transition name="toast">
-              <div v-if="saveMsg" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-lg shadow-lg text-sm font-medium flex items-center gap-1.5"
-                :style="{ background: saveMsg === '保存失败' ? 'rgba(220,38,38,0.9)' : 'rgba(34,197,94,0.9)', color: '#fff' }">
-                <Icon v-if="saveMsg === '已保存'" name="circle-check" class="w-4 h-4" />
-                <Icon v-else-if="saveMsg === '保存失败'" name="circle-xmark" class="w-4 h-4" />
-                <span>{{ saveMsg }}</span>
+              <div v-if="state.saveMsg" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-lg shadow-lg text-sm font-medium flex items-center gap-1.5"
+                :style="{ background: state.saveMsg === '保存失败' ? 'rgba(220,38,38,0.9)' : 'rgba(34,197,94,0.9)', color: '#fff' }">
+                <Icon v-if="state.saveMsg === '已保存'" name="circle-check" class="w-4 h-4" />
+                <Icon v-else-if="state.saveMsg === '保存失败'" name="circle-xmark" class="w-4 h-4" />
+                <span>{{ state.saveMsg }}</span>
               </div>
             </Transition>
           </div>
 
           <!-- DOCX: docx-preview -->
-          <div v-if="!loading && fileType === 'docx'" class="office-container">
-            <div ref="docxContainer" class="docx-content" />
+          <div v-if="!state.loading && state.fileType === 'docx'" class="office-container">
+            <div :ref="state.setDocxContainer" class="docx-content" />
           </div>
 
           <!-- EXCEL: ExcelJS + 自定义 sheet tab -->
-          <div v-if="!loading && fileType === 'xlsx'" class="office-container">
+          <div v-if="!state.loading && state.fileType === 'xlsx'" class="office-container">
             <div class="flex flex-col h-full">
               <!-- Sheet tabs -->
-              <div v-if="excelSheets.length > 1" class="flex items-center gap-0 px-2 py-1 border-b flex-shrink-0 overflow-x-auto"
+              <div v-if="state.excelSheets.length > 1" class="flex items-center gap-0 px-2 py-1 border-b flex-shrink-0 overflow-x-auto"
                 style="border-color: var(--border-color); background-color: var(--hover-color)">
-                <button v-for="(sheet, idx) in excelSheets" :key="sheet.name"
-                  @click="excelActiveSheet = idx"
+                <button v-for="(sheet, idx) in state.excelSheets" :key="sheet.name"
+                  @click="state.excelActiveSheet = idx"
                   class="px-3 py-1 text-xs font-medium border-b-2 transition-colors whitespace-nowrap"
                   :style="{
-                    color: idx === excelActiveSheet ? 'var(--accent-color)' : 'var(--text-secondary-color)',
-                    'border-color': idx === excelActiveSheet ? 'var(--accent-color)' : 'transparent'
+                    color: idx === state.excelActiveSheet ? 'var(--accent-color)' : 'var(--text-secondary-color)',
+                    'border-color': idx === state.excelActiveSheet ? 'var(--accent-color)' : 'transparent'
                   }">
                   {{ sheet.name }}
                 </button>
               </div>
               <!-- Sheet content -->
-              <div class="flex-1 overflow-auto p-2" v-html="excelSheets[excelActiveSheet]?.html || ''" />
+              <div class="flex-1 overflow-auto p-2" v-html="state.excelSheets[state.excelActiveSheet]?.html || ''" />
             </div>
           </div>
 
           <!-- UNSUPPORTED / LEGACY DOC / PPT -->
-          <div v-if="!loading && (fileType === 'unknown' || fileType === 'doc-legacy' || fileType === 'ppt-legacy')" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
+          <div v-if="!state.loading && (state.fileType === 'unknown' || state.fileType === 'doc-legacy' || state.fileType === 'ppt-legacy')" class="flex flex-col items-center justify-center py-20" style="color: var(--text-secondary-color)">
             <Icon name="file-alt" class="w-16 h-16 mb-4" />
-            <p v-if="fileType === 'doc-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持预览 .doc 格式，请转为 .docx</p>
-            <p v-else-if="fileType === 'ppt-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持在线预览 PPT，请下载查看</p>
+            <p v-if="state.fileType === 'doc-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持预览 .doc 格式，请转为 .docx</p>
+            <p v-else-if="state.fileType === 'ppt-legacy'" class="text-lg" style="color: var(--text-secondary-color)">不支持在线预览 PPT，请下载查看</p>
             <p v-else class="text-lg" style="color: var(--text-secondary-color)">不支持预览此文件类型</p>
-            <a :href="previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">下载文件</a>
+            <a :href="state.previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">下载文件</a>
           </div>
         </div>
       </div>

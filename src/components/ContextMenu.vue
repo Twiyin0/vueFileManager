@@ -11,6 +11,7 @@ const props = defineProps<{
   clipboardCount?: number
   readOnly?: boolean
   allowedActions?: string[]
+  showRemoteUploadAction?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -186,7 +187,7 @@ onUnmounted(() => {
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="upload" class="w-4 h-4" /> 上传文件
         </button>
-        <button @click="handleAction('remote-upload')"
+        <button v-if="showRemoteUploadAction !== false" @click="handleAction('remote-upload')"
           class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
           <Icon name="network-wired" class="w-4 h-4" /> 远程上传
         </button>

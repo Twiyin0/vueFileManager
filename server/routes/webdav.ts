@@ -15,8 +15,42 @@ function normalizeDavPath(inputPath: string) {
   return decodeURIComponent((inputPath || '').replace(/^\/+/, '').replace(/\\/g, '/'))
 }
 
-function buildHref(baseUrl: string, filePath: string) {
-  return `${baseUrl.replace(/\/$/, '')}/${filePath.split('/').map(encodeURIComponent).join('/')}`
+function extractPoolScope(userId: number, rawRoutePath: string, queryPoolId?: string) {
+  const normalized = normalizeDavPath(rawRoutePath)
+  const match = normalized.match(/^(?:pool|p)\/(\d+)(?:\/(.*))?$/)
+  if (match) {
+    return {
+      poolId: Number(match[1]),
+      storagePath: normalizeDavPath(match[2] || ''),
+      basePath: `/dav/pool/${match[1]}`,
+      usingPathPool: true
+    }
+  }
+
+  const poolId = getPoolId(userId, queryPoolId)
+  return {
+    poolId,
+    storagePath: normalized,
+    basePath: '/dav',
+    usingPathPool: false
+  }
+}
+
+function appendEncodedPath(basePath: string, filePath: string) {
+  const trimmedBasePath = basePath.replace(/\/$/, '')
+  const encodedPath = filePath
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/')
+  return encodedPath ? `${trimmedBasePath}/${encodedPath}` : `${trimmedBasePath}/`
+}
+
+function buildHref(baseUrl: string, filePath: string, searchParams?: URLSearchParams) {
+  const url = new URL(baseUrl)
+  url.pathname = appendEncodedPath(url.pathname, filePath)
+  url.search = searchParams?.toString() || ''
+  return url.toString()
 }
 
 function escapeXml(value: string) {
@@ -28,8 +62,13 @@ function escapeXml(value: string) {
     .replace(/'/g, '&apos;')
 }
 
-function createPropResponse(baseUrl: string, item: { path: string; name: string; type: 'file' | 'folder'; size: number; modified: string }) {
-  const href = escapeXml(buildHref(baseUrl, item.path) + (item.type === 'folder' ? '/' : ''))
+function createPropResponse(
+  baseUrl: string,
+  item: { path: string; name: string; type: 'file' | 'folder'; size: number; modified: string },
+  searchParams?: URLSearchParams
+) {
+  const hrefValue = buildHref(baseUrl, item.path, searchParams)
+  const href = escapeXml(item.type === 'folder' && !hrefValue.endsWith('/') ? `${hrefValue}/` : hrefValue)
   const displayName = escapeXml(item.name || '/')
   const contentLength = String(item.size || 0)
   const modified = escapeXml(new Date(item.modified).toUTCString())
@@ -51,24 +90,41 @@ function createPropResponse(baseUrl: string, item: { path: string; name: string;
   `.trim()
 }
 
-router.use(flexibleAuth)
-
 router.options('/*', (_req, res) => {
-  res.setHeader('Allow', 'OPTIONS, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE')
-  res.setHeader('DAV', '1')
+  res.setHeader('Allow', 'OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE')
+  res.setHeader('DAV', '1, 2')
+  res.setHeader('MS-Author-Via', 'DAV')
   res.status(200).end()
 })
 
+router.use(flexibleAuth)
+
 router.all('/*', async (req: ApiKeyRequest, res: Response) => {
   try {
-    const poolId = getPoolId(req.userId!, req.query.poolId as string | undefined)
+    const rawRoutePath = (req.params as any)[0] || ''
+    const scope = extractPoolScope(req.userId!, rawRoutePath, req.query.poolId as string | undefined)
+    const poolId = scope.poolId
     if (!poolId) {
       return res.status(400).json({ error: '存储池不存在' })
     }
 
     const storage = getStorageByPoolId(req.userId!, poolId)
-    const pathFromRoute = normalizeDavPath((req.params as any)[0] || '')
-    const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`
+    const pathFromRoute = scope.storagePath
+    const baseUrl = `${req.protocol}://${req.get('host')}${scope.basePath}`
+    const sharedSearchParams = new URLSearchParams()
+    for (const [key, value] of Object.entries(req.query)) {
+      if (scope.usingPathPool && key === 'poolId') continue
+      if (value === undefined) continue
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item === 'string') sharedSearchParams.append(key, item)
+        }
+        continue
+      }
+      if (typeof value === 'string') {
+        sharedSearchParams.set(key, value)
+      }
+    }
 
     if (req.method === 'PROPFIND') {
       const depth = req.headers.depth === '0' ? 0 : 1
@@ -81,7 +137,7 @@ router.all('/*', async (req: ApiKeyRequest, res: Response) => {
 
       const responses = []
       if (pathFromRoute && info) {
-        responses.push(createPropResponse(baseUrl, info))
+        responses.push(createPropResponse(baseUrl, info, sharedSearchParams))
       } else if (!pathFromRoute) {
         responses.push(createPropResponse(baseUrl, {
           path: '',
@@ -89,12 +145,12 @@ router.all('/*', async (req: ApiKeyRequest, res: Response) => {
           type: 'folder',
           size: 0,
           modified: new Date().toISOString()
-        }))
+        }, sharedSearchParams))
       }
 
       if (depth !== 0) {
         for (const item of items) {
-          responses.push(createPropResponse(baseUrl, item))
+          responses.push(createPropResponse(baseUrl, item, sharedSearchParams))
         }
       }
 
@@ -107,7 +163,44 @@ ${responses.join('\n')}
       return
     }
 
+    if (req.method === 'HEAD') {
+      if (!pathFromRoute) {
+        res
+          .status(200)
+          .setHeader('DAV', '1, 2')
+          .setHeader('MS-Author-Via', 'DAV')
+          .setHeader('Allow', 'OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE')
+          .end()
+        return
+      }
+
+      const info = await storage.info(pathFromRoute)
+      if (info.type === 'folder') {
+        res
+          .status(200)
+          .setHeader('DAV', '1, 2')
+          .setHeader('MS-Author-Via', 'DAV')
+          .setHeader('Allow', 'OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE')
+          .end()
+        return
+      }
+
+      res
+        .status(200)
+        .setHeader('Content-Length', info.size || 0)
+        .setHeader('Allow', 'OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE')
+        .end()
+      return
+    }
+
     if (req.method === 'GET') {
+      if (!pathFromRoute) {
+        res
+          .status(200)
+          .type('text/plain; charset=utf-8')
+          .send(`WebDAV endpoint is reachable.\nPool ID: ${poolId}\nFinder/Cyberduck should prefer ${scope.basePath}\nUse a WebDAV client or PROPFIND to browse directories.`)
+        return
+      }
       const data = await storage.download(pathFromRoute)
       res.send(data)
       return
@@ -143,7 +236,12 @@ ${responses.join('\n')}
         return res.status(400).json({ error: '缺少 Destination' })
       }
       const targetUrl = new URL(destination)
-      const targetPath = normalizeDavPath(targetUrl.pathname.replace(req.baseUrl, ''))
+      const targetRawPath = normalizeDavPath(targetUrl.pathname.replace(/^\/dav\/?/, ''))
+      const targetScope = extractPoolScope(req.userId!, targetRawPath)
+      if (targetScope.poolId !== poolId) {
+        return res.status(400).json({ error: '暂不支持跨存储池移动' })
+      }
+      const targetPath = targetScope.storagePath
       await storage.move(pathFromRoute, targetPath)
       res.status(201).end()
       return

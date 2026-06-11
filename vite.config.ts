@@ -33,6 +33,14 @@ export default defineConfig({
       '^/api(?:/|$)': {
         target: 'http://localhost:3000',
         changeOrigin: true
+      },
+      '^/dav(?:/|$)': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '^/plugins(?:/|$)': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
       }
     }
   },

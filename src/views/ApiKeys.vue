@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
+import { copyToClipboard } from '@/utils/clipboard'
 
 interface ApiKey {
   id: number
@@ -81,18 +82,7 @@ async function handleDelete() {
 }
 
 async function copyKey(key: string, id: number) {
-  try {
-    await navigator.clipboard.writeText(key)
-  } catch {
-    // Fallback for non-HTTPS / macOS restrictions
-    const ta = document.createElement('textarea')
-    ta.value = key
-    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-  }
+  await copyToClipboard(key)
   copiedId.value = id
   setTimeout(() => { copiedId.value = null }, 2000)
 }

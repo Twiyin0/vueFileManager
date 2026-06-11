@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import db from '../db'
 import config from '../config'
@@ -11,12 +12,53 @@ export interface ApiKeyRequest extends Request {
   apiKeyPermissions?: string[]
 }
 
+function isWebDavRequest(req: Request) {
+  return req.baseUrl === '/dav' || req.originalUrl.startsWith('/dav')
+}
+
+function sendUnauthorized(req: Request, res: Response, error: string) {
+  if (isWebDavRequest(req)) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="VueFileManager WebDAV", charset="UTF-8"')
+    return res.status(401).type('text/plain; charset=utf-8').send(error)
+  }
+  return res.status(401).json({ error })
+}
+
+function authenticateWithBasicAuth(req: ApiKeyRequest) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Basic ')) return null
+
+  try {
+    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8')
+    const separatorIndex = decoded.indexOf(':')
+    if (separatorIndex < 0) return null
+
+    const username = decoded.slice(0, separatorIndex)
+    const password = decoded.slice(separatorIndex + 1)
+    if (!username || !password) return null
+
+    const user = db.prepare('SELECT id, role, banned, password FROM users WHERE username = ?').get(username) as any
+    if (!user || user.banned) return null
+
+    const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
+    if (hashedPassword !== user.password) return null
+
+    return {
+      userId: user.id as number,
+      userRole: user.role as string,
+      permissions: ['read', 'write', 'delete']
+    }
+  } catch {
+    return null
+  }
+}
+
 // API Key 认证中间件
 export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFunction) {
   const apiKey = req.headers['x-api-key'] as string
 
   if (!apiKey) {
-    return res.status(401).json({ error: '缺少 API Key' })
+    return sendUnauthorized(req, res, '缺少 API Key')
   }
 
   const keyRecord = db.prepare(`
@@ -26,7 +68,7 @@ export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFu
   `).get(apiKey) as any
 
   if (!keyRecord) {
-    return res.status(401).json({ error: 'API Key 无效' })
+    return sendUnauthorized(req, res, 'API Key 无效')
   }
 
   if (keyRecord.banned) {
@@ -59,12 +101,20 @@ export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFuncti
     return apiKeyMiddleware(req, res, next)
   }
 
+  const basicAuthUser = authenticateWithBasicAuth(req)
+  if (basicAuthUser) {
+    req.userId = basicAuthUser.userId
+    req.userRole = basicAuthUser.userRole
+    req.apiKeyPermissions = basicAuthUser.permissions
+    return next()
+  }
+
   if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
       const user = db.prepare('SELECT id, role, banned FROM users WHERE id = ?').get(decoded.userId) as any
       if (!user) {
-        return res.status(401).json({ error: '用户不存在' })
+        return sendUnauthorized(req, res, '用户不存在')
       }
       if (user.banned) {
         return res.status(403).json({ error: '账号已被封禁' })
@@ -74,9 +124,9 @@ export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFuncti
       req.apiKeyPermissions = ['read', 'write', 'delete']
       return next()
     } catch {
-      return res.status(401).json({ error: 'Token 无效' })
+      return sendUnauthorized(req, res, 'Token 无效')
     }
   }
 
-  return res.status(401).json({ error: '未认证' })
+  return sendUnauthorized(req, res, '未认证')
 }

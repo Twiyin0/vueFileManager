@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useFilesStore, FileItem } from '@/stores/files'
-import { api } from '@/api'
+import { reactive } from 'vue'
 import FileList from '@/components/FileList.vue'
 import UploadDialog from '@/components/UploadDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -16,1284 +13,447 @@ import Toast from '@/components/Toast.vue'
 import MoveDialog from '@/components/MoveDialog.vue'
 import Icon from '@/components/Icon.vue'
 import DirectoryReadme from '@/components/DirectoryReadme.vue'
+import OfflineTasksPanel from '@/components/OfflineTasksPanel.vue'
+import { useHomeView } from '@/composables/useHomeView'
 
-const route = useRoute()
-const router = useRouter()
-const filesStore = useFilesStore()
-
-// 基础状态
-const showUpload = ref(false)
-const showCreateFolder = ref(false)
-const newFolderName = ref('')
-const showDeleteConfirm = ref(false)
-const fileToDelete = ref<FileItem | null>(null)
-const showRename = ref(false)
-const fileToRename = ref<FileItem | null>(null)
-const newFileName = ref('')
-const showPreview = ref(false)
-const fileToPreview = ref<FileItem | null>(null)
-const showShare = ref(false)
-const fileToShare = ref<FileItem | null>(null)
-const showGuestShare = ref(false)
-const fileToGuestShare = ref<FileItem | null>(null)
-
-// 搜索
-const searchQuery = ref('')
-const searchResults = ref<FileItem[]>([])
-const isSearching = ref(false)
-const showSearch = ref(false)
-
-// 右键菜单
-const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
-
-// 批量选择（自动模式：勾选即进入批量）
-const selectedFiles = ref<Set<string>>(new Set())
-const isSelectMode = computed(() => selectedFiles.value.size > 0)
-
-// 视图模式
-const viewMode = ref<'list' | 'grid'>((localStorage.getItem('viewMode') as 'list' | 'grid') || 'list')
-watch(viewMode, (v) => localStorage.setItem('viewMode', v))
-
-// 文件详情面板
-const showDetailPanel = ref(false)
-const detailItem = ref<any>(null)
-
-// 远程上传
-const showRemoteUpload = ref(false)
-const remoteUrl = ref('')
-const remoteUploading = ref(false)
-const remoteUploadMode = ref<'instant' | 'offline'>('instant')
-const offlineTasks = ref<any[]>([])
-const offlineTasksLoading = ref(false)
-
-// 剪贴板
-const clipboardFiles = ref<{ path: string; name: string; poolId?: number }[]>([])
-const clipboardMode = ref<'copy' | 'move'>('copy')
-
-// Toast 通知
-const toast = ref({ show: false, message: '', type: 'info' as 'success' | 'error' | 'info' })
-
-// 移动对话框
-const showMoveDialog = ref(false)
-const filesToMove = ref<{ path: string; name: string; poolId?: number }[]>([])
-
-// 拖拽上传
-const isDragging = ref(false)
-let dragCounter = 0
-
-// 上传进度
-const uploadProgress = ref<{ file: string; percent: number }[]>([])
-const showUploadProgress = ref(false)
-const uploadStatus = ref('')
-const activeUploads = ref<XMLHttpRequest[]>([])
-const pendingUploadFiles = ref<File[]>([])
-const uploadError = ref('')
-const isUploadBusy = computed(() => uploadStatus.value === 'uploading' || uploadStatus.value === 'processing')
-const uploadStatusLabel = computed(() => {
-  if (uploadStatus.value === 'cancelled') return '已取消'
-  if (uploadStatus.value === 'processing') return '服务器处理中'
-  if (uploadStatus.value === 'completed') return '已完成'
-  return ''
-})
-
-// 存储池
-const currentPoolId = computed(() => {
-  const pool = route.query.pool as string
-  return pool ? parseInt(pool) : undefined
-})
-const pools = ref<{ id: number; name: string }[]>([])
-
-// 存储池下拉
-const showPoolDropdown = ref(false)
-
-const currentPath = computed(() => ((route.query.path as string) || '').replace(/\\/g, '/'))
-
-const pathSegments = computed(() => {
-  if (!currentPath.value) return []
-  return currentPath.value.split('/').filter(Boolean)
-})
-
-// APlayer
-const aplayerRef = ref<HTMLDivElement>()
-let aplayerInst: any = null
-const showAplayer = ref(false)
-const aplayerCollapsed = ref(true)
-
-// 暗色模式检测
-const isDark = ref(document.documentElement.classList.contains('dark'))
-const themeObserver = new MutationObserver(() => {
-  isDark.value = document.documentElement.classList.contains('dark')
-})
-
-onMounted(async () => {
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-  // 加载存储池列表
-  try {
-    const res = await api.get<{ pools: any[] }>('/storage-pools')
-    pools.value = res.pools.map(p => ({ id: p.id, name: p.name }))
-  } catch {}
-  await loadOfflineTasks()
-  filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-})
-
-onUnmounted(() => {
-  themeObserver.disconnect()
-  destroyAplayer()
-})
-
-watch([currentPath, currentPoolId], ([newPath]) => {
-  filesStore.fetchFiles(newPath, currentPoolId.value)
-  showSearch.value = false
-  searchQuery.value = ''
-  selectedFiles.value.clear()
-})
-
-// 点击外部关闭存储池下拉
-function handlePoolDropdownOutside(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (!target.closest('.pool-dropdown-trigger')) {
-    showPoolDropdown.value = false
-  }
-}
-
-watch(showPoolDropdown, (v) => {
-  if (v) document.addEventListener('click', handlePoolDropdownOutside, { once: true })
-})
-
-function navigateToPath(path: string, poolId?: number) {
-  const query: Record<string, string> = {}
-  if (poolId) query.pool = String(poolId)
-  if (path) query.path = path
-  router.push({ path: '/', query })
-}
-
-const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg']
-
-function isAudioFile(file: FileItem): boolean {
-  const ext = file.name.split('.').pop()?.toLowerCase() || ''
-  return audioExts.includes(ext)
-}
-
-function openFile(file: FileItem) {
-  if (file.isPool && file.poolId) {
-    navigateToPath('', file.poolId)
-  } else if (file.type === 'folder') {
-    navigateToPath(file.path, currentPoolId.value)
-  } else if (isAudioFile(file)) {
-    // 音频文件：打开 APlayer 播放
-    openAplayerWithFile(file)
-  } else {
-    fileToPreview.value = file
-    showPreview.value = true
-  }
-}
-
-// 移动端检测
-const isMobileDevice = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
-
-function openAplayerWithFile(targetFile: FileItem) {
-  const audioList = buildAudioList()
-  if (audioList.length === 0) return
-
-  // 找到目标文件在列表中的索引
-  const targetUrl = getFilePreviewUrl(targetFile)
-  const targetIndex = audioList.findIndex(a => a.url === targetUrl)
-
-  // 如果 APlayer 已在播放，更新列表并切换
-  if (aplayerInst && showAplayer.value) {
-    aplayerInst.list.clear()
-    audioList.forEach(a => aplayerInst!.list.add(a))
-    if (targetIndex >= 0) {
-      aplayerInst.list.switch(targetIndex)
-    }
-    aplayerInst.play()
-    return
-  }
-
-  // 销毁旧实例
-  destroyAplayer()
-  showAplayer.value = true
-  aplayerCollapsed.value = false
-
-  // 等待 DOM 渲染完成后再初始化
-  nextTick(async () => {
-    if (!aplayerRef.value) return
-    await import('aplayer/dist/APlayer.min.css')
-    const { default: APlayerClass } = await import('aplayer')
-    aplayerInst = new APlayerClass({
-      container: aplayerRef.value,
-      autoplay: !isMobileDevice, // 移动端不自动播放（浏览器会阻止）
-      volume: 0.3,
-      theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-      audio: audioList,
-    })
-    // 播放目标文件
-    if (targetIndex > 0) {
-      aplayerInst.list.switch(targetIndex)
-    }
-    // 移动端：用户点击即触发播放（需要用户手势）
-    if (isMobileDevice) {
-      aplayerInst.play()
-    }
-  })
-}
-
-function getFilePreviewUrl(file: FileItem): string {
-  if (file.directUrl) return file.directUrl
-  if (file.fileUrl) return file.fileUrl
-  const params = new URLSearchParams({ path: file.path })
-  const poolId = file.poolId || currentPoolId.value
-  if (poolId) params.set('poolId', String(poolId))
-  const token = localStorage.getItem('token')
-  if (token) params.set('token', token)
-  return `/api/files/preview?${params.toString()}`
-}
-
-function goUp() {
-  const segments = currentPath.value.split('/').filter(Boolean)
-  segments.pop()
-  const newPath = segments.join('/')
-  if (!newPath && currentPoolId.value) {
-    goBackToPools()
-  } else {
-    navigateToPath(newPath, currentPoolId.value)
-  }
-}
-
-function goBackToPools() {
-  router.push({ path: '/' })
-}
-
-// 上传（带进度）
-async function handleUpload(files: FileList, uploadPoolId?: number) {
-  const junkPatterns = [/^\._/, /^\.DS_Store$/, /^Thumbs\.db$/, /^__MACOSX\//]
-  const arr = Array.from(files).filter(f => !junkPatterns.some(p => p.test(f.name)))
-  if (arr.length === 0) return
-  pendingUploadFiles.value = arr
-  const targetPoolId = uploadPoolId || currentPoolId.value
-  showUploadProgress.value = true
-  uploadError.value = ''
-  uploadStatus.value = 'uploading'
-  uploadProgress.value = arr.map(f => ({ file: f.name, percent: 0 }))
-  activeUploads.value = []
-
-  for (let i = 0; i < arr.length; i++) {
-    const file = arr[i]
-    try {
-      const xhr = new XMLHttpRequest()
-      activeUploads.value.push(xhr)
-      const token = localStorage.getItem('token')
-
-      await new Promise<void>((resolve, reject) => {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            uploadProgress.value[i].percent = Math.round((e.loaded / e.total) * 100)
-            if (e.loaded === e.total) {
-              uploadStatus.value = 'processing'
-            }
-          }
-        }
-        xhr.onload = () => {
-          // console.log(`[upload] 响应: ${xhr.status} ${xhr.responseText}`)
-          if (xhr.status >= 200 && xhr.status < 300) {
-            uploadProgress.value[i].percent = 100
-            resolve()
-          } else {
-            let message = xhr.statusText || '上传失败'
-            try {
-              const data = JSON.parse(xhr.responseText || '{}')
-              message = data.error || data.message || message
-            } catch {}
-            reject(new Error(message))
-          }
-        }
-        xhr.onerror = () => reject(new Error('上传失败'))
-        xhr.onabort = () => reject(new Error('上传已取消'))
-
-        const dirPath = currentPath.value || ''
-        const params = new URLSearchParams()
-        if (dirPath) params.set('path', dirPath)
-        if (targetPoolId) params.set('poolId', String(targetPoolId))
-        const query = params.toString() ? `?${params}` : ''
-        const uploadUrl = `/api/files/upload-stream${query}`
-        const encodedName = encodeURIComponent(file.name)
-        const encodedDirPath = dirPath ? encodeURIComponent(dirPath) : ''
-        // console.log(`[upload] file.name: ${file.name}`)
-        // console.log(`[upload] encoded: ${encodedName}`)
-        xhr.open('POST', uploadUrl)
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-        xhr.setRequestHeader('X-File-Name', encodedName)
-        if (encodedDirPath) xhr.setRequestHeader('X-Dir-Path', encodedDirPath)
-        if (targetPoolId) xhr.setRequestHeader('X-Pool-Id', String(targetPoolId))
-        xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-        xhr.send(file)
-      })
-    } catch (err: any) {
-      if (err.message === '上传已取消') {
-        uploadStatus.value = 'cancelled'
-        break
-      }
-      uploadStatus.value = 'error'
-      uploadError.value = `${file.name}: ${err.message || '上传失败'}`
-      showToast(uploadError.value, 'error')
-      console.error(`上传失败: ${file.name}`, err)
-      return
-    }
-  }
-
-  activeUploads.value = []
-  if (uploadStatus.value === 'uploading' || uploadStatus.value === 'processing') {
-    uploadStatus.value = 'completed'
-    setTimeout(() => {
-      showUploadProgress.value = false
-      uploadStatus.value = ''
-      showUpload.value = false
-      pendingUploadFiles.value = []
-      uploadError.value = ''
-    }, 2000)
-  }
-  filesStore.fetchFiles(currentPath.value, currentPoolId.value).catch(() => {})
-}
-
-function cancelUploads() {
-  if (activeUploads.value.length === 0) {
-    showUploadProgress.value = false
-    uploadStatus.value = ''
-    return
-  }
-  uploadStatus.value = 'cancelled'
-  activeUploads.value.forEach(xhr => {
-    try { xhr.abort() } catch {}
-  })
-  activeUploads.value = []
-  setTimeout(() => {
-    showUploadProgress.value = false
-    uploadStatus.value = ''
-    uploadProgress.value = []
-    showUpload.value = false
-    pendingUploadFiles.value = []
-    uploadError.value = ''
-  }, 300)
-}
-
-// 拖拽上传
-function handleDragEnter(e: DragEvent) {
-  e.preventDefault()
-  dragCounter++
-  isDragging.value = true
-}
-
-function handleDragLeave(e: DragEvent) {
-  e.preventDefault()
-  dragCounter--
-  if (dragCounter === 0) isDragging.value = false
-}
-
-function handleDragOver(e: DragEvent) {
-  e.preventDefault()
-}
-
-function handleDrop(e: DragEvent) {
-  e.preventDefault()
-  dragCounter = 0
-  isDragging.value = false
-  if (e.dataTransfer?.files.length) {
-    pendingUploadFiles.value = Array.from(e.dataTransfer.files)
-    showUpload.value = true
-  }
-}
-
-// 远程上传
-async function handleRemoteUpload() {
-  if (!remoteUrl.value.trim()) return
-  remoteUploading.value = true
-  try {
-    if (remoteUploadMode.value === 'offline') {
-      await api.post('/files/offline-download', {
-        url: remoteUrl.value,
-        dirPath: currentPath.value,
-        poolId: currentPoolId.value
-      })
-      await loadOfflineTasks()
-    } else {
-      await api.post('/files/remote-upload', { url: remoteUrl.value, dirPath: currentPath.value, poolId: currentPoolId.value })
-      await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-    }
-    showRemoteUpload.value = false
-    remoteUrl.value = ''
-  } catch (err: any) {
-    alert(err.message)
-  } finally {
-    remoteUploading.value = false
-  }
-}
-
-async function loadOfflineTasks() {
-  offlineTasksLoading.value = true
-  try {
-    const res = await api.get<{ tasks: any[] }>('/files/offline-download/tasks')
-    offlineTasks.value = res.tasks
-  } catch {
-    offlineTasks.value = []
-  } finally {
-    offlineTasksLoading.value = false
-  }
-}
-
-async function cancelOfflineTask(taskId: number) {
-  await api.post(`/files/offline-download/tasks/${taskId}/cancel`)
-  await loadOfflineTasks()
-}
-
-async function retryOfflineTask(taskId: number) {
-  await api.post(`/files/offline-download/tasks/${taskId}/retry`)
-  await loadOfflineTasks()
-}
-
-// 批量选择（自动模式）
-function toggleSelectFile(path: string) {
-  if (selectedFiles.value.has(path)) {
-    selectedFiles.value.delete(path)
-    // 触发响应式更新
-    selectedFiles.value = new Set(selectedFiles.value)
-  } else {
-    selectedFiles.value = new Set([...selectedFiles.value, path])
-  }
-}
-
-function selectAll() {
-  const files = showSearch.value ? searchResults.value : filesStore.files
-  if (selectedFiles.value.size === files.length) {
-    selectedFiles.value.clear()
-  } else {
-    selectedFiles.value = new Set(files.map(f => f.path))
-  }
-}
-
-function clearSelection() {
-  selectedFiles.value.clear()
-}
-
-// 批量删除
-async function handleBatchDelete() {
-  if (selectedFiles.value.size === 0) return
-  if (!confirm(`确定要删除选中的 ${selectedFiles.value.size} 个项目吗？`)) return
-  try {
-    await api.post('/files/batch-delete', { paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
-    selectedFiles.value.clear()
-    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-  } catch (err: any) {
-    alert(err.message)
-  }
-}
-
-// 批量ZIP下载
-async function handleBatchDownload() {
-  if (selectedFiles.value.size === 0) return
-  try {
-    const response = await fetch('/api/files/download-zip', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
-    })
-
-    if (!response.ok) throw new Error('下载失败')
-
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'download.zip'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (err: any) {
-    alert(err.message)
-  }
-}
-
-// 收藏
-async function toggleFavourite(file: any) {
-  try {
-    const res = await api.get<{ isFavourited: boolean }>(`/favourites/check?filePath=${encodeURIComponent(file.path)}&storagePoolId=${currentPoolId.value || 1}`)
-    if (res.isFavourited) {
-      await api.delete(`/favourites?filePath=${encodeURIComponent(file.path)}&storagePoolId=${currentPoolId.value || 1}`)
-    } else {
-      await api.post('/favourites', {
-        filePath: file.path,
-        fileName: file.name,
-        fileType: file.type,
-        storagePoolId: currentPoolId.value || 1
-      })
-    }
-  } catch {}
-}
-
-// Toast 提示
-function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
-  toast.value = { show: true, message, type }
-}
-
-// 复制到剪贴板
-function handleCopy(files: { path: string; name?: string; poolId?: number }[]) {
-  clipboardFiles.value = files.map(f => ({
-    path: f.path,
-    name: f.name || f.path.split('/').filter(Boolean).pop() || f.path,
-    poolId: f.poolId
-  }))
-  clipboardMode.value = 'copy'
-  showToast(`已复制 ${files.length} 个项目`, 'success')
-}
-
-// 移动：打开移动对话框
-function handleMove(files: { path: string; name?: string; poolId?: number }[]) {
-  filesToMove.value = files.map(f => ({
-    path: f.path,
-    name: f.name || f.path.split('/').filter(Boolean).pop() || f.path,
-    poolId: f.poolId
-  }))
-  showMoveDialog.value = true
-}
-
-// 粘贴
-async function handlePaste() {
-  if (clipboardFiles.value.length === 0) return
-  const srcPoolId = clipboardFiles.value[0].poolId || currentPoolId.value
-  const destPoolId = currentPoolId.value
-  const destPath = currentPath.value
-
-  try {
-    if (clipboardMode.value === 'copy') {
-      if (!srcPoolId || srcPoolId === destPoolId) {
-        for (const file of clipboardFiles.value) {
-          const dest = destPath ? `${destPath}/${file.name}` : file.name
-          await api.post('/files/copy', { src: file.path, dest, poolId: currentPoolId.value })
-        }
-        showToast(`已粘贴 ${clipboardFiles.value.length} 个项目`, 'success')
-      } else {
-        await api.post('/files/cross-copy', {
-          srcPaths: clipboardFiles.value.map(f => f.path),
-          names: clipboardFiles.value.map(f => f.name),
-          srcPoolId,
-          destPoolId,
-          destPath
-        })
-        showToast(`已跨池复制 ${clipboardFiles.value.length} 个项目`, 'success')
-      }
-    } else {
-      if (!srcPoolId || srcPoolId === destPoolId) {
-        for (const file of clipboardFiles.value) {
-          const dest = destPath ? `${destPath}/${file.name}` : file.name
-          await api.post('/files/move', { src: file.path, dest, poolId: currentPoolId.value })
-        }
-        showToast(`已移动 ${clipboardFiles.value.length} 个项目`, 'success')
-      } else {
-        await api.post('/files/cross-move', {
-          srcPaths: clipboardFiles.value.map(f => f.path),
-          names: clipboardFiles.value.map(f => f.name),
-          srcPoolId,
-          destPoolId,
-          destPath
-        })
-        showToast(`已跨池移动 ${clipboardFiles.value.length} 个项目`, 'success')
-      }
-      clipboardFiles.value = []
-      clipboardMode.value = 'copy'
-    }
-    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-  } catch (err: any) {
-    showToast(err.message || '操作失败', 'error')
-  }
-}
-
-// 移动对话框确认
-async function handleMoveConfirm(destPoolId: number, destPath: string) {
-  const srcPoolId = filesToMove.value[0].poolId || currentPoolId.value
-  showMoveDialog.value = false
-
-  try {
-    if (!srcPoolId || srcPoolId === destPoolId) {
-      for (const file of filesToMove.value) {
-        const dest = destPath ? `${destPath}/${file.name}` : file.name
-        await api.post('/files/move', { src: file.path, dest, poolId: destPoolId })
-      }
-      showToast(`已移动 ${filesToMove.value.length} 个项目`, 'success')
-    } else {
-      await api.post('/files/cross-move', {
-        srcPaths: filesToMove.value.map(f => f.path),
-        names: filesToMove.value.map(f => f.name),
-        srcPoolId,
-        destPoolId,
-        destPath
-      })
-      showToast(`已跨池移动 ${filesToMove.value.length} 个项目`, 'success')
-    }
-    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-  } catch (err: any) {
-    showToast(err.message || '移动失败', 'error')
-  }
-  filesToMove.value = []
-}
-
-// 创建文件夹
-async function handleCreateFolder() {
-  if (!newFolderName.value.trim()) return
-  const path = currentPath.value ? `${currentPath.value}/${newFolderName.value}` : newFolderName.value
-  await api.post('/files/mkdir', { path, poolId: currentPoolId.value })
-  await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-  showCreateFolder.value = false
-  newFolderName.value = ''
-}
-
-// 删除
-function confirmDelete(file: FileItem) {
-  fileToDelete.value = file
-  showDeleteConfirm.value = true
-}
-
-async function handleDelete() {
-  if (!fileToDelete.value) return
-  await api.post('/files/delete', { path: fileToDelete.value.path, poolId: currentPoolId.value || undefined, permanent: false })
-  await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-  showDeleteConfirm.value = false
-  fileToDelete.value = null
-}
-
-// 下载
-async function handleDownload(file: FileItem) {
-  await filesStore.downloadFile(file.path, file.poolId || currentPoolId.value)
-}
-
-// 搜索
-async function handleSearch() {
-  if (!searchQuery.value.trim()) { showSearch.value = false; return }
-  isSearching.value = true
-  showSearch.value = true
-  try {
-    const params = new URLSearchParams()
-    params.set('q', searchQuery.value)
-    if (currentPath.value) params.set('path', currentPath.value)
-    if (currentPoolId.value) params.set('poolId', String(currentPoolId.value))
-    const res = await api.get<{ files: FileItem[] }>(`/files/search?${params}`)
-    searchResults.value = res.files
-  } catch { searchResults.value = [] }
-  finally { isSearching.value = false }
-}
-
-// 重命名
-function startRename(file: FileItem) {
-  fileToRename.value = file
-  newFileName.value = file.name
-  showRename.value = true
-}
-
-async function handleRename() {
-  if (!fileToRename.value || !newFileName.value.trim()) return
-  try {
-    await api.post('/files/rename', { path: fileToRename.value.path, newName: newFileName.value.trim(), poolId: currentPoolId.value })
-    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-    showRename.value = false
-  } catch (err: any) { alert(err.message) }
-}
-
-// 分享
-function startShare(file: FileItem) {
-  fileToShare.value = file
-  showShare.value = true
-}
-
-// 详情面板
-function showDetail(file: any) {
-  detailItem.value = file
-  showDetailPanel.value = true
-}
-
-// 右键菜单处理
-function handleContextMenu(e: MouseEvent, file?: any) {
-  e.preventDefault()
-  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, item: file || null }
-}
-
-function handleContextAction(action: string, item?: any) {
-  switch (action) {
-    case 'open': if (item) navigateToPath(item.path); break
-    case 'preview': if (item) { fileToPreview.value = item; showPreview.value = true }; break
-    case 'download': if (item) handleDownload(item); break
-    case 'rename': if (item) startRename(item); break
-    case 'share': if (item) startShare(item); break
-    case 'favourite': if (item) toggleFavourite(item); break
-    case 'guest-share': if (item) { fileToGuestShare.value = item; showGuestShare.value = true }; break
-    case 'info': if (item) showDetail(item); break
-    case 'delete': if (item) confirmDelete(item); break
-    case 'copy': if (item) handleCopy([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value }]); break
-    case 'move': if (item) handleMove([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value }]); break
-    case 'paste': handlePaste(); break
-    case 'select-all': selectAll(); break
-    case 'clear-selection': clearSelection(); break
-    case 'batch-delete': handleBatchDelete(); break
-    case 'batch-download': handleBatchDownload(); break
-    case 'batch-copy': {
-        const allFiles = showSearch.value ? searchResults.value : filesStore.files
-        handleCopy(Array.from(selectedFiles.value).map(p => {
-          const f = allFiles.find((file: FileItem) => file.path === p)
-          return { path: p as string, name: f?.name, poolId: currentPoolId.value }
-        }))
-        break
-      }
-    case 'batch-move': {
-        const allFiles2 = showSearch.value ? searchResults.value : filesStore.files
-        handleMove(Array.from(selectedFiles.value).map(p => {
-          const f = allFiles2.find((file: FileItem) => file.path === p)
-          return { path: p as string, name: f?.name, poolId: currentPoolId.value }
-        }))
-        break
-      }
-    case 'new-folder': showCreateFolder.value = true; break
-    case 'upload': showUpload.value = true; break
-    case 'remote-upload': showRemoteUpload.value = true; break
-    case 'refresh': filesStore.fetchFiles(currentPath.value, currentPoolId.value); break
-  }
-}
-
-// Spotlight搜索导航
-function triggerSpotlight() {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
-}
-
-function handleSpotlightNavigate(path: string, poolId?: number) {
-  navigateToPath(path, poolId || currentPoolId.value)
-}
-
-// 当前存储池名称
-const currentPoolName = computed(() => {
-  if (!currentPoolId.value) return ''
-  const pool = pools.value.find(p => p.id === currentPoolId.value)
-  return pool?.name || ''
-})
-
-// 格式化文件大小
-function formatSize(bytes: number) {
-  if (!bytes) return '0 B'
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
-}
-
-// ============ APlayer 浮动播放器 ============
-
-/** 从当前文件列表中提取音频文件，构建 APlayer 列表 */
-function buildAudioList(): { name: string; url: string; artist: string }[] {
-  const files = filesStore.files
-  return files.filter(f => isAudioFile(f)).map(f => ({
-    name: f.name.replace(/\.[^.]+$/, ''),
-    url: getFilePreviewUrl(f),
-    artist: 'VueFileManager',
-  }))
-}
-
-function destroyAplayer() {
-  if (aplayerInst) {
-    try { aplayerInst.destroy() } catch {}
-    aplayerInst = null
-  }
-  showAplayer.value = false
-}
-
-function toggleAplayerCollapse() {
-  aplayerCollapsed.value = !aplayerCollapsed.value
-}
-
-// 目录变化时自动刷新 APlayer 列表
-watch([currentPath, currentPoolId], () => {
-  if (showAplayer.value) {
-    nextTick(() => {
-      const audioList = buildAudioList()
-      if (audioList.length > 0 && aplayerInst) {
-        // 更新播放列表
-        aplayerInst.list.clear()
-        audioList.forEach(a => aplayerInst!.list.add(a))
-      } else if (audioList.length === 0) {
-        destroyAplayer()
-      }
-    })
-  }
-})
+const state = reactive(useHomeView())
 </script>
 
 <template>
-    <!-- 拖拽上传覆盖层 -->
-    <div v-if="isDragging"
+  <div
+    class="flex"
+    @dragenter="state.handleDragEnter"
+    @dragleave="state.handleDragLeave"
+    @dragover="state.handleDragOver"
+    @drop="state.handleDrop"
+  >
+    <div
+      v-if="state.isDragging"
       class="fixed inset-0 z-40 bg-blue-500/20 border-4 border-dashed border-blue-500 flex items-center justify-center"
-      @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
+      @dragenter="state.handleDragEnter"
+      @dragleave="state.handleDragLeave"
+      @dragover="state.handleDragOver"
+      @drop="state.handleDrop"
+    >
       <div class="bg-white dark:bg-dark-card rounded-xl p-8 border text-center">
         <Icon name="upload" class="w-16 h-16 mb-3" style="color: var(--accent-color)" />
         <p class="text-lg font-semibold" style="color: var(--text-color)">拖放文件到此处上传</p>
       </div>
     </div>
 
-    <div class="flex" @dragenter="handleDragEnter" @dragleave="handleDragLeave" @dragover="handleDragOver" @drop="handleDrop">
-      <!-- 主内容区 -->
-      <div class="flex-1 min-w-0">
-        <div class="px-4 pt-4">
-          <!-- 顶部操作栏 -->
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <!-- 面包屑导航 -->
-            <div class="flex items-center gap-1.5 text-sm flex-wrap">
-              <!-- 存储池选择器（下拉） -->
-              <div class="relative pool-dropdown-trigger">
-                <button @click.stop="showPoolDropdown = !showPoolDropdown"
-                  class="flex items-center gap-1 px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                  :style="{ color: currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId ? 'normal' : '500' }">
+    <div class="flex-1 min-w-0">
+      <div class="px-4 pt-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div class="flex items-center gap-1.5 text-sm flex-wrap">
+            <div class="relative pool-dropdown-trigger">
+              <button
+                class="flex items-center gap-1 px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                :style="{ color: state.currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: state.currentPoolId ? 'normal' : '500' }"
+                @click.stop="state.showPoolDropdown = !state.showPoolDropdown"
+              >
+                <Icon name="server" class="w-4 h-4" />
+                <span>{{ state.currentPoolId ? state.currentPoolName : '全部存储池' }}</span>
+                <Icon name="chevron-down" class="w-3 h-3" />
+              </button>
+
+              <div
+                v-if="state.showPoolDropdown"
+                class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border py-1 shadow-sm"
+                style="background-color: var(--card-color); border-color: var(--border-color)"
+              >
+                <button
+                  class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  :style="{ color: !state.currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: !state.currentPoolId ? '500' : 'normal' }"
+                  @click="state.goBackToPools(); state.showPoolDropdown = false"
+                >
                   <Icon name="server" class="w-4 h-4" />
-                  <span>{{ currentPoolId ? currentPoolName : '全部存储池' }}</span>
-                  <Icon name="chevron-down" class="w-3 h-3" />
+                  全部存储池
                 </button>
-                <!-- 下拉菜单 -->
-                <div v-if="showPoolDropdown"
-                  class="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border py-1 shadow-sm"
-                  style="background-color: var(--card-color); border-color: var(--border-color)">
-                  <button @click="goBackToPools(); showPoolDropdown = false"
-                    class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                    :style="{ color: !currentPoolId ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: !currentPoolId ? '500' : 'normal' }">
-                    <Icon name="server" class="w-4 h-4" />
-                    全部存储池
-                  </button>
-                  <div v-for="pool in pools" :key="pool.id"
-                    class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                    :style="{ color: currentPoolId === pool.id ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: currentPoolId === pool.id ? '500' : 'normal' }"
-                    @click="navigateToPath('', pool.id); showPoolDropdown = false">
-                    <Icon name="folder" class="w-4 h-4" />
-                    {{ pool.name }}
-                  </div>
+                <div
+                  v-for="pool in state.pools"
+                  :key="pool.id"
+                  class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  :style="{ color: state.currentPoolId === pool.id ? 'var(--accent-color)' : 'var(--text-color)', fontWeight: state.currentPoolId === pool.id ? '500' : 'normal' }"
+                  @click="state.navigateToPath('', pool.id); state.showPoolDropdown = false"
+                >
+                  <Icon name="folder" class="w-4 h-4" />
+                  {{ pool.name }}
                 </div>
               </div>
+            </div>
 
-              <!-- 路径面包屑 -->
-              <template v-if="currentPoolId && pathSegments.length > 0">
-                <template v-for="(segment, index) in pathSegments" :key="index">
-                  <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                  <button @click="navigateToPath(pathSegments.slice(0, index + 1).join('/'), currentPoolId)"
-                    class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                    :style="{ color: index === pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === pathSegments.length - 1 ? '500' : 'normal' }">
-                    {{ segment }}
-                  </button>
-                </template>
+            <template v-if="state.currentPoolId && state.pathSegments.length > 0">
+              <template v-for="(segment, index) in state.pathSegments" :key="index">
+                <Icon name="chevron-right" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+                <button
+                  class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  :style="{ color: index === state.pathSegments.length - 1 ? 'var(--text-color)' : 'var(--accent-color)', fontWeight: index === state.pathSegments.length - 1 ? '500' : 'normal' }"
+                  @click="state.navigateToPath(state.pathSegments.slice(0, index + 1).join('/'), state.currentPoolId)"
+                >
+                  {{ segment }}
+                </button>
               </template>
-            </div>
-
-            <!-- 操作按钮 -->
-            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-              <!-- Spotlight搜索触发 -->
-              <button @click="triggerSpotlight"
-                class="btn-secondary text-sm flex items-center gap-1" title="Ctrl+K 搜索">
-                <Icon name="search" class="w-4 h-4" />
-                <span class="hidden sm:inline">搜索</span>
-              </button>
-
-              <!-- 刷新 -->
-              <button @click="filesStore.fetchFiles(currentPath, currentPoolId)"
-                class="btn-secondary text-sm flex items-center gap-1" title="刷新">
-                <Icon name="refresh-cw" class="w-4 h-4" />
-              </button>
-
-              <button v-if="currentPath || currentPoolId" @click="goUp" class="btn-secondary text-sm flex items-center gap-1">
-                <Icon name="arrow-up" class="w-4 h-4" />
-                <span class="hidden sm:inline">上级</span>
-              </button>
-
-              <!-- 视图模式切换 -->
-              <div class="view-mode-toggle flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
-                <button @click="viewMode = 'list'" class="p-1.5 transition-colors" :class="viewMode === 'list' ? 'view-mode-active' : ''"
-                  title="列表模式">
-                  <Icon name="list" class="w-4 h-4" />
-                </button>
-                <button @click="viewMode = 'grid'" class="p-1.5 transition-colors" :class="viewMode === 'grid' ? 'view-mode-active' : ''"
-                  title="图片模式">
-                  <Icon name="grid" class="w-4 h-4" />
-                </button>
-              </div>
-
-              <button @click="showCreateFolder = true" class="btn-secondary text-sm flex items-center gap-1">
-                <Icon name="folder-plus" class="w-4 h-4" />
-                <span class="hidden sm:inline">新建</span>
-              </button>
-
-              <button @click="showRemoteUpload = true" class="btn-secondary text-sm flex items-center gap-1" title="远程URL上传">
-                <Icon name="network-wired" class="w-4 h-4" />
-                <span class="hidden sm:inline">远程上传</span>
-              </button>
-
-              <button @click="showUpload = true" class="btn-primary text-sm flex items-center gap-1">
-                <Icon name="upload" class="w-4 h-4" />
-                <span class="hidden sm:inline">上传</span>
-              </button>
-            </div>
+            </template>
           </div>
 
-          <!-- 批量选择提示条 -->
-          <div v-if="isSelectMode" class="mb-3 p-2 rounded-lg flex items-center justify-between text-sm"
-            style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
-            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-              <button @click="selectAll" class="text-sm hover:underline flex-shrink-0" style="color: var(--accent-color)">
-                {{ selectedFiles.size === (showSearch ? searchResults : filesStore.files).length ? '取消全选' : '全选' }}
+          <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <button class="btn-secondary text-sm flex items-center gap-1" title="Ctrl+K 搜索" @click="state.triggerSpotlight">
+              <Icon name="search" class="w-4 h-4" />
+              <span class="hidden sm:inline">搜索</span>
+            </button>
+
+            <button class="btn-secondary text-sm flex items-center gap-1" title="刷新" @click="state.filesStore.fetchFiles(state.currentPath, state.currentPoolId)">
+              <Icon name="refresh-cw" class="w-4 h-4" />
+            </button>
+
+            <button v-if="state.currentPath || state.currentPoolId" class="btn-secondary text-sm flex items-center gap-1" @click="state.goUp">
+              <Icon name="arrow-up" class="w-4 h-4" />
+              <span class="hidden sm:inline">上级</span>
+            </button>
+
+            <div class="view-mode-toggle flex items-center border rounded-lg overflow-hidden" style="border-color: var(--border-color)">
+              <button class="p-1.5 transition-colors" :class="state.viewMode === 'list' ? 'view-mode-active' : ''" title="列表模式" @click="state.viewMode = 'list'">
+                <Icon name="list" class="w-4 h-4" />
               </button>
-              <span class="truncate" style="color: var(--text-secondary-color)">已选 {{ selectedFiles.size }} 项</span>
+              <button class="p-1.5 transition-colors" :class="state.viewMode === 'grid' ? 'view-mode-active' : ''" title="图片模式" @click="state.viewMode = 'grid'">
+                <Icon name="grid" class="w-4 h-4" />
+              </button>
             </div>
-            <button @click="clearSelection" class="text-sm hover:underline flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">
-              取消
+
+            <button class="btn-secondary text-sm flex items-center gap-1" @click="state.showCreateFolder = true">
+              <Icon name="folder-plus" class="w-4 h-4" />
+              <span class="hidden sm:inline">新建</span>
+            </button>
+
+            <button
+              v-if="state.canUseRemoteUpload"
+              class="btn-secondary text-sm flex items-center gap-1"
+              title="远程URL上传"
+              @click="state.showRemoteUpload = true"
+            >
+              <Icon name="network-wired" class="w-4 h-4" />
+              <span class="hidden sm:inline">远程上传</span>
+            </button>
+
+            <button class="btn-primary text-sm flex items-center gap-1" @click="state.showUpload = true">
+              <Icon name="upload" class="w-4 h-4" />
+              <span class="hidden sm:inline">上传</span>
             </button>
           </div>
+        </div>
 
-          <!-- 剪贴板提示 -->
-          <div v-if="clipboardFiles.length > 0 && !isSelectMode" class="mb-3 p-2 rounded-lg border text-sm"
-            style="background-color: var(--hover-color); border-color: var(--border-color)">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <span class="truncate" style="color: var(--text-secondary-color)">
-                {{ clipboardMode === 'copy' ? '复制' : '移动' }} {{ clipboardFiles.length }} 项
-              </span>
-              <div class="flex items-center gap-2 flex-shrink-0">
-                <button @click="handlePaste" class="btn-primary text-xs px-3 py-1">粘贴</button>
-                <button @click="clipboardFiles = []" class="btn-secondary text-xs px-3 py-1">清空</button>
-              </div>
+        <div
+          v-if="state.isSelectMode"
+          class="mb-3 p-2 rounded-lg flex items-center justify-between text-sm"
+          style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)"
+        >
+          <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button class="text-sm hover:underline flex-shrink-0" style="color: var(--accent-color)" @click="state.selectAll">
+              {{ state.selectedFiles.size === (state.showSearch ? state.searchResults : state.filesStore.files).length ? '取消全选' : '全选' }}
+            </button>
+            <span class="truncate" style="color: var(--text-secondary-color)">已选 {{ state.selectedFiles.size }} 项</span>
+          </div>
+          <button class="text-sm hover:underline flex-shrink-0 ml-2" style="color: var(--text-secondary-color)" @click="state.clearSelection">
+            取消
+          </button>
+        </div>
+
+        <div
+          v-if="state.clipboardFiles.length > 0 && !state.isSelectMode"
+          class="mb-3 p-2 rounded-lg border text-sm"
+          style="background-color: var(--hover-color); border-color: var(--border-color)"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span class="truncate" style="color: var(--text-secondary-color)">
+              {{ state.clipboardMode === 'copy' ? '复制' : '移动' }} {{ state.clipboardFiles.length }} 项
+            </span>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button class="btn-primary text-xs px-3 py-1" @click="state.handlePaste">粘贴</button>
+              <button class="btn-secondary text-xs px-3 py-1" @click="state.clipboardFiles = []">清空</button>
             </div>
           </div>
+        </div>
 
-          <!-- 搜索内联 -->
-          <div v-if="showSearch" class="mb-4">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-sm font-medium" style="color: var(--text-color)">搜索结果：{{ searchResults.length }} 个</h3>
-              <button @click="showSearch = false; searchQuery = ''" class="text-xs hover:underline" style="color: var(--accent-color)">清除</button>
-            </div>
+        <div v-if="state.showSearch" class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium" style="color: var(--text-color)">搜索结果：{{ state.searchResults.length }} 个</h3>
+            <button class="text-xs hover:underline" style="color: var(--accent-color)" @click="state.showSearch = false; state.searchQuery = ''">清除</button>
           </div>
+        </div>
 
-          <!-- 文件列表 -->
-          <DirectoryReadme
-            v-if="!showSearch && filesStore.readme"
-            :src="filesStore.readme.directUrl || filesStore.readme.fileUrl"
-            :title="filesStore.readme.name"
-          />
+        <DirectoryReadme
+          v-if="!state.showSearch && state.filesStore.readme"
+          :src="state.filesStore.readme.directUrl || state.filesStore.readme.fileUrl"
+          :title="state.filesStore.readme.name"
+        />
 
-          <div
-            v-if="offlineTasks.length > 0"
-            class="card mb-4"
-          >
-            <div class="flex items-center justify-between gap-3 mb-3">
-              <div>
-                <h3 class="text-sm font-semibold" style="color: var(--text-color)">离线下载任务</h3>
-                <p class="text-xs" style="color: var(--text-secondary-color)">远程 URL 下载会在服务器端排队执行</p>
-              </div>
-              <button
-                @click="loadOfflineTasks"
-                class="btn-secondary text-xs px-3 py-1"
-                :disabled="offlineTasksLoading"
-              >
-                {{ offlineTasksLoading ? '刷新中...' : '刷新' }}
-              </button>
-            </div>
-            <div class="space-y-3">
-              <div
-                v-for="task in offlineTasks"
-                :key="task.id"
-                class="rounded-lg border p-3"
-                style="border-color: var(--border-color); background-color: var(--surface-color)"
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <span class="text-sm font-medium truncate" style="color: var(--text-color)">
-                        {{ task.file_name || task.url }}
-                      </span>
-                      <span class="px-2 py-0.5 rounded-full text-xs"
-                        :class="task.status === 'completed'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                          : task.status === 'failed'
-                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            : task.status === 'cancelled'
-                              ? 'bg-gray-100 text-gray-600 dark:bg-dark-hover dark:text-dark-text-secondary'
-                              : task.status === 'running'
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'">
-                        {{ task.status }}
-                      </span>
-                      <span class="text-xs font-mono" style="color: var(--text-secondary-color)">
-                        {{ task.pool_name }}
-                      </span>
-                    </div>
-                    <p class="mt-1 text-xs break-all" style="color: var(--text-secondary-color)">{{ task.url }}</p>
-                    <div class="mt-2 h-2 rounded-full" style="background-color: var(--hover-color)">
-                      <div class="h-2 rounded-full bg-blue-500 transition-all" :style="{ width: `${task.progress || 0}%` }" />
-                    </div>
-                    <div class="mt-2 flex items-center justify-between gap-3 text-xs" style="color: var(--text-secondary-color)">
-                      <span>{{ task.progress || 0 }}%</span>
-                      <span v-if="task.error_message" class="text-red-500">{{ task.error_message }}</span>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2 shrink-0">
-                    <button
-                      v-if="task.status === 'pending' || task.status === 'running'"
-                      @click="cancelOfflineTask(task.id)"
-                      class="btn-secondary text-xs px-3 py-1"
-                    >
-                      取消
-                    </button>
-                    <button
-                      v-if="task.status === 'failed' || task.status === 'cancelled'"
-                      @click="retryOfflineTask(task.id)"
-                      class="btn-primary text-xs px-3 py-1"
-                    >
-                      重试
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <div
+          v-if="state.offlineTasks.length > 0 && state.offlineTasksHidden"
+          class="mb-4 flex justify-end"
+        >
+          <button class="btn-secondary text-xs px-3 py-1" @click="state.showOfflineTasksPanel()">
+            显示离线任务
+          </button>
+        </div>
+
+        <OfflineTasksPanel
+          v-if="state.offlineTasks.length > 0 && !state.offlineTasksHidden"
+          class="mb-4"
+          :tasks="state.offlineTasks"
+          :loading="state.offlineTasksLoading"
+          :show-hide-button="true"
+          :can-clear-finished="state.hasFinishedOfflineTasks"
+          @refresh="state.loadOfflineTasks"
+          @cancel="state.cancelOfflineTask"
+          @retry="state.retryOfflineTask"
+          @clear-finished="state.clearFinishedOfflineTasks"
+          @hide="state.hideOfflineTasksPanel"
+        />
+
+        <FileList
+          :files="state.showSearch ? state.searchResults : state.filesStore.files"
+          :loading="state.filesStore.loading || state.isSearching"
+          :show-actions="true"
+          :select-mode="!!state.currentPoolId"
+          :selected-files="state.selectedFiles"
+          :view-mode="state.viewMode"
+          :current-pool-id="state.currentPoolId"
+          @open="state.openFile"
+          @download="state.handleDownload"
+          @delete="state.confirmDelete"
+          @contextmenu="state.handleContextMenu"
+          @toggle-select="state.toggleSelectFile"
+          @detail="state.showDetail"
+        />
+
+        <div v-if="state.filesStore.error" class="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+          {{ state.filesStore.error }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ContextMenu
+    :visible="state.contextMenu.visible"
+    :x="state.contextMenu.x"
+    :y="state.contextMenu.y"
+    :item="state.contextMenu.item"
+    :selected-items="state.isSelectMode ? Array.from(state.selectedFiles) : []"
+    :clipboard-count="state.clipboardFiles.length"
+    :show-remote-upload-action="state.canUseRemoteUpload"
+    @close="state.contextMenu.visible = false"
+    @action="state.handleContextAction"
+  />
+
+  <FileDetailPanel :visible="state.showDetailPanel" :item="state.detailItem" @close="state.showDetailPanel = false" @favourite="state.toggleFavourite" />
+  <SpotlightSearch @navigate="state.handleSpotlightNavigate" />
+
+  <UploadDialog
+    :show="state.showUpload"
+    :current-path="state.currentPath"
+    :pools="state.pools"
+    :current-pool-id="state.currentPoolId"
+    :pending-files="state.pendingUploadFiles"
+    :uploading="state.isUploadBusy"
+    :upload-progress="state.uploadProgress"
+    :upload-status="state.uploadStatus"
+    :upload-error="state.uploadError"
+    @close="state.showUpload = false; state.pendingUploadFiles = []; state.uploadError = ''; state.uploadStatus = ''; state.showUploadProgress = false"
+    @upload="state.handleUpload"
+    @cancel="state.cancelUploads"
+  />
+
+  <Teleport to="body">
+    <div v-if="state.showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRemoteUpload = false"/>
+      <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+        <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">远程URL上传</h3>
+        <input v-model="state.remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
+        <div class="mb-4">
+          <label class="block text-sm mb-1.5" style="color: var(--text-secondary-color)">上传方式</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              class="rounded-lg border px-3 py-2 text-sm transition-colors"
+              :style="state.remoteUploadMode === 'instant'
+                ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
+                : 'border-color: var(--border-color); color: var(--text-color)'"
+              @click="state.remoteUploadMode = 'instant'"
+            >
+              立即上传
+            </button>
+            <button
+              class="rounded-lg border px-3 py-2 text-sm transition-colors"
+              :style="state.remoteUploadMode === 'offline'
+                ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
+                : 'border-color: var(--border-color); color: var(--text-color)'"
+              @click="state.remoteUploadMode = 'offline'"
+            >
+              离线下载
+            </button>
           </div>
+          <p class="mt-2 text-xs" style="color: var(--text-secondary-color)">
+            {{ state.remoteUploadMode === 'offline' ? '服务器会在后台下载并写入当前目录。' : '当前会直接请求远程资源并立即写入存储池。' }}
+          </p>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button class="btn-secondary text-sm" @click="state.showRemoteUpload = false">取消</button>
+          <button class="btn-primary text-sm" :disabled="state.remoteUploading" @click="state.handleRemoteUpload">
+            {{ state.remoteUploading ? '上传中...' : '开始上传' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
-          <FileList
-            :files="showSearch ? searchResults : filesStore.files"
-            :loading="filesStore.loading || isSearching"
-            :show-actions="true"
-            :select-mode="!!currentPoolId"
-            :selected-files="selectedFiles"
-            :view-mode="viewMode"
-            :current-pool-id="currentPoolId"
-            @open="openFile"
-            @download="handleDownload"
-            @delete="confirmDelete"
-            @contextmenu="handleContextMenu"
-            @toggle-select="toggleSelectFile"
-            @detail="showDetail"
-          />
+  <Teleport to="body">
+    <div v-if="state.showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showCreateFolder = false"/>
+      <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+        <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">新建文件夹</h3>
+        <input v-model="state.newFolderName" type="text" class="input-field mb-4" placeholder="文件夹名称" @keyup.enter="state.handleCreateFolder" />
+        <div class="flex justify-end gap-3">
+          <button class="btn-secondary text-sm" @click="state.showCreateFolder = false">取消</button>
+          <button class="btn-primary text-sm" @click="state.handleCreateFolder">创建</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
-          <!-- 错误提示 -->
-          <div v-if="filesStore.error" class="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
-            {{ filesStore.error }}
+  <Teleport to="body">
+    <div v-if="state.showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRename = false"/>
+      <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
+        <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">重命名</h3>
+        <input v-model="state.newFileName" type="text" class="input-field mb-4" placeholder="新名称" @keyup.enter="state.handleRename" />
+        <div class="flex justify-end gap-3">
+          <button class="btn-secondary text-sm" @click="state.showRename = false">取消</button>
+          <button class="btn-primary text-sm" @click="state.handleRename">确认</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <ConfirmDialog
+    :show="state.showDeleteConfirm"
+    title="确认删除"
+    :message="`确定要删除「${state.fileToDelete?.name}」吗？`"
+    confirm-text="删除"
+    :danger="true"
+    @confirm="state.handleDelete"
+    @cancel="state.showDeleteConfirm = false"
+  />
+
+  <FilePreview
+    v-if="state.fileToPreview"
+    :show="state.showPreview"
+    :file-path="state.fileToPreview.path"
+    :file-name="state.fileToPreview.name"
+    :file-url="state.fileToPreview.directUrl || state.fileToPreview.fileUrl"
+    :pool-id="state.fileToPreview.poolId || state.currentPoolId"
+    :file-list="state.filesStore.files"
+    @close="state.showPreview = false; state.fileToPreview = null"
+  />
+
+  <ShareDialog
+    v-if="state.fileToShare"
+    :show="state.showShare"
+    :file-path="state.fileToShare.path"
+    :file-name="state.fileToShare.name"
+    :pool-id="state.fileToShare.poolId || state.currentPoolId"
+    :file-type="state.fileToShare.type"
+    @close="state.showShare = false"
+  />
+
+  <GuestShareDialog
+    v-if="state.fileToGuestShare"
+    :show="state.showGuestShare"
+    :folder-path="state.fileToGuestShare.path"
+    :folder-name="state.fileToGuestShare.name"
+    :pool-id="state.fileToGuestShare.poolId || state.currentPoolId"
+    @close="state.showGuestShare = false"
+    @done="state.filesStore.fetchFiles(state.currentPath, state.currentPoolId)"
+  />
+
+  <MoveDialog
+    :show="state.showMoveDialog"
+    :pools="state.pools"
+    :current-pool-id="state.currentPoolId"
+    :current-path="state.currentPath"
+    @close="state.showMoveDialog = false"
+    @confirm="state.handleMoveConfirm"
+  />
+
+  <Toast :show="state.toast.show" :message="state.toast.message" :type="state.toast.type" @close="state.toast.show = false" />
+
+  <Teleport to="body">
+    <div
+      v-if="state.showUploadProgress"
+      class="fixed right-4 bottom-4 z-50 w-[min(420px,calc(100vw-2rem))] rounded-xl border shadow-sm"
+      style="background-color: var(--card-color); border-color: var(--border-color)"
+    >
+      <div
+        class="flex items-center justify-between gap-3 px-4 py-3 border-b"
+        style="border-color: var(--border-color); background-color: var(--surface-color)"
+      >
+        <h4 class="text-sm font-semibold" style="color: var(--text-color)">
+          上传进度
+          <span v-if="state.uploadStatusLabel" class="ml-2 text-xs" :class="state.uploadStatus === 'cancelled' ? 'text-red-500' : 'text-amber-500'">
+            {{ state.uploadStatusLabel }}
+          </span>
+        </h4>
+        <button v-if="state.uploadStatus === 'uploading'" class="btn-secondary text-xs px-3 py-1" @click="state.cancelUploads">
+          取消上传
+        </button>
+        <button
+          v-else
+          class="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+          style="color: var(--text-secondary-color)"
+          @click="state.showUploadProgress = false"
+        >
+          <Icon name="xmark" class="w-4 h-4" />
+        </button>
+      </div>
+      <div class="p-4 max-h-[40vh] overflow-y-auto">
+        <div v-for="(item, index) in state.uploadProgress" :key="index" class="mb-3 last:mb-0">
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="truncate max-w-[220px]" style="color: var(--text-color)">{{ item.file }}</span>
+            <span class="flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">
+              {{ state.uploadStatus === 'processing' && item.percent >= 100 ? '处理中' : `${item.percent}%` }}
+            </span>
+          </div>
+          <div class="w-full rounded-full h-2" style="background-color: var(--hover-color)">
+            <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
           </div>
         </div>
       </div>
     </div>
+  </Teleport>
 
-    <!-- 右键菜单 -->
-    <ContextMenu
-      :visible="contextMenu.visible"
-      :x="contextMenu.x"
-      :y="contextMenu.y"
-      :item="contextMenu.item"
-      :selected-items="isSelectMode ? Array.from(selectedFiles) : []"
-      :clipboard-count="clipboardFiles.length"
-      @close="contextMenu.visible = false"
-      @action="handleContextAction"
-    />
-
-    <!-- 文件详情面板 -->
-    <FileDetailPanel
-      :visible="showDetailPanel"
-      :item="detailItem"
-      @close="showDetailPanel = false"
-      @favourite="toggleFavourite"
-    />
-
-    <!-- Spotlight搜索 -->
-    <SpotlightSearch @navigate="handleSpotlightNavigate" />
-
-    <!-- 上传对话框 -->
-    <UploadDialog
-      :show="showUpload"
-      :current-path="currentPath"
-      :pools="pools"
-      :current-pool-id="currentPoolId"
-      :pending-files="pendingUploadFiles"
-      :uploading="isUploadBusy"
-      :upload-progress="uploadProgress"
-      :upload-status="uploadStatus"
-      :upload-error="uploadError"
-      @close="showUpload = false; pendingUploadFiles = []; uploadError = ''; uploadStatus = ''; showUploadProgress = false"
-      @upload="handleUpload"
-      @cancel="cancelUploads"
-    />
-
-    <!-- 远程上传对话框 -->
-    <Teleport to="body">
-      <div v-if="showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRemoteUpload = false"/>
-        <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
-          <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">远程URL上传</h3>
-          <input v-model="remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
-          <div class="mb-4">
-            <label class="block text-sm mb-1.5" style="color: var(--text-secondary-color)">上传方式</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button
-                @click="remoteUploadMode = 'instant'"
-                class="rounded-lg border px-3 py-2 text-sm transition-colors"
-                :style="remoteUploadMode === 'instant'
-                  ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
-                  : 'border-color: var(--border-color); color: var(--text-color)'"
-              >
-                立即上传
-              </button>
-              <button
-                @click="remoteUploadMode = 'offline'"
-                class="rounded-lg border px-3 py-2 text-sm transition-colors"
-                :style="remoteUploadMode === 'offline'
-                  ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
-                  : 'border-color: var(--border-color); color: var(--text-color)'"
-              >
-                离线下载
-              </button>
-            </div>
-            <p class="mt-2 text-xs" style="color: var(--text-secondary-color)">
-              {{ remoteUploadMode === 'offline' ? '服务器会在后台下载并写入当前目录。' : '当前会直接请求远程资源并立即写入存储池。' }}
-            </p>
-          </div>
-          <div class="flex justify-end gap-3">
-            <button @click="showRemoteUpload = false" class="btn-secondary text-sm">取消</button>
-            <button @click="handleRemoteUpload" :disabled="remoteUploading" class="btn-primary text-sm">
-              {{ remoteUploading ? '上传中...' : '开始上传' }}
+  <Teleport to="body">
+    <div v-if="state.showAplayer" class="aplayer-float" :class="{ 'aplayer-mobile': state.isMobileDevice }">
+      <div
+        v-if="state.aplayerCollapsed"
+        class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm transition-all active:scale-95"
+        style="background-color: var(--accent-color); color: white"
+        title="展开播放器"
+        @click="state.toggleAplayerCollapse"
+      >
+        <Icon name="music" class="w-4 h-4" />
+      </div>
+      <div v-show="!state.aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
+        <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
+          <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
+          <div class="flex items-center gap-0.5">
+            <button class="p-1 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)" @click="state.toggleAplayerCollapse">
+              <Icon name="chevron-down" class="w-3.5 h-3.5" />
+            </button>
+            <button class="p-1 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)" @click="state.destroyAplayer">
+              <Icon name="xmark" class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
+        <div :ref="state.setAplayerRef" />
       </div>
-    </Teleport>
-
-    <!-- 新建文件夹对话框 -->
-    <Teleport to="body">
-      <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false"/>
-        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
-          <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">新建文件夹</h3>
-          <input v-model="newFolderName" type="text" class="input-field mb-4" placeholder="文件夹名称" @keyup.enter="handleCreateFolder" />
-          <div class="flex justify-end gap-3">
-            <button @click="showCreateFolder = false" class="btn-secondary text-sm">取消</button>
-            <button @click="handleCreateFolder" class="btn-primary text-sm">创建</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- 重命名对话框 -->
-    <Teleport to="body">
-      <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false"/>
-        <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
-          <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">重命名</h3>
-          <input v-model="newFileName" type="text" class="input-field mb-4" placeholder="新名称" @keyup.enter="handleRename" />
-          <div class="flex justify-end gap-3">
-            <button @click="showRename = false" class="btn-secondary text-sm">取消</button>
-            <button @click="handleRename" class="btn-primary text-sm">确认</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- 删除确认 -->
-    <ConfirmDialog
-      :show="showDeleteConfirm"
-      title="确认删除"
-      :message="`确定要删除「${fileToDelete?.name}」吗？`"
-      confirm-text="删除"
-      :danger="true"
-      @confirm="handleDelete"
-      @cancel="showDeleteConfirm = false"
-    />
-
-    <!-- 文件预览 -->
-    <FilePreview v-if="fileToPreview" :show="showPreview" :file-path="fileToPreview.path" :file-name="fileToPreview.name" :file-url="fileToPreview.directUrl || fileToPreview.fileUrl" :pool-id="fileToPreview.poolId || currentPoolId" :file-list="filesStore.files" @close="showPreview = false; fileToPreview = null" />
-
-    <!-- 分享对话框 -->
-    <ShareDialog v-if="fileToShare" :show="showShare" :file-path="fileToShare.path" :file-name="fileToShare.name" :pool-id="fileToShare.poolId || currentPoolId" :file-type="fileToShare.type" @close="showShare = false" />
-
-    <!-- 访客分享对话框 -->
-    <GuestShareDialog
-      v-if="fileToGuestShare"
-      :show="showGuestShare"
-      :folder-path="fileToGuestShare.path"
-      :folder-name="fileToGuestShare.name"
-      :pool-id="fileToGuestShare.poolId || currentPoolId"
-      @close="showGuestShare = false"
-      @done="filesStore.fetchFiles(currentPath, currentPoolId)"
-    />
-
-    <!-- 移动对话框 -->
-    <MoveDialog
-      :show="showMoveDialog"
-      :pools="pools"
-      :current-pool-id="currentPoolId"
-      :current-path="currentPath"
-      @close="showMoveDialog = false"
-      @confirm="handleMoveConfirm"
-    />
-
-    <!-- Toast 通知 -->
-    <Toast
-      :show="toast.show"
-      :message="toast.message"
-      :type="toast.type"
-      @close="toast.show = false"
-    />
-
-    <!-- 上传进度悬浮面板 -->
-    <Teleport to="body">
-      <div v-if="showUploadProgress" class="fixed right-4 bottom-4 z-50 w-[min(420px,calc(100vw-2rem))] rounded-xl border shadow-sm"
-        style="background-color: var(--card-color); border-color: var(--border-color)">
-        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b"
-          style="border-color: var(--border-color); background-color: var(--surface-color)">
-          <h4 class="text-sm font-semibold" style="color: var(--text-color)">
-            上传进度
-            <span v-if="uploadStatusLabel" class="ml-2 text-xs" :class="uploadStatus === 'cancelled' ? 'text-red-500' : 'text-amber-500'">{{ uploadStatusLabel }}</span>
-          </h4>
-          <button v-if="uploadStatus === 'uploading'" @click="cancelUploads" class="btn-secondary text-xs px-3 py-1">
-            取消上传
-          </button>
-          <button v-else @click="showUploadProgress = false" class="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-            style="color: var(--text-secondary-color)">
-            <Icon name="xmark" class="w-4 h-4" />
-          </button>
-        </div>
-        <div class="p-4 max-h-[40vh] overflow-y-auto">
-          <div v-for="(item, index) in uploadProgress" :key="index" class="mb-3 last:mb-0">
-            <div class="flex items-center justify-between text-xs mb-1">
-              <span class="truncate max-w-[220px]" style="color: var(--text-color)">{{ item.file }}</span>
-              <span class="flex-shrink-0 ml-2" style="color: var(--text-secondary-color)">
-                {{ uploadStatus === 'processing' && item.percent >= 100 ? '处理中' : `${item.percent}%` }}
-              </span>
-            </div>
-            <div class="w-full rounded-full h-2" style="background-color: var(--hover-color)">
-              <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: item.percent + '%' }"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- APlayer 浮动播放器 -->
-    <Teleport to="body">
-      <div v-if="showAplayer" class="aplayer-float" :class="{ 'aplayer-mobile': isMobileDevice }">
-        <!-- 收缩态：圆形图标 -->
-        <div v-if="aplayerCollapsed"
-          @click="toggleAplayerCollapse"
-          class="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm transition-all active:scale-95"
-          style="background-color: var(--accent-color); color: white"
-          title="展开播放器">
-          <Icon name="music" class="w-4 h-4" />
-        </div>
-        <!-- 展开态 -->
-        <div v-show="!aplayerCollapsed" class="aplayer-wrap rounded-lg overflow-hidden border" style="background-color: var(--card-color); border-color: var(--border-color)">
-          <div class="flex items-center justify-between px-2 py-1" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color)">
-            <span class="text-xs" style="color: var(--text-secondary-color)">播放器</span>
-            <div class="flex items-center gap-0.5">
-              <button @click="toggleAplayerCollapse" class="p-1 rounded hover:opacity-80" title="收缩" style="color: var(--text-secondary-color)">
-                <Icon name="chevron-down" class="w-3.5 h-3.5" />
-              </button>
-              <button @click="destroyAplayer" class="p-1 rounded hover:opacity-80" title="关闭" style="color: var(--text-secondary-color)">
-                <Icon name="xmark" class="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-          <div ref="aplayerRef" />
-        </div>
-      </div>
-    </Teleport>
+    </div>
+  </Teleport>
 </template>

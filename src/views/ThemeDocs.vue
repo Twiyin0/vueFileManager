@@ -3,5 +3,5 @@ import MarkdownDoc from '@/components/MarkdownDoc.vue'
 </script>
 
 <template>
-  <MarkdownDoc src="/Themes.md" />
+  <MarkdownDoc src="/Plugins.md" />
 </template>
