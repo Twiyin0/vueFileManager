@@ -4,7 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import { useOfflineTasks } from '@/composables/useOfflineTasks'
 import { useFilesStore, type FileItem } from '@/stores/files'
-import { fetchAudioBlobUrl, revokeAudioBlobUrls, type ResolvedAudioTrack } from '@/utils/audio'
+import APlayer from 'aplayer'
+
+import 'aplayer/dist/APlayer.min.css'
 
 export function useHomeView() {
   const route = useRoute()
@@ -105,8 +107,6 @@ export function useHomeView() {
   let aplayerInst: any = null
   const showAplayer = ref(false)
   const aplayerCollapsed = ref(true)
-  let resolvedAudioTracks: ResolvedAudioTrack[] = []
-  let audioBlobCleanupTimer: ReturnType<typeof setTimeout> | null = null
 
   const isDark = ref(document.documentElement.classList.contains('dark'))
   const isMobileDevice = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)
@@ -232,29 +232,14 @@ export function useHomeView() {
     }))
   }
 
-  async function resolveAudioList() {
-    const audioList = buildAudioList()
-    return Promise.all(audioList.map((item) => fetchAudioBlobUrl(item)))
+  function resolveAudioList() {
+    return buildAudioList()
   }
 
-  function replaceResolvedAudioTracks(nextTracks: ResolvedAudioTrack[]) {
-    const previousTracks = resolvedAudioTracks
-    resolvedAudioTracks = nextTracks
-
-    if (audioBlobCleanupTimer) {
-      clearTimeout(audioBlobCleanupTimer)
-    }
-
-    audioBlobCleanupTimer = setTimeout(() => {
-      revokeAudioBlobUrls(previousTracks)
-      audioBlobCleanupTimer = null
-    }, 1500)
-  }
-
-  function toAplayerAudioList(audioList: ResolvedAudioTrack[]) {
+  function toAplayerAudioList(audioList: Array<{ name: string; url: string; artist: string }>) {
     return audioList.map((item) => ({
       name: item.name.replace(/\.[^.]+$/, ''),
-      url: item.blobUrl,
+      url: item.url,
       artist: item.artist,
     }))
   }
@@ -273,7 +258,6 @@ export function useHomeView() {
     const playerAudioList = toAplayerAudioList(audioList)
     aplayerInst.list.clear()
     playerAudioList.forEach((item) => aplayerInst!.list.add(item))
-    replaceResolvedAudioTracks(audioList)
 
     if (targetIndex >= 0 && targetIndex < playerAudioList.length) {
       aplayerInst.list.switch(targetIndex)
@@ -284,7 +268,7 @@ export function useHomeView() {
 
   async function openAplayerWithFile(targetFile: FileItem) {
     const targetUrl = getFilePreviewUrl(targetFile)
-    let audioList: ResolvedAudioTrack[]
+    let audioList: Array<{ name: string; url: string; artist: string }>
     let targetIndex = -1
 
     try {
@@ -315,16 +299,13 @@ export function useHomeView() {
     nextTick(async () => {
       if (!aplayerRef.value) return
       const playerAudioList = toAplayerAudioList(audioList)
-      await import('aplayer/dist/APlayer.min.css')
-      const { default: APlayerClass } = await import('aplayer')
-      aplayerInst = new APlayerClass({
+      aplayerInst = new APlayer({
         container: aplayerRef.value,
         autoplay: !isMobileDevice,
         volume: 0.3,
         theme: isDark.value ? '#6b7cff' : '#4f6ef7',
         audio: playerAudioList,
       })
-      replaceResolvedAudioTracks(audioList)
       if (targetIndex >= 0) {
         aplayerInst.list.switch(targetIndex)
       }
@@ -339,12 +320,6 @@ export function useHomeView() {
       try { aplayerInst.destroy() } catch {}
       aplayerInst = null
     }
-    if (audioBlobCleanupTimer) {
-      clearTimeout(audioBlobCleanupTimer)
-      audioBlobCleanupTimer = null
-    }
-    revokeAudioBlobUrls(resolvedAudioTracks)
-    resolvedAudioTracks = []
     showAplayer.value = false
   }
 

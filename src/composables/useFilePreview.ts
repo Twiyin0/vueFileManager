@@ -2,9 +2,10 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { api } from '@/api'
 import type ArtPlayer from 'artplayer'
-import type APlayer from 'aplayer'
+import APlayer from 'aplayer'
 import type Viewer from 'viewerjs'
-import { fetchAudioBlobUrl, revokeAudioBlobUrls, type ResolvedAudioTrack } from '@/utils/audio'
+
+import 'aplayer/dist/APlayer.min.css'
 
 export interface PreviewFileListItem {
   path: string
@@ -82,7 +83,6 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   let imageBlobUrl: string | null = null
   let pdfBlobUrl: string | null = null
-  let audioBlobTracks: ResolvedAudioTrack[] = []
 
   const docxContainer = ref<HTMLDivElement>()
   const excelSheets = ref<{ name: string; html: string }[]>([])
@@ -553,42 +553,27 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
     await import('viewerjs/dist/viewer.css')
     const { default: ViewerClass } = await import('viewerjs')
+    const images = imageContainer.value.querySelectorAll('img')
+    images[galleryIndex.value].src = getImagePreviewUrl(list[galleryIndex.value])
 
-    const currentUrl = getImagePreviewUrl(list[galleryIndex.value])
-    fetch(currentUrl)
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.blob()
-      })
-      .then((blob) => {
-        if (imageBlobUrl) URL.revokeObjectURL(imageBlobUrl)
-        imageBlobUrl = URL.createObjectURL(blob)
-        const images = imageContainer.value!.querySelectorAll('img')
-        images[galleryIndex.value].src = imageBlobUrl
-
-        viewer = new ViewerClass(imageContainer.value!, {
-          initialViewIndex: galleryIndex.value,
-          navbar: true,
-          toolbar: {
-            zoomIn: true, zoomOut: true, oneToOne: true, reset: true,
-            prev: false, play: false, next: false,
-            rotateLeft: true, rotateRight: true,
-            flipHorizontal: true, flipVertical: true,
-          },
-          title: [1, (_image: any, imageData: any) =>
-            `${imageData.alt || list[galleryIndex.value].name} (${imageData.width}×${imageData.height})`],
-          hidden: () => { if (!isProgrammaticDestroy) emit('close'); isProgrammaticDestroy = false },
-        })
-        viewer.show()
-        imageContainer.value!.addEventListener('viewed', ((event: CustomEvent) => {
-          galleryIndex.value = event.detail?.index ?? galleryIndex.value
-        }) as EventListener)
-        loading.value = false
-      })
-      .catch((err) => {
-        console.error('Image load error:', err)
-        loading.value = false
-      })
+    viewer = new ViewerClass(imageContainer.value, {
+      initialViewIndex: galleryIndex.value,
+      navbar: true,
+      toolbar: {
+        zoomIn: true, zoomOut: true, oneToOne: true, reset: true,
+        prev: false, play: false, next: false,
+        rotateLeft: true, rotateRight: true,
+        flipHorizontal: true, flipVertical: true,
+      },
+      title: [1, (_image: any, imageData: any) =>
+        `${imageData.alt || list[galleryIndex.value].name} (${imageData.width}×${imageData.height})`],
+      hidden: () => { if (!isProgrammaticDestroy) emit('close'); isProgrammaticDestroy = false },
+    })
+    viewer.show()
+    imageContainer.value.addEventListener('viewed', ((event: CustomEvent) => {
+      galleryIndex.value = event.detail?.index ?? galleryIndex.value
+    }) as EventListener)
+    loading.value = false
   }
 
   function destroyImageViewer() {
@@ -675,21 +660,12 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
   async function initAudioPlayer() {
     if (!audioContainer.value) return
     try {
-      const resolvedTrack = await fetchAudioBlobUrl({
-        name: props.fileName,
-        url: previewUrl.value,
-        artist: 'VueFileManager',
-      })
-      revokeAudioBlobUrls(audioBlobTracks)
-      audioBlobTracks = [resolvedTrack]
-      await import('aplayer/dist/APlayer.min.css')
-      const { default: APlayerClass } = await import('aplayer')
-      aplayerInst = new APlayerClass({
+      aplayerInst = new APlayer({
         container: audioContainer.value,
         autoplay: false,
         volume: 0.3,
         theme: isDark.value ? '#6b7cff' : '#4f6ef7',
-        audio: [{ name: props.fileName, url: resolvedTrack.blobUrl, artist: 'VueFileManager', cover: '' }],
+        audio: [{ name: props.fileName, url: previewUrl.value, artist: 'VueFileManager', cover: '' }],
       })
       try { aplayerInst.play() } catch {}
       loading.value = false
@@ -789,8 +765,6 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     isProgrammaticDestroy = true
     if (artPlayer) { try { artPlayer.destroy() } catch {}; artPlayer = null }
     if (aplayerInst) { try { aplayerInst.destroy() } catch {}; aplayerInst = null }
-    revokeAudioBlobUrls(audioBlobTracks)
-    audioBlobTracks = []
     destroyImageViewer()
     destroyCodeMirror()
     if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null }

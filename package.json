@@ -1,6 +1,6 @@
 {
   "name": "vue-file-manager",
-  "version": "1.0.1-preview",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "license": "MIT",
