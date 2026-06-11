@@ -29,6 +29,10 @@ const app = express()
 const PORT = Number(process.env.PORT) || config.server.port
 const HOST = process.env.HOST || config.server.host || 'localhost'
 
+function isApiPath(pathname: string) {
+  return pathname === '/api' || pathname.startsWith('/api/')
+}
+
 // 监听 config.yml 变化，触发 tsx watch 自动重启
 const configFilePath = path.join(__dirname, '..', 'config.yml')
 const selfFilePath = path.join(__dirname, 'index.ts')
@@ -137,7 +141,7 @@ app.put('/api/themes/:name/toggle', (req, res) => {
 async function startServer() {
   // SPA fallback
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
+    if (!isApiPath(req.path)) {
       res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'))
     }
   })
