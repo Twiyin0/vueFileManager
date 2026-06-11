@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import Icon from '@/components/Icon.vue'
+import { useAuthStore } from '@/stores/auth'
 
 interface GuestUser {
   username: string
@@ -11,8 +12,13 @@ interface GuestUser {
 
 const users = ref<GuestUser[]>([])
 const loading = ref(true)
+const authStore = useAuthStore()
 
 onMounted(async () => {
+  if (!authStore.user && localStorage.getItem('token')) {
+    await authStore.fetchUser()
+  }
+
   try {
     const res = await api.get<{ users: GuestUser[] }>('/guest')
     users.value = res.users
@@ -26,7 +32,6 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
-    <!-- 顶部导航 -->
     <header class="h-11 flex items-center justify-between px-4 border-b flex-shrink-0" style="background-color: var(--surface-color); border-color: var(--border-color)">
       <div class="flex items-center gap-3 min-w-0">
         <router-link to="/" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
@@ -37,7 +42,8 @@ onMounted(async () => {
       </div>
       <div class="flex items-center gap-3 flex-shrink-0">
         <ThemeToggle />
-        <router-link to="/login" class="btn-primary text-sm">登录</router-link>
+        <router-link v-if="authStore.isLoggedIn" to="/" class="btn-primary text-sm">用户模式</router-link>
+        <router-link v-else to="/login" class="btn-primary text-sm">登录</router-link>
       </div>
     </header>
 
@@ -48,7 +54,6 @@ onMounted(async () => {
           <p class="text-sm text-gray-500 dark:text-dark-text-secondary mt-1">浏览公开分享的文件</p>
         </div>
 
-        <!-- 加载状态 -->
         <div v-if="loading" class="flex items-center justify-center py-20">
           <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -56,14 +61,12 @@ onMounted(async () => {
           </svg>
         </div>
 
-        <!-- 空状态 -->
         <div v-else-if="users.length === 0" class="card flex flex-col items-center justify-center py-20 text-gray-400 dark:text-dark-text-secondary">
           <Icon name="globe" class="w-20 h-20 mb-4" />
           <p class="text-lg">暂无公开分享的文件</p>
           <p class="text-sm mt-1">用户可以在设置中开启访客模式并分享文件夹</p>
         </div>
 
-        <!-- 用户列表 -->
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <router-link
             v-for="user in users"

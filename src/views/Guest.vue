@@ -11,9 +11,11 @@ import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import UploadDialog from '@/components/UploadDialog.vue'
 import Icon from '@/components/Icon.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const files = ref<FileItem[]>([])
 const loading = ref(false)
@@ -184,6 +186,9 @@ async function fetchFiles() {
 }
 
 onMounted(() => {
+  if (!authStore.user && localStorage.getItem('token')) {
+    authStore.fetchUser()
+  }
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
   if (shareId.value) {
     fetchFiles()
@@ -607,8 +612,9 @@ const permLabels: Record<string, string> = {
           / 访客模式
         </span>
       </div>
-      <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0" :class="{ 'guest-auth-logged-in': authStore.isLoggedIn }">
         <ThemeToggle />
+        <router-link v-if="authStore.isLoggedIn" to="/" class="btn-primary text-sm px-3 py-1.5">用户模式</router-link>
         <router-link to="/login" class="btn-primary text-sm px-3 py-1.5">登录</router-link>
       </div>
     </header>
@@ -958,3 +964,9 @@ const permLabels: Record<string, string> = {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.guest-auth-logged-in a[href="/login"] {
+  display: none;
+}
+</style>
