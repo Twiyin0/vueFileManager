@@ -17,6 +17,12 @@ import { getStorage, getStorageByPoolId } from '../services/factory'
 import { LocalStorage } from '../services/local'
 import { PrefixStorage } from '../services/prefix'
 import config from '../config'
+import {
+  createOfflineDownloadTask,
+  listOfflineDownloadTasks,
+  cancelOfflineDownloadTask,
+  retryOfflineDownloadTask
+} from '../services/offline-download'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const UPLOAD_TEMP_DIR = path.join(os.tmpdir(), 'vue-file-manager', 'uploads')
@@ -322,7 +328,22 @@ router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
       .filter(f => !isJunkFile(f.name) && !isTemporaryUploadFile(f.name))
       .map(f => withDirectUrl(req, { ...f, poolId: resolvedPoolId }, resolvedPoolId))
 
-    res.json({ files: filesWithPool })
+    let readme: { name: string; path: string; directUrl: string; fileUrl: string } | null = null
+    if (resolvedPoolId && prefix) {
+      const readmeFile = filesWithPool.find((file: any) =>
+        file.type === 'file' && ['readme.md', 'readme.markdown'].includes(file.name.toLowerCase())
+      ) as any
+      if (readmeFile) {
+        readme = {
+          name: readmeFile.name,
+          path: readmeFile.path,
+          directUrl: readmeFile.directUrl,
+          fileUrl: readmeFile.fileUrl
+        }
+      }
+    }
+
+    res.json({ files: filesWithPool, readme })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -1227,6 +1248,51 @@ router.post('/remote-upload', flexibleAuth, requirePermission('write'), async (r
     res.json({ message: '远程上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/offline-download', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const { url, dirPath, poolId } = req.body
+    if (!url) {
+      return res.status(400).json({ error: '缺少 URL' })
+    }
+
+    const resolvedPoolId = resolvePoolId(req.userId!, poolId)
+    if (!resolvedPoolId) {
+      return res.status(400).json({ error: '存储池不存在' })
+    }
+
+    const taskId = createOfflineDownloadTask(req.userId!, resolvedPoolId, url, dirPath || '')
+    res.json({ message: '离线下载任务已创建', taskId })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/offline-download/tasks', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  try {
+    res.json({ tasks: listOfflineDownloadTasks(req.userId!) })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/offline-download/tasks/:id/cancel', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  try {
+    cancelOfflineDownloadTask(req.userId!, Number(req.params.id))
+    res.json({ message: '任务已取消' })
+  } catch (err: any) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+router.post('/offline-download/tasks/:id/retry', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  try {
+    retryOfflineDownloadTask(req.userId!, Number(req.params.id))
+    res.json({ message: '任务已重新加入队列' })
+  } catch (err: any) {
+    res.status(400).json({ error: err.message })
   }
 })
 

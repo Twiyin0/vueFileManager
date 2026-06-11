@@ -15,6 +15,7 @@ import GuestShareDialog from '@/components/GuestShareDialog.vue'
 import Toast from '@/components/Toast.vue'
 import MoveDialog from '@/components/MoveDialog.vue'
 import Icon from '@/components/Icon.vue'
+import DirectoryReadme from '@/components/DirectoryReadme.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -61,6 +62,9 @@ const detailItem = ref<any>(null)
 const showRemoteUpload = ref(false)
 const remoteUrl = ref('')
 const remoteUploading = ref(false)
+const remoteUploadMode = ref<'instant' | 'offline'>('instant')
+const offlineTasks = ref<any[]>([])
+const offlineTasksLoading = ref(false)
 
 // 剪贴板
 const clipboardFiles = ref<{ path: string; name: string; poolId?: number }[]>([])
@@ -128,6 +132,7 @@ onMounted(async () => {
     const res = await api.get<{ pools: any[] }>('/storage-pools')
     pools.value = res.pools.map(p => ({ id: p.id, name: p.name }))
   } catch {}
+  await loadOfflineTasks()
   filesStore.fetchFiles(currentPath.value, currentPoolId.value)
 })
 
@@ -403,8 +408,17 @@ async function handleRemoteUpload() {
   if (!remoteUrl.value.trim()) return
   remoteUploading.value = true
   try {
-    await api.post('/files/remote-upload', { url: remoteUrl.value, dirPath: currentPath.value, poolId: currentPoolId.value })
-    await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+    if (remoteUploadMode.value === 'offline') {
+      await api.post('/files/offline-download', {
+        url: remoteUrl.value,
+        dirPath: currentPath.value,
+        poolId: currentPoolId.value
+      })
+      await loadOfflineTasks()
+    } else {
+      await api.post('/files/remote-upload', { url: remoteUrl.value, dirPath: currentPath.value, poolId: currentPoolId.value })
+      await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+    }
     showRemoteUpload.value = false
     remoteUrl.value = ''
   } catch (err: any) {
@@ -412,6 +426,28 @@ async function handleRemoteUpload() {
   } finally {
     remoteUploading.value = false
   }
+}
+
+async function loadOfflineTasks() {
+  offlineTasksLoading.value = true
+  try {
+    const res = await api.get<{ tasks: any[] }>('/files/offline-download/tasks')
+    offlineTasks.value = res.tasks
+  } catch {
+    offlineTasks.value = []
+  } finally {
+    offlineTasksLoading.value = false
+  }
+}
+
+async function cancelOfflineTask(taskId: number) {
+  await api.post(`/files/offline-download/tasks/${taskId}/cancel`)
+  await loadOfflineTasks()
+}
+
+async function retryOfflineTask(taskId: number) {
+  await api.post(`/files/offline-download/tasks/${taskId}/retry`)
+  await loadOfflineTasks()
 }
 
 // 批量选择（自动模式）
@@ -934,6 +970,88 @@ watch([currentPath, currentPoolId], () => {
           </div>
 
           <!-- 文件列表 -->
+          <DirectoryReadme
+            v-if="!showSearch && filesStore.readme"
+            :src="filesStore.readme.directUrl || filesStore.readme.fileUrl"
+            :title="filesStore.readme.name"
+          />
+
+          <div
+            v-if="offlineTasks.length > 0"
+            class="card mb-4"
+          >
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 class="text-sm font-semibold" style="color: var(--text-color)">离线下载任务</h3>
+                <p class="text-xs" style="color: var(--text-secondary-color)">远程 URL 下载会在服务器端排队执行</p>
+              </div>
+              <button
+                @click="loadOfflineTasks"
+                class="btn-secondary text-xs px-3 py-1"
+                :disabled="offlineTasksLoading"
+              >
+                {{ offlineTasksLoading ? '刷新中...' : '刷新' }}
+              </button>
+            </div>
+            <div class="space-y-3">
+              <div
+                v-for="task in offlineTasks"
+                :key="task.id"
+                class="rounded-lg border p-3"
+                style="border-color: var(--border-color); background-color: var(--surface-color)"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-sm font-medium truncate" style="color: var(--text-color)">
+                        {{ task.file_name || task.url }}
+                      </span>
+                      <span class="px-2 py-0.5 rounded-full text-xs"
+                        :class="task.status === 'completed'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : task.status === 'failed'
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            : task.status === 'cancelled'
+                              ? 'bg-gray-100 text-gray-600 dark:bg-dark-hover dark:text-dark-text-secondary'
+                              : task.status === 'running'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'">
+                        {{ task.status }}
+                      </span>
+                      <span class="text-xs font-mono" style="color: var(--text-secondary-color)">
+                        {{ task.pool_name }}
+                      </span>
+                    </div>
+                    <p class="mt-1 text-xs break-all" style="color: var(--text-secondary-color)">{{ task.url }}</p>
+                    <div class="mt-2 h-2 rounded-full" style="background-color: var(--hover-color)">
+                      <div class="h-2 rounded-full bg-blue-500 transition-all" :style="{ width: `${task.progress || 0}%` }" />
+                    </div>
+                    <div class="mt-2 flex items-center justify-between gap-3 text-xs" style="color: var(--text-secondary-color)">
+                      <span>{{ task.progress || 0 }}%</span>
+                      <span v-if="task.error_message" class="text-red-500">{{ task.error_message }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <button
+                      v-if="task.status === 'pending' || task.status === 'running'"
+                      @click="cancelOfflineTask(task.id)"
+                      class="btn-secondary text-xs px-3 py-1"
+                    >
+                      取消
+                    </button>
+                    <button
+                      v-if="task.status === 'failed' || task.status === 'cancelled'"
+                      @click="retryOfflineTask(task.id)"
+                      class="btn-primary text-xs px-3 py-1"
+                    >
+                      重试
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <FileList
             :files="showSearch ? searchResults : filesStore.files"
             :loading="filesStore.loading || isSearching"
@@ -1004,6 +1122,32 @@ watch([currentPath, currentPoolId], () => {
         <div class="relative card w-full max-w-md max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
           <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">远程URL上传</h3>
           <input v-model="remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
+          <div class="mb-4">
+            <label class="block text-sm mb-1.5" style="color: var(--text-secondary-color)">上传方式</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                @click="remoteUploadMode = 'instant'"
+                class="rounded-lg border px-3 py-2 text-sm transition-colors"
+                :style="remoteUploadMode === 'instant'
+                  ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
+                  : 'border-color: var(--border-color); color: var(--text-color)'"
+              >
+                立即上传
+              </button>
+              <button
+                @click="remoteUploadMode = 'offline'"
+                class="rounded-lg border px-3 py-2 text-sm transition-colors"
+                :style="remoteUploadMode === 'offline'
+                  ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
+                  : 'border-color: var(--border-color); color: var(--text-color)'"
+              >
+                离线下载
+              </button>
+            </div>
+            <p class="mt-2 text-xs" style="color: var(--text-secondary-color)">
+              {{ remoteUploadMode === 'offline' ? '服务器会在后台下载并写入当前目录。' : '当前会直接请求远程资源并立即写入存储池。' }}
+            </p>
+          </div>
           <div class="flex justify-end gap-3">
             <button @click="showRemoteUpload = false" class="btn-secondary text-sm">取消</button>
             <button @click="handleRemoteUpload" :disabled="remoteUploading" class="btn-primary text-sm">

@@ -2,6 +2,7 @@ import { LocalStorage } from './local'
 import { UpyunStorage } from './upyun'
 import { FtpStorage } from './ftp'
 import { S3Storage } from './s3'
+import { SftpStorage } from './sftp'
 import { PrefixStorage } from './prefix'
 import { StorageProvider } from './storage'
 import appConfig from '../config'
@@ -24,6 +25,8 @@ function createStorageInstance(pool: any, username?: string): StorageProvider {
     )
   } else if (pool.storage_type === 'ftp') {
     storage = new FtpStorage(config)
+  } else if (pool.storage_type === 'sftp') {
+    storage = new SftpStorage(config)
   } else if (pool.storage_type === 's3') {
     storage = new S3Storage(config)
   } else {

@@ -14,11 +14,19 @@ export interface FileItem {
   fileUrl?: string
 }
 
+export interface DirectoryReadme {
+  name: string
+  path: string
+  directUrl: string
+  fileUrl: string
+}
+
 export const useFilesStore = defineStore('files', () => {
   const files = ref<FileItem[]>([])
   const currentPath = ref('')
   const loading = ref(false)
   const error = ref('')
+  const readme = ref<DirectoryReadme | null>(null)
 
   async function fetchFiles(path: string = '', poolId?: number) {
     loading.value = true
@@ -28,12 +36,14 @@ export const useFilesStore = defineStore('files', () => {
       if (path) params.set('path', path)
       if (poolId) params.set('poolId', String(poolId))
       const query = params.toString() ? `?${params}` : ''
-      const res = await api.get<{ files: FileItem[] }>(`/files/list${query}`)
+      const res = await api.get<{ files: FileItem[]; readme?: DirectoryReadme | null }>(`/files/list${query}`)
       files.value = res.files
+      readme.value = res.readme || null
       currentPath.value = path
     } catch (err: any) {
       error.value = err.message
       files.value = []
+      readme.value = null
     } finally {
       loading.value = false
     }
@@ -91,7 +101,7 @@ export const useFilesStore = defineStore('files', () => {
   }
 
   return {
-    files, currentPath, loading, error,
+    files, currentPath, loading, error, readme,
     fetchFiles, uploadFile, deleteFile, createFolder, downloadFile,
     formatSize, formatDate
   }

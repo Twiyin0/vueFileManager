@@ -239,7 +239,21 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
         path: prefix ? (f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path) : f.path
       }))
 
-    res.json({ files: result, owner: user.username, shareLabel: share.label, permissions: share.permissions })
+    let readme: { name: string; path: string; directUrl: string; fileUrl: string } | null = null
+    const readmeFile = result.find(file =>
+      file.type === 'file' && ['readme.md', 'readme.markdown'].includes(file.name.toLowerCase())
+    )
+    if (readmeFile) {
+      const previewUrl = `/api/guest/${encodeURIComponent(user.username)}/${share.id}/preview?path=${encodeURIComponent(readmeFile.path)}`
+      readme = {
+        name: readmeFile.name,
+        path: readmeFile.path,
+        directUrl: previewUrl,
+        fileUrl: previewUrl
+      }
+    }
+
+    res.json({ files: result, owner: user.username, shareLabel: share.label, permissions: share.permissions, readme })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

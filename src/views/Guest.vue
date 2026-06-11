@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
-import { FileItem } from '@/stores/files'
+import type { DirectoryReadme as DirectoryReadmeData, FileItem } from '@/stores/files'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import FileList from '@/components/FileList.vue'
 import FilePreview from '@/components/FilePreview.vue'
@@ -11,6 +11,7 @@ import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import UploadDialog from '@/components/UploadDialog.vue'
 import Icon from '@/components/Icon.vue'
+import DirectoryReadme from '@/components/DirectoryReadme.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -18,6 +19,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const files = ref<FileItem[]>([])
+const readme = ref<DirectoryReadmeData | null>(null)
 const loading = ref(false)
 const error = ref('')
 const owner = ref('')
@@ -170,16 +172,18 @@ async function fetchFiles() {
     const params = new URLSearchParams()
     if (currentPath.value) params.set('path', currentPath.value)
     const query = params.toString() ? `?${params}` : ''
-    const res = await api.get<{ files: FileItem[]; owner: string; shareLabel: string; permissions: string }>(
+    const res = await api.get<{ files: FileItem[]; owner: string; shareLabel: string; permissions: string; readme?: DirectoryReadmeData | null }>(
       `/guest/${username.value}/${shareId.value}/list${query}`
     )
     files.value = res.files
+    readme.value = res.readme || null
     owner.value = res.owner
     shareLabel.value = res.shareLabel
     sharePermissions.value = res.permissions || ''
   } catch (err: any) {
     error.value = err.message
     files.value = []
+    readme.value = null
   } finally {
     loading.value = false
   }
@@ -791,6 +795,12 @@ const permLabels: Record<string, string> = {
           </div>
 
           <!-- 文件列表 -->
+          <DirectoryReadme
+            v-if="!showSearch && readme"
+            :src="readme.directUrl || readme.fileUrl"
+            :title="readme.name"
+          />
+
           <FileList
             :files="showSearch ? searchResults : files"
             :loading="loading"

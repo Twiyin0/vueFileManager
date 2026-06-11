@@ -11,6 +11,7 @@ import './db'
 // 加载主题插件
 import { loadPlugins, getThemeStyles, getAllThemes, toggleTheme } from './plugins/loader'
 loadPlugins()
+startOfflineDownloadWorker()
 
 import authRoutes from './routes/auth'
 import filesRoutes from './routes/files'
@@ -22,7 +23,9 @@ import storagePoolsRoutes from './routes/storage-pools'
 import trashRoutes from './routes/trash'
 import favouritesRoutes from './routes/favourites'
 import publicRoutes from './routes/public'
+import webdavRoutes from './routes/webdav'
 import { ipBlacklistMiddleware } from './middleware/auth'
+import { startOfflineDownloadWorker } from './services/offline-download'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -90,6 +93,7 @@ app.use('/api/share', shareRoutes)
 app.use('/api/storage-pools', storagePoolsRoutes)
 app.use('/api/trash', trashRoutes)
 app.use('/api/favourites', favouritesRoutes)
+app.use('/dav', webdavRoutes)
 
 // 公开访问路由（无需认证）
 app.use('/f', publicRoutes)

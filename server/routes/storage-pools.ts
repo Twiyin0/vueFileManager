@@ -7,7 +7,52 @@ import { clearStorageCache } from '../services/factory'
 
 const router = Router()
 
-// 获取用户所有存储池
+function maskSecrets(rawConfig: Record<string, any>) {
+  const cfg = { ...rawConfig }
+  if (cfg.upyunPassword) cfg.upyunPassword = '******'
+  if (cfg.ftpPassword) cfg.ftpPassword = '******'
+  if (cfg.s3SecretAccessKey) cfg.s3SecretAccessKey = '******'
+  if (cfg.sftpPassword) cfg.sftpPassword = '******'
+  if (cfg.sftpPrivateKey) cfg.sftpPrivateKey = '*** hidden ***'
+  return cfg
+}
+
+function validateStorageConfig(storageType: string, storageConfig: Record<string, any>) {
+  if (!['local', 'upyun', 'ftp', 's3', 'sftp'].includes(storageType)) {
+    throw new Error('不支持的存储类型')
+  }
+
+  if (storageType === 'upyun') {
+    if (!storageConfig.upyunOperator || !storageConfig.upyunPassword || !storageConfig.upyunBucket) {
+      throw new Error('又拍云存储需要填写操作员、密码和服务名')
+    }
+  }
+
+  if (storageType === 'ftp') {
+    if (!storageConfig.ftpHost) {
+      throw new Error('FTP 存储需要填写主机地址')
+    }
+  }
+
+  if (storageType === 'sftp') {
+    if (!storageConfig.sftpHost || !storageConfig.sftpUser) {
+      throw new Error('SFTP 存储需要填写主机地址和用户名')
+    }
+    if (!storageConfig.sftpPassword && !storageConfig.sftpPrivateKey) {
+      throw new Error('SFTP 存储需要密码或私钥')
+    }
+  }
+
+  if (storageType === 's3') {
+    if (!storageConfig.s3Bucket) {
+      throw new Error('S3 存储需要填写 Bucket 名称')
+    }
+    if (!storageConfig.s3AccessKeyId || !storageConfig.s3SecretAccessKey) {
+      throw new Error('S3 存储需要填写 Access Key')
+    }
+  }
+}
+
 router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const pools = db.prepare(`
@@ -15,22 +60,15 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
       FROM storage_pools
       WHERE user_id = ?
       ORDER BY is_default DESC, created_at ASC
-    `).all(req.userId!)
+    `).all(req.userId!) as any[]
 
-    // 获取用户名
     const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
     const username = user?.username || ''
 
-    // 解析config JSON，但不返回密码
-    const safePools = pools.map((pool: any) => {
-      const cfg = JSON.parse(pool.config)
-      // 移除敏感信息
-      if (cfg.upyunPassword) cfg.upyunPassword = '••••••'
-      if (cfg.ftpPassword) cfg.ftpPassword = '••••••'
-      if (cfg.s3SecretAccessKey) cfg.s3SecretAccessKey = '••••••'
-
-      // 本地存储：返回实际路径
+    const safePools = pools.map(pool => {
+      const cfg = maskSecrets(JSON.parse(pool.config || '{}'))
       let resolvedPath = ''
+
       if (pool.storage_type === 'local') {
         const base = path.resolve(config.storage_root || './uploads', username)
         resolvedPath = cfg.rootPath && cfg.rootPath !== '/'
@@ -55,44 +93,16 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-// 创建存储池
 router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
-    const { name, storageType, config } = req.body
+    const { name, storageType, config: storageConfig } = req.body
 
-    if (!name || !storageType || !config) {
+    if (!name || !storageType || !storageConfig) {
       return res.status(400).json({ error: '缺少必要参数' })
     }
 
-    // 验证存储类型
-    if (!['local', 'upyun', 'ftp', 's3'].includes(storageType)) {
-      return res.status(400).json({ error: '不支持的存储类型' })
-    }
+    validateStorageConfig(storageType, storageConfig)
 
-    // 本地存储无需验证路径（自动使用 storage_root/username）
-
-    if (storageType === 'upyun') {
-      if (!config.upyunOperator || !config.upyunPassword || !config.upyunBucket) {
-        return res.status(400).json({ error: '又拍云存储需要填写操作员名称、密码和服务名' })
-      }
-    }
-
-    if (storageType === 'ftp') {
-      if (!config.ftpHost) {
-        return res.status(400).json({ error: 'FTP 存储需要填写主机地址' })
-      }
-    }
-
-    if (storageType === 's3') {
-      if (!config.s3Bucket) {
-        return res.status(400).json({ error: 'S3 存储需要填写 Bucket 名称' })
-      }
-      if (!config.s3AccessKeyId || !config.s3SecretAccessKey) {
-        return res.status(400).json({ error: 'S3 存储需要填写 Access Key' })
-      }
-    }
-
-    // 检查是否是第一个存储池（自动设为默认）
     const existingPools = db.prepare('SELECT COUNT(*) as count FROM storage_pools WHERE user_id = ?').get(req.userId!) as any
     const isFirst = existingPools.count === 0
 
@@ -104,10 +114,9 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
       name,
       storageType,
       isFirst ? 1 : 0,
-      JSON.stringify(config)
+      JSON.stringify(storageConfig)
     )
 
-    // 清除存储缓存
     clearStorageCache(req.userId!)
 
     res.json({
@@ -117,38 +126,47 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
         name,
         storageType,
         isDefault: isFirst,
-        config
+        config: maskSecrets(storageConfig)
       }
     })
   } catch (err: any) {
-    res.status(500).json({ error: err.message })
+    res.status(err.message === '不支持的存储类型' ? 400 : 500).json({ error: err.message })
   }
 })
 
-// 更新存储池
 router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const { name, storageType, config } = req.body
+    const { name, storageType, config: nextConfig } = req.body
 
-    // 检查存储池是否存在且属于当前用户
     const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
 
-    if (storageType === 'upyun' && config) {
-      // 如果密码为空或占位符，保留原密码
-      if (config.upyunPassword === '••••••' || !config.upyunPassword) {
-        const oldConfig = JSON.parse(pool.config)
-        config.upyunPassword = oldConfig.upyunPassword
+    const mergedConfig = nextConfig ? { ...JSON.parse(pool.config || '{}'), ...nextConfig } : undefined
+    if (storageType && mergedConfig) {
+      validateStorageConfig(storageType, mergedConfig)
+    }
+
+    if (mergedConfig) {
+      if (nextConfig.upyunPassword === '******' || !nextConfig.upyunPassword) {
+        mergedConfig.upyunPassword = JSON.parse(pool.config || '{}').upyunPassword
       }
-      if (!config.upyunOperator || !config.upyunBucket) {
-        return res.status(400).json({ error: '又拍云存储需要填写操作员名称和服务名' })
+      if (nextConfig.ftpPassword === '******' || !nextConfig.ftpPassword) {
+        mergedConfig.ftpPassword = JSON.parse(pool.config || '{}').ftpPassword
+      }
+      if (nextConfig.s3SecretAccessKey === '******' || !nextConfig.s3SecretAccessKey) {
+        mergedConfig.s3SecretAccessKey = JSON.parse(pool.config || '{}').s3SecretAccessKey
+      }
+      if (nextConfig.sftpPassword === '******' || !nextConfig.sftpPassword) {
+        mergedConfig.sftpPassword = JSON.parse(pool.config || '{}').sftpPassword
+      }
+      if (nextConfig.sftpPrivateKey === '*** hidden ***' || !nextConfig.sftpPrivateKey) {
+        mergedConfig.sftpPrivateKey = JSON.parse(pool.config || '{}').sftpPrivateKey
       }
     }
 
-    // 构建更新语句
     const updates: string[] = []
     const values: any[] = []
 
@@ -160,9 +178,9 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
       updates.push('storage_type = ?')
       values.push(storageType)
     }
-    if (config !== undefined) {
+    if (mergedConfig !== undefined) {
       updates.push('config = ?')
-      values.push(JSON.stringify(config))
+      values.push(JSON.stringify(mergedConfig))
     }
 
     if (updates.length > 0) {
@@ -177,18 +195,13 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-// 删除存储池
 router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-
-    // 检查存储池是否存在且属于当前用户
     const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
-
-    // 不能删除默认存储池
     if (pool.is_default) {
       return res.status(400).json({ error: '不能删除默认存储池，请先设置其他存储池为默认' })
     }
@@ -202,7 +215,6 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-// 批量删除存储池
 router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
@@ -226,7 +238,7 @@ router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) =
         continue
       }
       if (pool.is_default) {
-        errors.push(`不能删除默认存储池: ${pool.name}`)
+        errors.push(`不能删除默认存储池 ${pool.name}`)
         continue
       }
 
@@ -248,23 +260,16 @@ router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) =
   }
 })
 
-// 设置默认存储池
 router.post('/:id/set-default', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-
-    // 检查存储池是否存在且属于当前用户
     const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
 
-    // 取消所有默认
     db.prepare('UPDATE storage_pools SET is_default = 0 WHERE user_id = ?').run(req.userId!)
-
-    // 设置新的默认
     db.prepare('UPDATE storage_pools SET is_default = 1 WHERE id = ? AND user_id = ?').run(id, req.userId!)
-
     clearStorageCache(req.userId!)
 
     res.json({ message: '默认存储池设置成功' })
@@ -273,48 +278,78 @@ router.post('/:id/set-default', authMiddleware, (req: AuthRequest, res: Response
   }
 })
 
-// 测试存储池连接
 router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-
-    // 检查存储池是否存在且属于当前用户
     const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
 
-    const config = JSON.parse(pool.config)
+    const poolConfig = JSON.parse(pool.config || '{}')
 
-    // 根据存储类型测试连接
     if (pool.storage_type === 'local') {
       const fs = await import('fs/promises')
       const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
       const localPath = path.resolve(config.storage_root || './uploads', user?.username || '')
       try {
         await fs.access(localPath)
-        res.json({ success: true, message: `本地路径可访问: ${localPath}` })
+        return res.json({ success: true, message: `本地路径可访问: ${localPath}` })
       } catch {
-        res.json({ success: false, message: `本地路径不可访问: ${localPath}` })
+        return res.json({ success: false, message: `本地路径不可访问: ${localPath}` })
       }
-    } else if (pool.storage_type === 'upyun') {
-      // 测试又拍云连接
+    }
+
+    if (pool.storage_type === 'upyun') {
       const { UpyunStorage } = await import('../services/upyun')
       try {
         const storage = new UpyunStorage(
-          config.upyunOperator,
-          config.upyunPassword,
-          config.upyunBucket,
-          config.upyunEndpoint || 'v0.api.upyun.com'
+          poolConfig.upyunOperator,
+          poolConfig.upyunPassword,
+          poolConfig.upyunBucket,
+          poolConfig.upyunEndpoint || 'v0.api.upyun.com'
         )
         await storage.list('/')
-        res.json({ success: true, message: '又拍云连接成功' })
+        return res.json({ success: true, message: '又拍云连接成功' })
       } catch (err: any) {
-        res.json({ success: false, message: `又拍云连接失败: ${err.message}` })
+        return res.json({ success: false, message: `又拍云连接失败: ${err.message}` })
       }
-    } else {
-      res.json({ success: false, message: '不支持的存储类型' })
     }
+
+    if (pool.storage_type === 'ftp') {
+      const { FtpStorage } = await import('../services/ftp')
+      try {
+        const storage = new FtpStorage(poolConfig)
+        await storage.list('')
+        return res.json({ success: true, message: 'FTP 连接成功' })
+      } catch (err: any) {
+        return res.json({ success: false, message: `FTP 连接失败: ${err.message}` })
+      }
+    }
+
+    if (pool.storage_type === 'sftp') {
+      const { SftpStorage } = await import('../services/sftp')
+      try {
+        const storage = new SftpStorage(poolConfig)
+        await storage.list('')
+        return res.json({ success: true, message: 'SFTP 连接成功' })
+      } catch (err: any) {
+        return res.json({ success: false, message: `SFTP 连接失败: ${err.message}` })
+      }
+    }
+
+    if (pool.storage_type === 's3') {
+      const { S3Storage } = await import('../services/s3')
+      try {
+        const storage = new S3Storage(poolConfig)
+        await storage.list('')
+        return res.json({ success: true, message: 'S3/OSS 连接成功' })
+      } catch (err: any) {
+        return res.json({ success: false, message: `S3/OSS 连接失败: ${err.message}` })
+      }
+    }
+
+    res.json({ success: false, message: '不支持的存储类型' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

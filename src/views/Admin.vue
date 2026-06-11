@@ -34,6 +34,22 @@ interface UserDetail {
   stats: { trashCount: number; favCount: number; shareCount: number; apiKeyCount: number }
 }
 
+interface DatabaseStatus {
+  type: 'sqlite' | 'mysql' | 'postgres'
+  runtime: 'sqlite' | 'external'
+  configured: boolean
+  supported: boolean
+  message: string
+  note?: string
+}
+
+interface DatabaseConfigForm {
+  type: 'sqlite' | 'mysql' | 'postgres'
+  sqlite: { path: string }
+  mysql: { host: string; port: number; user: string; password: string; database: string; ssl: boolean }
+  postgres: { host: string; port: number; user: string; password: string; database: string; ssl: boolean }
+}
+
 const users = ref<AdminUser[]>([])
 const loading = ref(true)
 const search = ref('')
@@ -81,6 +97,17 @@ async function saveQuota() {
 const uploadLimit = ref(100)
 const showUploadLimitDialog = ref(false)
 const newUploadLimit = ref('')
+const databaseSaving = ref(false)
+const databaseTesting = ref(false)
+const databaseMessage = ref('')
+const databaseMessageType = ref<'success' | 'error' | 'info'>('info')
+const databaseStatus = ref<DatabaseStatus | null>(null)
+const databaseForm = ref<DatabaseConfigForm>({
+  type: 'sqlite',
+  sqlite: { path: './data/filemanager.db' },
+  mysql: { host: '127.0.0.1', port: 3306, user: '', password: '', database: '', ssl: false },
+  postgres: { host: '127.0.0.1', port: 5432, user: '', password: '', database: '', ssl: false }
+})
 
 async function fetchUploadLimit() {
   try {
@@ -106,6 +133,51 @@ async function saveUploadLimit() {
     showUploadLimitDialog.value = false
   } catch (err: any) {
     alert(err.message)
+  }
+}
+
+function setDatabaseMessage(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  databaseMessage.value = message
+  databaseMessageType.value = type
+}
+
+async function fetchDatabaseConfig() {
+  try {
+    const res = await api.get<{ database: DatabaseConfigForm; status: DatabaseStatus }>('/admin/database')
+    databaseForm.value = res.database
+    databaseStatus.value = res.status
+  } catch (err: any) {
+    setDatabaseMessage(err.message, 'error')
+  }
+}
+
+async function saveDatabaseConfig() {
+  databaseSaving.value = true
+  try {
+    const res = await api.put<{ message: string; status: DatabaseStatus }>('/admin/database', {
+      database: databaseForm.value
+    })
+    databaseStatus.value = res.status
+    setDatabaseMessage(res.message, 'success')
+  } catch (err: any) {
+    setDatabaseMessage(err.message, 'error')
+  } finally {
+    databaseSaving.value = false
+  }
+}
+
+async function testDatabaseConfig() {
+  databaseTesting.value = true
+  try {
+    const res = await api.post<{ success: boolean; message: string; status?: DatabaseStatus }>('/admin/database/test', {
+      database: databaseForm.value
+    })
+    if (res.status) databaseStatus.value = res.status
+    setDatabaseMessage(res.message, res.success ? 'success' : 'error')
+  } catch (err: any) {
+    setDatabaseMessage(err.message, 'error')
+  } finally {
+    databaseTesting.value = false
   }
 }
 
@@ -158,6 +230,7 @@ async function fetchUsers() {
 onMounted(() => {
   fetchUsers()
   fetchUploadLimit()
+  fetchDatabaseConfig()
 })
 
 function formatBytes(bytes: number): string {
@@ -558,6 +631,117 @@ onMounted(() => {
 
       <!-- IP 黑名单/白名单 -->
       <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold dark:text-dark-text text-light-text flex items-center gap-2">
+            <Icon name="database" class="w-5 h-5 text-cyan-500" />
+            数据库配置
+          </h2>
+          <div class="flex items-center gap-2">
+            <button @click="testDatabaseConfig" :disabled="databaseTesting" class="btn-secondary text-sm flex items-center gap-1.5">
+              <Icon name="check" class="w-4 h-4" />
+              {{ databaseTesting ? '测试中...' : '测试连接' }}
+            </button>
+            <button @click="saveDatabaseConfig" :disabled="databaseSaving" class="btn-primary text-sm flex items-center gap-1.5">
+              <Icon name="save" class="w-4 h-4" />
+              {{ databaseSaving ? '保存中...' : '保存配置' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="card space-y-4 mb-8">
+          <div v-if="databaseMessage" class="rounded-lg border px-3 py-2 text-sm"
+            :class="databaseMessageType === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-600 dark:text-green-400'
+              : databaseMessageType === 'error'
+                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+                : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'">
+            {{ databaseMessage }}
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">数据库类型</label>
+              <select v-model="databaseForm.type" class="input-field">
+                <option value="sqlite">SQLite</option>
+                <option value="mysql">MySQL</option>
+                <option value="postgres">PostgreSQL</option>
+              </select>
+            </div>
+
+            <div class="rounded-lg border px-3 py-3 text-sm" style="border-color: var(--border-color); background-color: var(--surface-color)">
+              <div class="font-medium mb-1" style="color: var(--text-color)">运行状态</div>
+              <div style="color: var(--text-secondary-color)">{{ databaseStatus?.message || '未获取状态' }}</div>
+              <div v-if="databaseStatus?.note" class="mt-2 text-xs" style="color: var(--text-secondary-color)">
+                {{ databaseStatus.note }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="databaseForm.type === 'sqlite'">
+            <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">SQLite 文件路径</label>
+            <input v-model="databaseForm.sqlite.path" type="text" class="input-field" placeholder="./data/filemanager.db" />
+          </div>
+
+          <div v-if="databaseForm.type === 'mysql'" class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Host</label>
+              <input v-model="databaseForm.mysql.host" type="text" class="input-field" placeholder="127.0.0.1" />
+            </div>
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Port</label>
+              <input v-model.number="databaseForm.mysql.port" type="number" class="input-field" placeholder="3306" />
+            </div>
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">User</label>
+              <input v-model="databaseForm.mysql.user" type="text" class="input-field" />
+            </div>
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Password</label>
+              <input v-model="databaseForm.mysql.password" type="password" class="input-field" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Database</label>
+              <input v-model="databaseForm.mysql.database" type="text" class="input-field" />
+            </div>
+            <label class="flex items-center gap-2 text-sm md:col-span-2" style="color: var(--text-color)">
+              <input v-model="databaseForm.mysql.ssl" type="checkbox" />
+              启用 SSL
+            </label>
+          </div>
+
+          <div v-if="databaseForm.type === 'postgres'" class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Host</label>
+              <input v-model="databaseForm.postgres.host" type="text" class="input-field" placeholder="127.0.0.1" />
+            </div>
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Port</label>
+              <input v-model.number="databaseForm.postgres.port" type="number" class="input-field" placeholder="5432" />
+            </div>
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">User</label>
+              <input v-model="databaseForm.postgres.user" type="text" class="input-field" />
+            </div>
+            <div>
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Password</label>
+              <input v-model="databaseForm.postgres.password" type="password" class="input-field" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-sm mb-1 block" style="color: var(--text-secondary-color)">Database</label>
+              <input v-model="databaseForm.postgres.database" type="text" class="input-field" />
+            </div>
+            <label class="flex items-center gap-2 text-sm md:col-span-2" style="color: var(--text-color)">
+              <input v-model="databaseForm.postgres.ssl" type="checkbox" />
+              启用 SSL
+            </label>
+          </div>
+
+          <div class="rounded-lg border px-3 py-3 text-sm bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300">
+            当前支持范围：SQLite 可直接作为运行数据库；MySQL / PostgreSQL 现阶段支持配置保存与连接测试。
+            业务数据访问层仍基于 SQLite，完整切换还需要后端查询层重构。
+          </div>
+        </div>
+
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-bold dark:text-dark-text text-light-text flex items-center gap-2">
             <Icon name="shield" class="w-5 h-5 text-red-500" />
