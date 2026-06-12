@@ -33,4 +33,5 @@ export interface StorageProvider {
   copy(srcPath: string, destPath: string): Promise<void>
   // 搜索（递归）
   search(prefix: string, keyword: string): Promise<FileInfo[]>
+  resolveLocalPath?(filePath: string): Promise<string | null>
 }

@@ -6,8 +6,8 @@ import { getGuestStorage, getStorageByPoolId } from '../services/factory'
 const router = Router()
 
 // 获取用户信息（根据用户名）
-function getUserByUsername(username: string) {
-  return db.prepare('SELECT id, username FROM users WHERE username = ?').get(username) as any
+async function getUserByUsername(username: string) {
+  return await db.prepare('SELECT id, username FROM users WHERE username = ?').get(username) as any
 }
 
 // MIME 类型映射
@@ -44,13 +44,13 @@ router.get('/:username/*', async (req: Request, res: Response) => {
     }
 
     // 查找用户
-    const user = getUserByUsername(username as string)
+    const user = await getUserByUsername(username as string)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }
 
     // 获取访客存储配置
-    const guestConfig = getGuestStorage(user.id)
+    const guestConfig = await getGuestStorage(user.id)
     if (!guestConfig) {
       return res.status(403).json({ error: '该用户未开启访客模式' })
     }

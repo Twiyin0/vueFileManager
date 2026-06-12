@@ -8,8 +8,6 @@ import iconv from 'iconv-lite'
 import db from '../../db'
 import { ApiKeyRequest } from '../../middleware/apikey'
 import { getStorage, getStorageByPoolId } from '../../services/factory'
-import { LocalStorage } from '../../services/local'
-import { PrefixStorage } from '../../services/prefix'
 import config from '../../config'
 
 export const UPLOAD_TEMP_DIR = path.join(os.tmpdir(), 'vue-file-manager', 'uploads')
@@ -69,11 +67,11 @@ export async function finalizeAtomicUpload(storage: Awaited<ReturnType<typeof ge
   }
 }
 
-export function resolvePoolId(userId: number, poolId?: string | number | null): number | undefined {
+export async function resolvePoolId(userId: number, poolId?: string | number | null): Promise<number | undefined> {
   if (poolId !== undefined && poolId !== null && poolId !== '') {
     return Number(poolId)
   }
-  return (db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(userId) as any)?.id
+  return (await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(userId) as any)?.id
 }
 
 export function buildDirectUrl(req: ApiKeyRequest, filePath: string, poolId?: number): string {
@@ -266,23 +264,9 @@ export function createUploadPassThrough() {
   return new PassThrough()
 }
 
-export function unwrapLocalStorage(storage: ReturnType<typeof getStorageForRequest>) {
-  return storage instanceof PrefixStorage ? (storage as any).inner : storage
-}
-
 export function resolveLocalMediaPath(storage: ReturnType<typeof getStorageForRequest>, filePath: string) {
-  if (storage instanceof PrefixStorage) {
-    const inner = (storage as any).inner
-    const prefix = ((storage as any).prefix as string | undefined)?.replace(/\/+$/, '') || ''
-    if (inner instanceof LocalStorage) {
-      const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`
-      return inner.resolvePath(prefix ? `${prefix}${normalizedPath}` : normalizedPath)
-    }
+  if (!storage.resolveLocalPath) {
+    return Promise.resolve(null)
   }
-
-  if (storage instanceof LocalStorage) {
-    return storage.resolvePath(filePath)
-  }
-
-  return null
+  return storage.resolveLocalPath(filePath)
 }

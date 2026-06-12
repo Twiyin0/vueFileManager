@@ -1,10 +1,7 @@
-import path from 'path'
-import { fileURLToPath } from 'url'
 import mysql from 'mysql2/promise'
 import { Client as PgClient } from 'pg'
 import config, { DatabaseConfig } from '../config'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+import { resolveFromRoot } from '../runtime-paths'
 
 export interface DatabaseStatus {
   type: DatabaseConfig['type']
@@ -16,7 +13,7 @@ export interface DatabaseStatus {
 }
 
 function getSqliteResolvedPath() {
-  return path.resolve(__dirname, '..', '..', config.database.sqlite.path || './data/filemanager.db')
+  return resolveFromRoot(config.database.sqlite.path || './data/filemanager.db')
 }
 
 export function getDatabaseStatus(): DatabaseStatus {
@@ -34,11 +31,10 @@ export function getDatabaseStatus(): DatabaseStatus {
 
   return {
     type,
-    runtime: 'sqlite',
+    runtime: 'external',
     configured: true,
-    supported: false,
-    message: `${type} configuration saved, but business data still runs on SQLite`,
-    note: 'Current backend routes still depend on SQLite-specific queries. Full migration requires data access layer refactor.'
+    supported: true,
+    message: `${type} active: business data is using the configured external database`
   }
 }
 
@@ -46,7 +42,7 @@ export async function testDatabaseConnection(database: DatabaseConfig) {
   if (database.type === 'sqlite') {
     return {
       success: true,
-      message: `SQLite database file: ${path.resolve(__dirname, '..', '..', database.sqlite.path || './data/filemanager.db')}`
+      message: `SQLite database file: ${resolveFromRoot(database.sqlite.path || './data/filemanager.db')}`
     }
   }
 

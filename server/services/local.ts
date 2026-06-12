@@ -209,4 +209,7 @@ export class LocalStorage implements StorageProvider {
     await walk(searchDir, prefix || '')
     return results.slice(0, 100) // 限制返回数量
   }
+  async resolveLocalPath(filePath: string): Promise<string | null> {
+    return this.resolvePath(filePath)
+  }
 }

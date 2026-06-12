@@ -53,16 +53,16 @@ function validateStorageConfig(storageType: string, storageConfig: Record<string
   }
 }
 
-router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const pools = db.prepare(`
+    const pools = await db.prepare(`
       SELECT id, name, storage_type, is_default, config, created_at
       FROM storage_pools
       WHERE user_id = ?
       ORDER BY is_default DESC, created_at ASC
     `).all(req.userId!) as any[]
 
-    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
+    const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
     const username = user?.username || ''
 
     const safePools = pools.map(pool => {
@@ -93,7 +93,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { name, storageType, config: storageConfig } = req.body
 
@@ -103,10 +103,10 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
 
     validateStorageConfig(storageType, storageConfig)
 
-    const existingPools = db.prepare('SELECT COUNT(*) as count FROM storage_pools WHERE user_id = ?').get(req.userId!) as any
+    const existingPools = await db.prepare('SELECT COUNT(*) as count FROM storage_pools WHERE user_id = ?').get(req.userId!) as any
     const isFirst = existingPools.count === 0
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
       VALUES (?, ?, ?, ?, ?)
     `).run(
@@ -134,12 +134,12 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
     const { name, storageType, config: nextConfig } = req.body
 
-    const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
+    const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
@@ -185,7 +185,7 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
 
     if (updates.length > 0) {
       values.push(id, req.userId!)
-      db.prepare(`UPDATE storage_pools SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...values)
+      await db.prepare(`UPDATE storage_pools SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...values)
       clearStorageCache(req.userId!)
     }
 
@@ -195,10 +195,10 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
+    const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
@@ -206,7 +206,7 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '不能删除默认存储池，请先设置其他存储池为默认' })
     }
 
-    db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
+    await db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
     clearStorageCache(req.userId!)
 
     res.json({ message: '存储池删除成功' })
@@ -215,7 +215,7 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 })
 
-router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/batch-delete', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
     if (ids.length === 0) {
@@ -232,7 +232,7 @@ router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) =
         continue
       }
 
-      const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
+      const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
       if (!pool) {
         errors.push(`存储池不存在: #${id}`)
         continue
@@ -242,7 +242,7 @@ router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) =
         continue
       }
 
-      db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
+      await db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
       deletedIds.push(id)
     }
 
@@ -260,16 +260,16 @@ router.post('/batch-delete', authMiddleware, (req: AuthRequest, res: Response) =
   }
 })
 
-router.post('/:id/set-default', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/:id/set-default', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
+    const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
 
-    db.prepare('UPDATE storage_pools SET is_default = 0 WHERE user_id = ?').run(req.userId!)
-    db.prepare('UPDATE storage_pools SET is_default = 1 WHERE id = ? AND user_id = ?').run(id, req.userId!)
+    await db.prepare('UPDATE storage_pools SET is_default = 0 WHERE user_id = ?').run(req.userId!)
+    await db.prepare('UPDATE storage_pools SET is_default = 1 WHERE id = ? AND user_id = ?').run(id, req.userId!)
     clearStorageCache(req.userId!)
 
     res.json({ message: '默认存储池设置成功' })
@@ -281,7 +281,7 @@ router.post('/:id/set-default', authMiddleware, (req: AuthRequest, res: Response
 router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
+    const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
       return res.status(404).json({ error: '存储池不存在' })
     }
@@ -290,7 +290,7 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
 
     if (pool.storage_type === 'local') {
       const fs = await import('fs/promises')
-      const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
+      const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
       const localPath = path.resolve(config.storage_root || './uploads', user?.username || '')
       try {
         await fs.access(localPath)

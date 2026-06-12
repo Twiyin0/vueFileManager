@@ -5,7 +5,8 @@ import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { flexibleAuth, ApiKeyRequest, requirePermission } from '../middleware/apikey'
 import { getStorage, getStorageByPoolId } from '../services/factory'
-import { LocalStorage } from '../services/local'
+import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { buildTrashPath, moveToTrash } from '../services/trash'
 import {
   buildDirectUrl,
   cleanupExpiredUploads,
@@ -14,8 +15,6 @@ import {
   isTemporaryUploadFile,
   processConcurrently,
   resolvePoolId,
-  resolveLocalMediaPath,
-  unwrapLocalStorage,
   withDirectUrl,
 } from './files/shared'
 import { registerOfflineTaskRoutes } from './files/offline-routes'
@@ -33,7 +32,7 @@ router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
     const prefix = (req.query.path as string) || ''
 
     if (!poolId && !prefix) {
-      const pools = db.prepare(`
+      const pools = await db.prepare(`
         SELECT id, name, storage_type, is_default, created_at
         FROM storage_pools WHERE user_id = ?
         ORDER BY is_default DESC, created_at ASC
@@ -55,7 +54,7 @@ router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
 
     const storage = getStorageForRequest(req)
     const files = await storage.list(prefix)
-    const resolvedPoolId = resolvePoolId(req.userId!, poolId)
+    const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
     const filesWithPool = files
       .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
       .map((file: any) => withDirectUrl(req, { ...file, poolId: resolvedPoolId }, resolvedPoolId))
@@ -91,7 +90,7 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
     }
 
     const info = await storage.info(filePath)
-    const resolvedPoolId = resolvePoolId(req.userId!, req.query.poolId as string)
+    const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
     res.json({ info: withDirectUrl(req, { ...info, poolId: resolvedPoolId }, resolvedPoolId) })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -133,15 +132,17 @@ const handleDelete = async (req: ApiKeyRequest, res: Response) => {
       if (poolId) {
         storagePoolId = parseInt(poolId)
       } else {
-        const defaultPool = db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any
+        const defaultPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any
         storagePoolId = defaultPool?.id || 1
       }
 
       const stat = await storage.info(filePath).catch(() => ({ type: 'file' as const }))
-      const result = db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
+      const result = await db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
         .run(req.userId!, filePath, fileName, stat.type, storagePoolId)
 
-      const trashPath = `/.trash/${result.lastInsertRowid}_${fileName}`
+      const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
+      await moveToTrash(storage, filePath, trashPath, stat.type)
+      return res.json({ message: '删除成功' })
       try {
         const data = await storage.download(filePath)
         await storage.upload(trashPath, data)
@@ -172,7 +173,7 @@ router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (r
     const poolId = req.body.poolId as number
     let storagePoolId = poolId
     if (!storagePoolId) {
-      const defaultPool = db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any
+      const defaultPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any
       storagePoolId = defaultPool?.id || 1
     }
 
@@ -184,9 +185,11 @@ router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (r
         } else {
           const fileName = filePath.split('/').pop() || ''
           const stat = await storage.info(filePath).catch(() => ({ type: 'file' as const }))
-          const result = db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
+          const result = await db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
             .run(req.userId!, filePath, fileName, stat.type, storagePoolId)
-          const trashPath = `/.trash/${result.lastInsertRowid}_${fileName}`
+          const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
+          await moveToTrash(storage, filePath, trashPath, stat.type)
+          continue
 
           try {
             const data = await storage.download(filePath)
@@ -350,7 +353,7 @@ router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKe
     }
 
     const files = await storage.search(prefix, keyword)
-    const resolvedPoolId = resolvePoolId(req.userId!, req.query.poolId as string)
+    const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
     const normalized = files
       .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
       .map((file: any) => withDirectUrl(req, { ...file, poolId: resolvedPoolId }, resolvedPoolId))
@@ -385,9 +388,12 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
     const contentType = mimeTypes[ext] || 'application/octet-stream'
 
     const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
-    const fullPath = isMedia ? await resolveLocalMediaPath(storage, filePath) : null
-    if (isMedia && fullPath) {
-      const stat = await fs.stat(fullPath)
+    const cachedMedia = isMedia
+      ? await resolvePreviewCacheFile(`user:${req.userId}:pool:${req.query.poolId || 'default'}`, storage, filePath)
+      : null
+    if (cachedMedia) {
+      const fileOnDisk = cachedMedia.path
+      const stat = cachedMedia.stat
       const fileSize = stat.size
       const etag = `"${fileSize}-${stat.mtimeMs}"`
       const range = req.headers.range
@@ -412,11 +418,11 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
         res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
         res.setHeader('Content-Length', chunkSize)
 
-        const stream = fsSync.createReadStream(fullPath, { start, end })
+        const stream = fsSync.createReadStream(fileOnDisk, { start, end })
         stream.pipe(res)
       } else {
         res.setHeader('Content-Length', fileSize)
-        const stream = fsSync.createReadStream(fullPath)
+        const stream = fsSync.createReadStream(fileOnDisk)
         stream.pipe(res)
       }
       return

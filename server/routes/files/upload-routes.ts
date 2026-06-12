@@ -24,13 +24,13 @@ import {
 import db from '../../db'
 
 async function checkLocalQuota(userId: number, resolvedPoolId: number | undefined, size: number) {
-  const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+  const pool = await db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
   if (pool?.storage_type !== 'local') {
     return { allowed: true, pool }
   }
 
   const { checkQuota } = await import('../../services/quota')
-  const quotaCheck = checkQuota(userId, size)
+  const quotaCheck = await checkQuota(userId, size)
   return { ...quotaCheck, pool }
 }
 
@@ -40,7 +40,7 @@ export function registerUploadRoutes(router: Router) {
       if (!req.file) return res.status(400).json({ error: '没有文件' })
 
       const poolId = req.query.poolId as string || req.body.poolId as string
-      const resolvedPoolId = resolvePoolId(req.userId!, poolId)
+      const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
       const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, req.file.size)
       if (!quotaCheck.allowed) {
         return res.status(400).json({ error: quotaCheck.message })
@@ -111,8 +111,8 @@ export function registerUploadRoutes(router: Router) {
         return res.status(400).json({ error: `已拦截系统文件: ${fileName}` })
       }
 
-      const resolvedPoolId = resolvePoolId(req.userId!, poolIdStr)
-      const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+      const resolvedPoolId = await resolvePoolId(req.userId!, poolIdStr)
+      const pool = await db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
       const storage = poolIdStr ? getStorageByPoolId(req.userId!, parseInt(poolIdStr)) : getStorageForRequest(req)
       const filePath = dirPath ? `${dirPath}/${fileName}` : fileName
       const contentLengthHeader = req.headers['content-length']
@@ -381,7 +381,7 @@ export function registerUploadRoutes(router: Router) {
       }
       const finalBuffer = Buffer.concat(buffers)
 
-      const resolvedPoolId = resolvePoolId(req.userId!, meta.poolId)
+      const resolvedPoolId = await resolvePoolId(req.userId!, meta.poolId)
       const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, finalBuffer.length)
       if (!quotaCheck.allowed) {
         await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})

@@ -13,7 +13,7 @@ router.get('/upload-limit', authMiddleware, adminMiddleware, (_req: AuthRequest,
 router.put('/upload-limit', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
   const { upload_limit } = req.body
   if (typeof upload_limit !== 'number' || upload_limit < 1 || upload_limit > 10240) {
-    return res.status(400).json({ error: '上传限制必须在 1 到 10240 MB 之间' })
+    return res.status(400).json({ error: 'Upload limit must be between 1 and 10240 MB' })
   }
 
   config.upload_limit = upload_limit
@@ -21,7 +21,7 @@ router.put('/upload-limit', authMiddleware, adminMiddleware, (req: AuthRequest, 
     rawConfig.upload_limit = upload_limit
   })
 
-  res.json({ upload_limit, message: '上传限制已更新，重启后完全生效' })
+  res.json({ upload_limit, message: 'Upload limit saved. Restart the service to fully apply it.' })
 })
 
 router.get('/database', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {
@@ -39,7 +39,7 @@ router.get('/database', authMiddleware, adminMiddleware, (_req: AuthRequest, res
 router.put('/database', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
   const payload = req.body?.database
   if (!payload || !['sqlite', 'mysql', 'postgres'].includes(payload.type)) {
-    return res.status(400).json({ error: '无效的数据库配置' })
+    return res.status(400).json({ error: 'Invalid database configuration' })
   }
 
   const nextDatabase = {
@@ -70,7 +70,7 @@ router.put('/database', authMiddleware, adminMiddleware, (req: AuthRequest, res:
   })
 
   res.json({
-    message: '数据库配置已保存，重启后会按新配置加载',
+    message: 'Database configuration saved. Restart the service to switch runtime connections.',
     status: getDatabaseStatus()
   })
 })
@@ -109,7 +109,9 @@ router.post('/database/test', authMiddleware, adminMiddleware, async (req: AuthR
         : {
             ...getDatabaseStatus(),
             type: database.type,
-            message: `${result.message}。当前业务数据仍运行在 SQLite，完整切换还需要迁移数据访问层。`
+            runtime: 'external',
+            supported: true,
+            message: result.message
           }
     })
   } catch (err) {

@@ -25,7 +25,6 @@ function getAudioMimeType(name: string) {
 export async function fetchAudioBlobUrl(track: AudioTrackSource): Promise<ResolvedAudioTrack> {
   const response = await fetch(track.url, {
     credentials: 'include',
-    cache: 'no-store',
   })
 
   if (!response.ok) {

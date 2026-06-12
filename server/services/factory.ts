@@ -8,10 +8,8 @@ import { StorageProvider } from './storage'
 import appConfig from '../config'
 import db from '../db'
 
-// 缓存存储实例 (key: userId-poolId)
 const storageCache = new Map<string, StorageProvider>()
 
-// 创建存储实例
 function createStorageInstance(pool: any, username?: string): StorageProvider {
   const config = JSON.parse(pool.config)
 
@@ -30,13 +28,10 @@ function createStorageInstance(pool: any, username?: string): StorageProvider {
   } else if (pool.storage_type === 's3') {
     storage = new S3Storage(config)
   } else {
-    // 使用全局配置的 storage_root，不是池配置
     storage = new LocalStorage(appConfig.storage_root || './uploads', username)
   }
 
-  // 如果配置了 rootPath，用 PrefixStorage 包装，并确保目录存在
   if (config.rootPath && config.rootPath !== '/' && config.rootPath !== '') {
-    // 本地存储需要确保映射目录存在
     if (storage instanceof LocalStorage) {
       storage.ensureSubdir(config.rootPath)
     }
@@ -46,22 +41,18 @@ function createStorageInstance(pool: any, username?: string): StorageProvider {
   return storage
 }
 
-// 根据存储池ID获取存储实例
-export function getStorageByPoolId(userId: number, poolId: number): StorageProvider {
+async function resolveStorageByPoolId(userId: number, poolId: number): Promise<StorageProvider> {
   const cacheKey = `${userId}-${poolId}`
-
   if (storageCache.has(cacheKey)) {
     return storageCache.get(cacheKey)!
   }
 
-  const pool = db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(poolId, userId) as any
-
+  const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(poolId, userId) as any
   if (!pool) {
     throw new Error('存储池不存在')
   }
 
-  // 获取用户名（用于本地存储目录隔离）
-  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
   const username = user?.username || `user_${userId}`
 
   const storage = createStorageInstance(pool, username)
@@ -69,36 +60,54 @@ export function getStorageByPoolId(userId: number, poolId: number): StorageProvi
   return storage
 }
 
-// 获取用户的默认存储
-export function getStorage(userId: number): StorageProvider {
-  // 查找默认存储池
-  const defaultPool = db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(userId) as any
-
-  if (defaultPool) {
-    return getStorageByPoolId(userId, defaultPool.id)
+function createDeferredStorage(getter: () => Promise<StorageProvider>): StorageProvider {
+  return {
+    list: (prefix) => getter().then((storage) => storage.list(prefix)),
+    upload: (filePath, data) => getter().then((storage) => storage.upload(filePath, data)),
+    uploadStream: (filePath, stream, size) => getter().then(async (storage) => {
+      if (!storage.uploadStream) throw new Error('当前存储不支持流式上传')
+      return storage.uploadStream(filePath, stream, size)
+    }),
+    download: (filePath) => getter().then((storage) => storage.download(filePath)),
+    remove: (filePath) => getter().then((storage) => storage.remove(filePath)),
+    mkdir: (dirPath) => getter().then((storage) => storage.mkdir(dirPath)),
+    info: (filePath) => getter().then((storage) => storage.info(filePath)),
+    exists: (filePath) => getter().then((storage) => storage.exists(filePath)),
+    rename: (oldPath, newName) => getter().then((storage) => storage.rename(oldPath, newName)),
+    move: (srcPath, destPath) => getter().then((storage) => storage.move(srcPath, destPath)),
+    copy: (srcPath, destPath) => getter().then((storage) => storage.copy(srcPath, destPath)),
+    search: (prefix, keyword) => getter().then((storage) => storage.search(prefix, keyword)),
+    resolveLocalPath: (filePath) => getter().then((storage) => storage.resolveLocalPath ? storage.resolveLocalPath(filePath) : null),
   }
-
-  // 如果没有默认存储池，尝试获取第一个
-  const firstPool = db.prepare('SELECT id FROM storage_pools WHERE user_id = ? ORDER BY created_at ASC LIMIT 1').get(userId) as any
-
-  if (firstPool) {
-    // 设置为默认
-    db.prepare('UPDATE storage_pools SET is_default = 1 WHERE id = ?').run(firstPool.id)
-    return getStorageByPoolId(userId, firstPool.id)
-  }
-
-  // 如果没有任何存储池，创建一个默认的本地存储池
-  const result = db.prepare(`
-    INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
-    VALUES (?, ?, ?, 1, ?)
-  `).run(userId, '默认存储', 'local', JSON.stringify({}))
-
-  return getStorageByPoolId(userId, result.lastInsertRowid as number)
 }
 
-// 清除用户的存储缓存（配置变更时调用）
+export function getStorageByPoolId(userId: number, poolId: number): StorageProvider {
+  return createDeferredStorage(() => resolveStorageByPoolId(userId, poolId))
+}
+
+export function getStorage(userId: number): StorageProvider {
+  return createDeferredStorage(async () => {
+    const defaultPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(userId) as any
+    if (defaultPool) {
+      return resolveStorageByPoolId(userId, defaultPool.id)
+    }
+
+    const firstPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? ORDER BY created_at ASC LIMIT 1').get(userId) as any
+    if (firstPool) {
+      await db.prepare('UPDATE storage_pools SET is_default = 1 WHERE id = ?').run(firstPool.id)
+      return resolveStorageByPoolId(userId, firstPool.id)
+    }
+
+    const result = await db.prepare(`
+      INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
+      VALUES (?, ?, ?, 1, ?)
+    `).run(userId, '默认存储', 'local', JSON.stringify({}))
+
+    return resolveStorageByPoolId(userId, result.lastInsertRowid as number)
+  })
+}
+
 export function clearStorageCache(userId: number) {
-  // 清除该用户的所有存储缓存
   for (const key of storageCache.keys()) {
     if (key.startsWith(`${userId}-`)) {
       storageCache.delete(key)
@@ -106,8 +115,7 @@ export function clearStorageCache(userId: number) {
   }
 }
 
-// 获取用户所有存储池
-export function getUserStoragePools(userId: number): any[] {
+export async function getUserStoragePools(userId: number): Promise<any[]> {
   return db.prepare(`
     SELECT id, name, storage_type, is_default, config, created_at
     FROM storage_pools
@@ -116,24 +124,19 @@ export function getUserStoragePools(userId: number): any[] {
   `).all(userId)
 }
 
-// 获取访客可访问的存储（根据用户配置）
-export function getGuestStorage(ownerId: number): { storage: StorageProvider; basePath: string } | null {
-  const settings = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(ownerId) as any
-
+export async function getGuestStorage(ownerId: number): Promise<{ storage: StorageProvider; basePath: string } | null> {
+  const settings = await db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(ownerId) as any
   if (!settings || !settings.guest_enabled) {
     return null
   }
 
-  // 获取默认存储池
-  const defaultPool = db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(ownerId) as any
-
+  const defaultPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(ownerId) as any
   if (!defaultPool) {
     return null
   }
 
-  const storage = getStorageByPoolId(ownerId, defaultPool.id)
   return {
-    storage,
+    storage: getStorageByPoolId(ownerId, defaultPool.id),
     basePath: settings.guest_path || ''
   }
 }

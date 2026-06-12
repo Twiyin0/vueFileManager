@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router } from 'express'
 import db from '../../db'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../../middleware/auth'
 import { sendServerError } from './shared'
@@ -10,7 +10,7 @@ const CIDR_RE = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
 
 function isValidIpv4(ip: string): boolean {
   if (!IPV4_RE.test(ip)) return false
-  return ip.split('.').every(part => {
+  return ip.split('.').every((part) => {
     const n = Number(part)
     return n >= 0 && n <= 255
   })
@@ -26,15 +26,15 @@ function isValidIpPattern(pattern: string): boolean {
   return isValidIpv4(value)
 }
 
-function getIpTableName() {
-  const row = db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get() as { mode: string } | undefined
+async function getIpTableName() {
+  const row = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
   return row?.mode === 'whitelist' ? 'ip_whitelist' : 'ip_blacklist'
 }
 
-router.get('/ip-blacklist', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {
+router.get('/ip-blacklist', authMiddleware, adminMiddleware, async (_req: AuthRequest, res) => {
   try {
-    const table = getIpTableName()
-    const entries = db.prepare(`
+    const table = await getIpTableName()
+    const entries = await db.prepare(`
       SELECT t.*, u.username as created_by_name
       FROM ${table} t
       LEFT JOIN users u ON t.created_by = u.id
@@ -46,21 +46,21 @@ router.get('/ip-blacklist', authMiddleware, adminMiddleware, (_req: AuthRequest,
   }
 })
 
-router.post('/ip-blacklist', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/ip-blacklist', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
-    const table = getIpTableName()
+    const table = await getIpTableName()
     const { ip_pattern, reason } = req.body
 
     if (!ip_pattern || !isValidIpPattern(ip_pattern)) {
       return res.status(400).json({ error: '无效的 IP 或 CIDR 格式' })
     }
 
-    const existing = db.prepare(`SELECT id FROM ${table} WHERE ip_pattern = ?`).get(ip_pattern.trim())
+    const existing = await db.prepare(`SELECT id FROM ${table} WHERE ip_pattern = ?`).get(ip_pattern.trim())
     if (existing) {
       return res.status(409).json({ error: '该 IP 或网段已存在' })
     }
 
-    const result = db.prepare(`INSERT INTO ${table} (ip_pattern, reason, created_by) VALUES (?, ?, ?)`).run(
+    const result = await db.prepare(`INSERT INTO ${table} (ip_pattern, reason, created_by) VALUES (?, ?, ?)`).run(
       ip_pattern.trim(),
       reason || '',
       req.userId
@@ -75,50 +75,50 @@ router.post('/ip-blacklist', authMiddleware, adminMiddleware, (req: AuthRequest,
   }
 })
 
-router.delete('/ip-blacklist/:id', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+router.delete('/ip-blacklist/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
-    const table = getIpTableName()
+    const table = await getIpTableName()
     const id = Number(req.params.id)
-    const entry = db.prepare(`SELECT id, ip_pattern FROM ${table} WHERE id = ?`).get(id) as any
+    const entry = await db.prepare(`SELECT id, ip_pattern FROM ${table} WHERE id = ?`).get(id) as any
 
     if (!entry) {
       return res.status(404).json({ error: '条目不存在' })
     }
 
-    const configRow = db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get() as { mode: string } | undefined
+    const configRow = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
     if (configRow?.mode === 'whitelist' && entry.ip_pattern === '127.0.0.1') {
       return res.status(400).json({ error: '白名单模式下不能删除 127.0.0.1' })
     }
 
-    db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id)
+    await db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id)
     res.json({ message: 'IP 条目已删除' })
   } catch (err) {
     sendServerError(res, err)
   }
 })
 
-router.get('/ip-list/mode', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {
+router.get('/ip-list/mode', authMiddleware, adminMiddleware, async (_req: AuthRequest, res) => {
   try {
-    const row = db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get() as { mode: string } | undefined
+    const row = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
     res.json({ mode: row?.mode || 'blacklist' })
   } catch (err) {
     sendServerError(res, err)
   }
 })
 
-router.put('/ip-list/mode', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+router.put('/ip-list/mode', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
     const { mode } = req.body
     if (!['blacklist', 'whitelist'].includes(mode)) {
       return res.status(400).json({ error: '仅支持 blacklist 或 whitelist' })
     }
 
-    const current = db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get() as { mode: string } | undefined
+    const current = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
     if (current?.mode === mode) {
       return res.json({ message: '模式未变化', mode })
     }
 
-    db.prepare('UPDATE ip_list_config SET mode = ? WHERE id = 1').run(mode)
+    await db.prepare('UPDATE ip_list_config SET mode = ? WHERE id = 1').run(mode)
 
     if (mode === 'whitelist') {
       const defaults = [
@@ -126,11 +126,11 @@ router.put('/ip-list/mode', authMiddleware, adminMiddleware, (req: AuthRequest, 
         { ip: '::1', reason: 'IPv6 本地回环' },
         { ip: 'localhost', reason: '本地主机名' }
       ]
-      const existing = new Set((db.prepare('SELECT ip_pattern FROM ip_whitelist').all() as { ip_pattern: string }[]).map(row => row.ip_pattern))
+      const existing = new Set((await db.prepare('SELECT ip_pattern FROM ip_whitelist').all<{ ip_pattern: string }>()).map((row) => row.ip_pattern))
       const insert = db.prepare('INSERT INTO ip_whitelist (ip_pattern, reason, created_by) VALUES (?, ?, ?)')
       for (const item of defaults) {
         if (!existing.has(item.ip)) {
-          insert.run(item.ip, item.reason, req.userId)
+          await insert.run(item.ip, item.reason, req.userId)
         }
       }
     }

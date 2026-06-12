@@ -488,8 +488,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   async function loadTextContent() {
     try {
-      const url = previewUrl.value + (previewUrl.value.includes('?') ? '&' : '?') + '_t=' + Date.now()
-      const response = await fetch(url, { cache: 'no-store' })
+      const response = await fetch(previewUrl.value)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       textContent.value = await response.text()
     } catch {

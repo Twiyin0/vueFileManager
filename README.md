@@ -1,492 +1,310 @@
 # VueFileManager
 
-一个类似 AList 的网页文件管理系统，支持本地存储、Upyun 云存储、FTP、S3/OSS，支持多存储池管理，并已整理为“框架 + 插件”式结构，方便后续继续扩展主题、功能模块和第三方集成。
+A Vue 3 + Express file manager with multi-storage pools, guest sharing, WebDAV, recycle bin, favourites, API keys, plugin/theme support, and runtime-compatible database adapters.
 
-## 📦 v1.0.1-preview
+## Status
 
-当前预览版聚焦三件事：稳定预览链路、补齐后台任务与 WebDAV、把项目逐步整理成可维护的插件式结构。
+- Version: `1.0.1`
+- Frontend: Vue 3 + Vite
+- Backend: Express + TypeScript
+- Database runtime: `sqlite`, `mysql`, `postgres`
+- Storage backends: `local`, `upyun`, `ftp`, `s3`, `sftp`
 
-### 本次更新摘要
+## Core features
 
-- 🧩 插件架构整理：新增 `server/app/`、`server/plugins/`、`src/app/` 等模块化入口，主题插件与功能插件统一到 `plugins/` 目录管理
-- 📘 新增和补全文档：插件开发文档、WebDAV 使用说明、离线任务说明、分享/访客预览能力说明
-- 🎵 预览链路修复：APlayer blob URL、分享页单文件音频/Office 预览、访客音频 Range 请求、`aac/m4a` MIME
-- 🧠 预览缓存增强：文件预览、访客预览、分享预览加入 ETag/304 验证；本地音视频支持 Range/断点播放
-- 📥 离线任务完善：新增后台离线任务页、任务清空/隐藏、首页自动轮询、创建任务后明确提示保存位置
-- 🌐 WebDAV 可用性增强：支持 `/dav/pool/:id` 路径式入口，补齐 Finder/Cyberduck 更依赖的 `OPTIONS` / `DAV` / `Allow` / `MS-Author-Via` 握手
-- 🧹 系统目录隐藏：`.trash`、`._*`、`.DS_Store` 等系统文件/目录统一隐藏，避免误删和误操作
-- ☁️ 存储细节修复：Upyun 中文文件名移动问题、S3 `CopySource` 编码问题
+- User registration, login, JWT auth, API keys
+- Admin user management, quota control, ban/unban, verify user
+- Multi-storage pool management per user
+- File list, upload, stream upload, resumable upload, download, preview
+- Cross-pool copy and move
+- Remote upload and offline download tasks
+- Recycle bin and favourites
+- Share links and guest folder shares
+- WebDAV access with JWT, API key, or basic auth
+- Theme and plugin discovery from `plugins/`
 
-### 升级提醒
+## Runtime requirements
 
-- WebDAV 客户端现在推荐使用 `http://<host>:3000/dav/pool/<poolId>`，不要再依赖 `?poolId=` 查询参数形式
-- “远程上传 / 离线下载”入口现在只会在已进入具体存储池时显示，避免任务落到默认池却误以为在当前目录
-- `.trash` 目录现在属于系统保留目录，不会出现在普通列表、访客列表和分享列表中
+- Node.js `18+`
+- Recommended Node.js `20 LTS`
+- CPU: 2 cores
+- Memory: 2 GB minimum
+- Free disk: 2 GB minimum, excluding uploaded files
 
-## ✨ 功能特性
+## Install
 
-### 文件管理
-- 📁 文件浏览、上传、下载、删除
-- 📝 重命名、移动、复制（支持跨存储池）
-- 🔍 文件搜索（递归）
-- 📦 创建文件夹
-- 👁️ 文件预览 v4：视频 (ArtPlayer, 16:9 容器 + playsInline) / 音频 (APlayer, 浮动左下角播放器, 自动添加目录歌曲) / 图片 (ViewerJS 全屏画廊, 透明毛玻璃左右箭头, blob URL 防 iOS 系统预览抢占, 文件夹内前后翻页) / PDF (PDF.js CDN canvas 渲染, 工具栏含页码跳转/缩放) / 代码 (CodeMirror 6 可编辑 + Ctrl+S 保存, Toast 保存提示, 暗色主题)
-- ☑️ 常驻复选框 + 自动批量模式（勾选即进入批量，右键菜单含批量操作）
-- 🖱️ 右键上下文菜单（含批量操作：复制/移动/打包下载/删除）
-- 📊 文件详情面板
-- ⌘ Spotlight 全局搜索 (Ctrl+K)
-- 📦 ZIP 打包下载
-- 📡 远程 URL 上传
-- 🗂️ 后台离线下载任务（排队/取消/重试/清空已结束/首页隐藏）
-- 📥 拖拽上传 + 上传进度条 + 上传中取消
-- ⚡ 流式上传 + 断点续传（支持缓存过期自动清理）
-- 🔗 文件列表 / 文件信息 / 上传结果直接返回 `directUrl` / `fileUrl`
-- ⚡ Express body 限制提升至 50MB，Upyun keepalive HTTPS Agent + 指数退避重试
-- 💾 文本保存端点 30s 超时保护
-- 📝 Markdown 预览高亮
-- 📋 剪贴板复制/粘贴 + Toast 通知
-- 📦 移动对话框（跨存储池文件夹选择器）
-- 👆 长按进入多选模式（移动端）
-
-### 存储池系统
-- 💾 多存储池管理（创建/编辑/删除/切换）
-- ☁️ 本地存储 + Upyun 云存储 + FTP + S3/OSS
-- 📊 用户存储配额管理（默认 10GB，管理员可调）
-- 🔒 本地存储用户目录自动隔离（`storage_root/<username>/`）
-- 🔄 存储池独立配置，一键切换默认
-- 🧪 存储池连接测试
-- 🗑️ 存储池批量删除
-- 📝 config.yml 预配置存储池，新用户自动继承
-
-### 用户系统
-- 👤 用户注册/登录（支持 SMTP 邮箱验证码注册）
-- 🔐 JWT + API Key 双模式认证
-- 👑 管理员/普通用户角色
-- 📊 记录注册IP和最后登录IP
-- 🚫 用户封禁/解封
-
-### 管理面板
-- 👥 用户列表（搜索/筛选）
-- ➕ 创建用户
-- 🔒 封禁/解封用户（管理员不可被封禁）
-- 🔑 重置用户密码
-- ⬆️⬇️ 升级/降级用户角色
-- 🗑️ 删除用户
-- 📋 用户详情（存储池、统计数据）
-- 🛡️ IP 黑名单/白名单（支持精确 IP 和 CIDR 网段，config.yml 可配置默认模式）
-
-### 回收站
-- 🗑️ 文件删除自动移入回收站
-- ♻️ 恢复文件到原路径
-- 🗑️ 永久删除单个项目
-- 🧹 一键清空回收站
-
-### 收藏系统
-- ⭐ 收藏/取消收藏文件和文件夹
-- 📋 收藏列表管理
-- 🚀 从收藏快速跳转
-
-### 分享系统
-- 🔗 生成分享链接
-- 🔒 密码保护
-- ⏰ 过期时间设置
-- 📉 下载次数限制
-
-### 权限系统
-- 🔑 API Key 权限管理（read/write/delete）
-- 🚪 访客模式（多文件夹分享，右键菜单一键分享，四级权限：读取/写入/删除/文件编辑，APlayer 音乐播放，搜索功能，复选框批量操作）
-- 🛡️ 管理员面板
-
-### 插件系统
-- 🎨 主题插件与功能插件统一放在 `plugins/` 目录下
-- 📦 向后兼容主题插件：`manifest.json` + `style.css`
-- 🧩 新增功能插件 manifest 约定：支持 `kind`、`entry`、`docs`、`capabilities`
-- 🔧 主题插件覆盖 CSS 变量即可自定义颜色，支持亮/暗模式
-- 🔄 插件可开关，`/themes` 页面作为插件中心统一管理
-- 📘 提供插件开发文档与示例插件，方便第三方自行扩展
-
-### WebDAV / 集成
-- 🌐 WebDAV 支持路径式存储池入口：`/dav/pool/:id`
-- 🔐 WebDAV 支持用户名/密码 Basic Auth、JWT Token、API Key
-- 🖥️ 补齐 Finder / Cyberduck 更依赖的 `OPTIONS`、`HEAD`、`PROPFIND` 握手
-- 📋 WebDAV 页面统一生成可直接复制的客户端地址和浏览器测试地址
-
-### 兼容性
-- 🍎 macOS 资源分支文件 (`._*`) 自动过滤（服务端/客户端/Multer 三重防护）
-- 🗑️ `.trash` 系统目录统一隐藏，避免误删回收站内部数据
-- 🔧 外置硬盘乱码文件名修复（resolvePath 回退, DELETE 走 POST body）
-
-### 界面
-- 🌙 暗色/亮色/跟随系统主题，全局 CSS 变量统一管理，主题下拉切换（桌面端显示当前模式）
-- 📱 移动端完整适配：Header 精简、侧边栏覆盖层、按钮图标化、对话框紧凑、APlayer 底部全宽
-- 🎨 扁平化设计：轻微阴影分层，侧边栏激活项左侧竖条指示器（带展开动画）
-- 🎯 统一图标库（1702 个 stroke 风格 SVG），通过 `<Icon>` 组件引入，自动适配暗色模式
-- 📂 侧边栏可收缩可拖拽调节宽度（功能导航），页面切换有 fade 动效
-- 🗂️ 存储池下拉选择器（面包屑首位置）
-- 🎵 浮动 APlayer 音乐播放器（桌面左下角/移动端底部全宽，点击音频触发，移动端适配）
-- 📜 文件预览对话框半透明毛玻璃头部（精简紧凑）
-- 📜 所有对话框自适应滚动 (max-h-[90vh])，适配各种屏幕分辨率
-- 📏 紧凑标题栏 (h-11)，页面标题在 Header 内显示（带切换动效）
-- 🖼️ 画廊左右导航箭头 (透明毛玻璃样式)
-- 🔢 图片浮层编号计数器
-- ☑️ 统一复选框样式（自绘，暗色模式适配）
-- 🦶 页面 Footer（版权 + 备案信息，config.yml 可配置）
-- ⬆️ 回到顶部按钮（滚动出现，弹跳动效）
-- 📌 侧边栏固定不随内容滚动
-- 📖 Header 更多菜单（API 文档 + 主题开发 + GitHub，移动端收进 ⋮ 下拉）
-- 🎬 页面切换动效（fade + translateY，Layout 持久化不重建侧边栏）
-
-## 🚀 快速开始
-
-### 环境要求
-- Node.js >= 18
-- npm >= 9
-
-### 安装
 ```bash
-# 克隆项目
-git clone <repo-url>
-cd vueFileManager
-
-# 安装依赖
-npm install
+yarn install
 ```
 
-### 配置
+## Development
 
-**1. 主配置 (config.yml)**
+Run full development mode:
+
+```bash
+yarn dev
+```
+
+Or run frontend and backend separately:
+
+```bash
+yarn dev:client
+yarn dev:server
+```
+
+## Build
+
+```bash
+yarn build
+```
+
+Validation build:
+
+```bash
+yarn build:check
+```
+
+## Production
+
+Build on a machine with full dependencies:
+
+```bash
+yarn install --immutable
+yarn build
+```
+
+Artifacts to deploy:
+
+- `dist/`
+- `dist-server/`
+- `config.yml`
+- `package.json`
+- `yarn.lock`
+- `.yarn/`
+- `.yarnrc.yml`
+- `public/`
+- `plugins/`
+- `uploads/` if using local storage
+- `data/` if still using SQLite or preparing database migration
+
+Install production dependencies only on the server:
+
+```bash
+yarn workspaces focus --all --production
+```
+
+Start the service:
+
+```bash
+yarn start
+```
+
+This runs:
+
+```bash
+node dist-server/index.js
+```
+
+Production runtime does not need `vite`, `tsx`, `vue-tsc`, or TypeScript compilation.
+
+## Configuration
+
+Main config file: `config.yml`
+
+Example:
+
 ```yaml
 admin:
   username: admin
-  # 密码的 MD5 值，默认为 MD5("admin")
   password: 21232f297a57a5a743894a0e4a801fc3
 
 server:
   port: 3000
-  # 监听地址，留空默认 localhost，0.0.0.0 可从局域网访问
-  host: ''
+  host: ""
   jwt_secret: vue-file-manager-secret-key-2024
 
-# 单文件上传限制（MB）
+storage_root: ./uploads
 upload_limit: 100
-
-# 断点续传缓存保留时间（分钟）
 resumable_upload_cache_minutes: 120
+ip_list_mode: blacklist
 
-# 存储池配置（新用户自动继承）
+site:
+  icp_beian: ""
+  police_beian: ""
+
+database:
+  type: sqlite
+  sqlite:
+    path: ./data/filemanager.db
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    password: ""
+    database: vue_file_manager
+    ssl: false
+  postgres:
+    host: 127.0.0.1
+    port: 5432
+    user: postgres
+    password: ""
+    database: vue_file_manager
+    ssl: false
+
 storage_pools:
-  - name: 本地存储
+  - name: Local Storage
     type: local
     default: true
-    config:
-      localPath: ./uploads
+    config: {}
 
-  # 又拍云示例
-  # - name: 又拍云存储
-  #   type: upyun
-  #   default: false
-  #   config:
-  #     upyunOperator: your-operator
-  #     upyunPassword: your-password
-  #     upyunBucket: your-bucket
-  #     upyunEndpoint: v0.api.upyun.com
+smtp:
+  enabled: false
+  host: ""
+  port: 465
+  secure: true
+  user: ""
+  pass: ""
+  from: ""
+
+plugins:
+  enabled: true
+  dir: ./plugins
 ```
 
-> 💡 密码使用 MD5 值，可通过 `echo -n "your-password" | md5` 计算
+## Database support
 
-**2. Upyun 测试配置 (.env)**
+The backend now uses a unified adapter layer:
 
-复制并编辑 `.env` 文件（仅用于测试脚本）：
-```bash
-cp .env.example .env
-```
+- `sqlite` via `sql.js`
+- `mysql` via `mysql2`
+- `postgres` via `pg`
 
-```env
-ENV_upyun_operator=操作员名称
-ENV_upyun_password=操作员密码
-ENV_upyun_bucket=服务名称
-ENV_upyun_endpoint=v0.api.upyun.com
-```
+Business data is stored directly in the configured runtime database.
 
-> ⚠️ `.env` 文件包含敏感信息，已加入 `.gitignore`，不会提交到版本库
+### Change database type
 
-### 启动
-```bash
-# 开发模式（同时启动前后端）
-npm run dev
+1. Update `config.yml`
+2. If switching databases, migrate data first
+3. Restart the service
 
-# 仅前端
-npm run dev:client
+Admin API also supports:
 
-# 仅后端
-npm run dev:server
+- `GET /api/admin/database`
+- `PUT /api/admin/database`
+- `POST /api/admin/database/test`
 
-# 构建生产版本
-npm run build
+## SQLite WAL merge before using `sql.js`
 
-# 启动生产服务
-npm start
-```
+If your old deployment contains:
 
-### 访问
-- 前端: http://localhost:5173
-- 后端 API: http://localhost:3000/api
+- `data/filemanager.db-wal`
+- `data/filemanager.db-shm`
 
-### 默认管理员
-- 用户名: `admin`
-- 密码: `admin`
+merge WAL into the main database file before switching to the current runtime.
 
-## 📁 项目结构
-
-```
-vueFileManager/
-├── config.yml                  # 配置文件
-├── .env                        # 环境变量（测试用）
-├── server/                     # Express 后端
-│   ├── index.ts               # 启动入口（已瘦身）
-│   ├── app/                   # 应用装配层：中间件、路由、启动、特性注册
-│   ├── config.ts              # 配置加载
-│   ├── db.ts                  # 数据库访问（待继续拆分）
-│   ├── middleware/            # 中间件
-│   │   ├── auth.ts           # JWT 认证 + 封禁检查
-│   │   └── apikey.ts         # API Key 认证
-│   ├── plugins/              # 插件注册表、类型、兼容加载器
-│   ├── routes/               # API 路由
-│   │   ├── auth.ts           # 认证
-│   │   ├── files.ts          # 文件操作
-│   │   ├── user.ts           # 用户设置 + API Key
-│   │   ├── admin.ts          # 管理面板入口
-│   │   ├── admin/            # 管理面板子路由
-│   │   ├── guest.ts          # 访客
-│   │   ├── share.ts          # 分享
-│   │   ├── storage-pools.ts  # 存储池管理
-│   │   ├── trash.ts          # 回收站
-│   │   ├── favourites.ts     # 收藏
-│   │   └── public.ts         # 公开文件访问
-│   │   └── files/            # 文件路由子模块
-│   └── services/             # 存储服务
-│       ├── storage.ts        # 接口定义
-│       ├── local.ts          # 本地存储
-│       ├── upyun.ts          # Upyun 存储
-│       ├── prefix.ts         # 路径前缀包装器
-│       └── factory.ts        # 工厂模式（含存储池缓存）
-├── plugins/                    # 外部插件目录（主题 / 功能插件）
-│   ├── example-theme/         # 主题插件示例
-│   └── example-feature/       # 功能插件示例
-├── public/                     # 静态文档
-│   ├── API.md                 # API 文档
-│   ├── Plugins.md             # 插件开发文档
-│   └── Themes.md              # 旧版主题文档（兼容保留）
-├── src/                        # Vue 前端
-│   ├── main.ts               # 入口
-│   ├── app/                  # 路由 / 导航注册中心
-│   ├── router/               # 路由
-│   ├── stores/               # 状态管理
-│   ├── api/                  # API 封装
-│   ├── composables/          # 页面状态逻辑
-│   ├── components/           # 组件
-│   │   ├── Icon.vue          # 统一图标组件（加载 iconlib SVG）
-│   │   ├── Sidebar.vue       # 侧边栏（功能导航）
-│   │   ├── Layout.vue        # 布局（Header + 侧边栏 + 主内容区）
-│   │   ├── FileList.vue      # 文件列表（常驻复选框）
-│   │   ├── ContextMenu.vue   # 右键菜单（含批量操作）
-│   │   ├── SpotlightSearch.vue # 全局搜索
-│   │   ├── FileDetailPanel.vue # 文件详情
-│   │   ├── UploadDialog.vue  # 上传对话框
-│   │   ├── MoveDialog.vue    # 移动对话框
-│   │   ├── GuestShareDialog.vue # 访客分享对话框
-│   │   ├── ShareDialog.vue   # 分享链接对话框
-│   │   ├── FilePreview.vue   # 文件预览（毛玻璃头部, ArtPlayer/APlayer/ViewerJS/CodeMirror 6）
-│   │   ├── Toast.vue         # Toast 通知
-│   │   ├── ConfirmDialog.vue # 确认弹窗
-│   │   ├── admin/            # 管理页分区组件
-│   │   └── ThemeToggle.vue   # 主题切换（放大图标）
-│   └── views/                # 页面
-│       ├── Home.vue          # 文件管理主页
-│       ├── StoragePools.vue  # 存储池管理
-│       ├── Trash.vue         # 回收站
-│       ├── Favourites.vue    # 收藏
-│       ├── MyShares.vue      # 我的分享
-│       ├── UserSettings.vue  # 用户设置
-│       ├── ApiKeys.vue       # API Key
-│       ├── Admin.vue         # 管理面板
-│       ├── Share.vue         # 分享访问页
-│       ├── Guest.vue         # 访客文件浏览
-│       ├── GuestList.vue     # 访客用户列表
-│       └── Login.vue         # 登录注册
-├── public/
-│   └── icon/iconlib/          # 图标库（1702 个 stroke 风格 SVG）
-├── test/                       # 测试
-│   ├── workflows.ts          # API 全流程测试（121 项）
-│   └── upyun.ts              # Upyun 存储测试
-└── public/API.md               # API 文档
-```
-
-## 🧪 测试
+Stop the old service, then run:
 
 ```bash
-# 启动服务
-npm run dev:server
-
-# 运行 API 全流程测试（另开终端）
-npx tsx test/workflows.ts
-
-# 运行 SMTP 连通性测试
-npx tsx test/smtp.ts your@email.com
-
-# 运行 Upyun 存储测试
-npx tsx test/upyun.ts
+chmod +x migrate-sqlite-wal.sh
+./migrate-sqlite-wal.sh
 ```
 
-测试覆盖（121 项）：
-- ✅ 认证 API（注册/登录/用户信息/Token校验）
-- ✅ 存储池 API（CRUD/切换默认/连接测试）
-- ✅ 文件 API（列表/创建/重命名/移动/复制/搜索/批量删除/回收站删除/永久删除/打包下载）
-- ✅ 回收站 API（列表/恢复/永久删除/清空）
-- ✅ 收藏 API（添加/检查/列表/取消收藏）
-- ✅ 分享 API（创建/密码分享/列表/访问/签名验证）
-- ✅ 流式上传 API（chunked transfer）
-- ✅ 断点续传 API（初始化/分片/状态/合并）
-- ✅ SMTP 连通性测试脚本（配置验证 + 试发邮件）
-- ✅ 匿名公网访问 API（路径越权防护）
-- ✅ API Key API（创建/列表/认证/删除）
-- ✅ 用户设置 API（获取/更新/恢复默认）
-- ✅ 访客 API（用户列表/分享列表/文件列表/预览/创建文件夹/重命名/删除/回收站标注/权限配置/权限更新/权限降级403）
-- ✅ 管理 API（列表/详情/创建/封禁/解封/重置密码/升降级/权限控制/管理员保护/配额超限400）
-- ✅ 封禁用户 API Key 验证（403 拒绝）
-- ✅ IP 黑名单/白名单（CRUD/模式切换/白名单默认IP/127.0.0.1保护）
+Or with a custom database path:
 
-## 📖 API 文档
-
-详见 [public/API.md](./public/API.md)
-
-### 认证方式
-
-**JWT Token:**
 ```bash
-curl -H "Authorization: Bearer <token>" http://localhost:3000/api/files/list
+./migrate-sqlite-wal.sh /path/to/filemanager.db
 ```
 
-**API Key:**
+Do not switch to the `sql.js` runtime before WAL has been checkpointed.
+
+## Database migration
+
+Migrate existing SQLite data into MySQL or PostgreSQL.
+
+Development command:
+
 ```bash
-curl -H "X-API-Key: <key>" http://localhost:3000/api/files/list
+yarn migrate:db --target mysql --truncate
 ```
 
-### 主要端点
+```bash
+yarn migrate:db --target postgres --truncate
+```
 
-| 模块 | 端点 | 说明 |
-|------|------|------|
-| 认证 | `POST /api/auth/login` | 登录 |
-| 认证 | `POST /api/auth/register` | 注册 |
-| 认证 | `GET /api/auth/me` | 当前用户信息 |
-| 文件 | `GET /api/files/list` | 文件列表 |
-| 文件 | `POST /api/files/upload` | 上传 |
-| 文件 | `POST /api/files/upload-stream` | 流式上传 |
-| 文件 | `POST /api/files/upload/init` | 断点续传初始化 |
-| 文件 | `PATCH /api/files/upload/:id/chunk` | 断点续传分片 |
-| 文件 | `GET /api/files/upload/:id/status` | 断点续传状态 |
-| 文件 | `POST /api/files/upload/:id/complete` | 断点续传完成 |
-| 文件 | `DELETE /api/files/upload/:id` | 取消并清理断点续传缓存 |
-| 文件 | `GET /api/files/download` | 下载 |
-| 文件 | `GET /api/files/preview` | 预览 |
-| 文件 | `POST /api/files/rename` | 重命名 |
-| 文件 | `POST /api/files/move` | 移动 |
-| 文件 | `POST /api/files/copy` | 复制 |
-| 文件 | `POST /api/files/cross-copy` | 跨存储池复制 |
-| 文件 | `POST /api/files/cross-move` | 跨存储池移动 |
-| 文件 | `DELETE /api/files/delete` | 删除（回收站） |
-| 文件 | `POST /api/files/batch-delete` | 批量删除 |
-| 文件 | `POST /api/files/batch-move` | 批量移动 |
-| 文件 | `GET /api/files/search` | 搜索 |
-| 文件 | `GET /api/files/info` | 文件信息 |
-| 文件 | `GET /api/files/storage-stats` | 存储统计 |
-| 文件 | `POST /api/files/download-zip` | ZIP打包下载 |
-| 文件 | `POST /api/files/remote-upload` | 远程URL上传 |
-| 文件 | `POST /api/files/offline-download` | 创建后台离线下载任务 |
-| 文件 | `GET /api/files/offline-download/tasks` | 离线任务列表 |
-| 文件 | `POST /api/files/offline-download/tasks/:id/cancel` | 取消离线任务 |
-| 文件 | `POST /api/files/offline-download/tasks/:id/retry` | 重试离线任务 |
-| 文件 | `POST /api/files/offline-download/tasks/clear-finished` | 清空已结束离线任务 |
-| 文件 | `POST /api/files/write` | 保存文本/代码 (30s超时) |
-| 存储池 | `GET /api/storage-pools` | 存储池列表 |
-| 存储池 | `POST /api/storage-pools` | 创建存储池 |
-| 存储池 | `PUT /api/storage-pools/:id` | 更新存储池 |
-| 存储池 | `DELETE /api/storage-pools/:id` | 删除存储池 |
-| 存储池 | `POST /api/storage-pools/batch-delete` | 批量删除存储池 |
-| 存储池 | `POST /api/storage-pools/:id/set-default` | 设为默认 |
-| 存储池 | `POST /api/storage-pools/:id/test` | 测试连接 |
-| 回收站 | `GET /api/trash` | 回收站列表 |
-| 回收站 | `POST /api/trash/:id/restore` | 恢复文件 |
-| 回收站 | `DELETE /api/trash/:id` | 永久删除 |
-| 回收站 | `DELETE /api/trash` | 清空回收站 |
-| 收藏 | `GET /api/favourites` | 收藏列表 |
-| 收藏 | `POST /api/favourites` | 添加收藏 |
-| 收藏 | `DELETE /api/favourites` | 取消收藏 |
-| 收藏 | `GET /api/favourites/check` | 检查收藏状态 |
-| 分享 | `POST /api/share/create` | 创建分享 |
-| 分享 | `GET /api/share/list` | 我的分享列表 |
-| 分享 | `GET /api/share/s/:code` | 访问分享 |
-| 分享 | `GET /api/share/download/:code` | 下载分享文件（需签名） |
-| 分享 | `GET /api/share/preview/:code` | 预览分享文件（需签名） |
-| 公开 | `GET /f/:username/*` | 匿名访问文件 |
-| 访客 | `GET /api/guest/:username/:shareId/preview` | 访客预览文件 |
-| WebDAV | `OPTIONS /dav/pool/:id` | WebDAV 能力握手 |
-| WebDAV | `PROPFIND /dav/pool/:id/*` | WebDAV 列目录 |
-| 访客 | `POST /api/guest/:username/:shareId/upload` | 访客上传文件 |
-| 访客 | `POST /api/guest/:username/:shareId/write` | 访客编辑文件内容 |
-| 访客 | `POST /api/guest/:username/:shareId/delete` | 访客删除文件 |
-| 访客 | `POST /api/guest/:username/:shareId/rename` | 访客重命名文件 |
-| 访客 | `POST /api/guest/:username/:shareId/mkdir` | 访客创建文件夹 |
-| 用户 | `GET /api/user/info` | 用户完整信息（含存储池和统计） |
-| 用户 | `GET /api/user/settings` | 获取设置 |
-| 用户 | `PUT /api/user/settings` | 更新设置 |
-| 用户 | `GET /api/user/guest-shares` | 访客分享列表 |
-| 用户 | `POST /api/user/guest-shares` | 创建访客分享 |
-| 用户 | `PUT /api/user/guest-shares/:id` | 更新访客分享（权限/标签） |
-| 用户 | `DELETE /api/user/guest-shares/:id` | 删除访客分享 |
-| 用户 | `GET /api/user/apikeys` | API Key 列表 |
-| 用户 | `POST /api/user/apikeys` | 创建 API Key |
-| 管理 | `GET /api/admin/users` | 用户列表 |
-| 管理 | `GET /api/admin/users/:id` | 用户详情 |
-| 管理 | `POST /api/admin/users` | 创建用户 |
-| 管理 | `PUT /api/admin/users/:id/role` | 修改角色 |
-| 管理 | `PUT /api/admin/users/:id/ban` | 封禁/解封 |
-| 管理 | `PUT /api/admin/users/:id/password` | 重置密码 |
-| 管理 | `DELETE /api/admin/users/:id` | 删除用户 |
-| 管理 | `GET /api/admin/ip-blacklist` | IP 黑名单/白名单列表 |
-| 管理 | `POST /api/admin/ip-blacklist` | 添加 IP 条目 |
-| 管理 | `DELETE /api/admin/ip-blacklist/:id` | 删除 IP 条目 |
-| 管理 | `GET /api/admin/ip-list/mode` | 获取 IP 列表模式 |
-| 管理 | `PUT /api/admin/ip-list/mode` | 切换黑名单/白名单模式 |
+Production command after build:
 
-## 🛠️ 技术栈
+```bash
+node dist-server/db-cli.js --target mysql --truncate
+```
 
-**前端:**
-- Vue 3 (Composition API)
-- TypeScript
-- Tailwind CSS 4
-- ArtPlayer + APlayer + ViewerJS + CodeMirror 6 + PDF.js（文件预览 v4）
-- Vue Router 4
-- Pinia
-- Fetch API
+```bash
+node dist-server/db-cli.js --target postgres --truncate
+```
 
-**后端:**
-- Node.js
-- Express
-- TypeScript (tsx)
-- better-sqlite3
-- JWT (jsonwebtoken)
-- js-yaml
-- archiver (ZIP 打包)
-- Upyun SDK
-- basic-ftp（FTP 存储驱动）
-- @aws-sdk/client-s3（S3/OSS 存储驱动）
+Options:
 
-**部署:**
-- Docker 支持
-- deploy.sh 自动部署脚本（rsync + Docker exec）
-- Nginx 反代大文件上传时建议关闭请求体缓冲：`proxy_request_buffering off;`，避免代理层先完整接收上传再转发给 Node
+- `--source-sqlite /path/to/filemanager.db`
+- `--target mysql|postgres`
+- `--truncate`
 
-## 📄 许可证
+Migrated tables:
 
-MIT License
+- `users`
+- `user_settings`
+- `storage_pools`
+- `api_keys`
+- `shares`
+- `trash`
+- `favourites`
+- `guest_shares`
+- `ip_blacklist`
+- `ip_whitelist`
+- `ip_list_config`
+- `verification_codes`
+- `offline_download_tasks`
+
+Notes:
+
+- Primary keys are preserved where possible
+- Target schema is created automatically before import
+- Uploaded files are not stored in the database
+- Keep `uploads/` and external storage config unchanged during cutover
+
+## Scripts
+
+- `yarn dev`
+- `yarn dev:client`
+- `yarn dev:server`
+- `yarn build`
+- `yarn build:server`
+- `yarn build:client`
+- `yarn build:check`
+- `yarn migrate:db`
+- `yarn migrate:db:prod`
+- `yarn start`
+
+## Project layout
+
+```text
+server/               Express backend
+src/                  Vue frontend
+plugins/              Theme and feature plugins
+public/               Public documentation assets
+scripts/              Build and migration helpers
+dist/                 Built frontend
+dist-server/          Built backend bundles
+data/                 SQLite data directory
+uploads/              Local storage root
+```
+
+## Related docs
+
+- [API.md](public/API.md)
+- [Plugins.md](public/Plugins.md)
+- [Themes.md](public/Themes.md)
+
+## Notes
+
+- Local storage is isolated per user under `storage_root/<username>/`
+- System junk files such as `._*`, `.DS_Store`, and `.trash` are filtered from normal file listings
+- Theme and plugin toggles update manifest files and usually require a restart to fully apply

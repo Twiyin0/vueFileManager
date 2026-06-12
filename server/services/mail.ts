@@ -21,21 +21,17 @@ function getTransporter() {
   return transporter
 }
 
-/** 生成 6 位验证码 */
 function generateCode(): string {
   return crypto.randomInt(100000, 999999).toString()
 }
 
-/** 发送验证码邮件，返回验证码（供测试用） */
 export async function sendVerificationCode(email: string): Promise<{ code: string; expiresAt: string }> {
   const transport = getTransporter()
   if (!transport) throw new Error('SMTP 未启用')
 
-  // 清理该邮箱的旧验证码
-  db.prepare("DELETE FROM verification_codes WHERE email = ? AND (used = 1 OR expires_at < datetime('now'))").run(email)
+  await db.prepare("DELETE FROM verification_codes WHERE email = ? AND (used = 1 OR expires_at < datetime('now'))").run(email)
 
-  // 检查频率限制（1 分钟内不能重复发送）
-  const recent = db.prepare(
+  const recent = await db.prepare(
     "SELECT id FROM verification_codes WHERE email = ? AND created_at > datetime('now', '-1 minute')"
   ).get(email)
   if (recent) throw new Error('请等待 1 分钟后再试')
@@ -43,7 +39,7 @@ export async function sendVerificationCode(email: string): Promise<{ code: strin
   const code = generateCode()
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
 
-  db.prepare(
+  await db.prepare(
     'INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)'
   ).run(email, code, 'register', expiresAt)
 
@@ -66,14 +62,13 @@ export async function sendVerificationCode(email: string): Promise<{ code: strin
   return { code, expiresAt }
 }
 
-/** 验证验证码 */
-export function verifyCode(email: string, code: string): boolean {
-  const record = db.prepare(
+export async function verifyCode(email: string, code: string): Promise<boolean> {
+  const record = await db.prepare(
     "SELECT id FROM verification_codes WHERE email = ? AND code = ? AND used = 0 AND expires_at > datetime('now') ORDER BY id DESC LIMIT 1"
   ).get(email, code) as any
 
   if (!record) return false
 
-  db.prepare('UPDATE verification_codes SET used = 1 WHERE id = ?').run(record.id)
+  await db.prepare('UPDATE verification_codes SET used = 1 WHERE id = ?').run(record.id)
   return true
 }

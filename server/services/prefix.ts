@@ -87,4 +87,10 @@ export class PrefixStorage implements StorageProvider {
       path: this.stripPrefix(f.path)
     }))
   }
+  async resolveLocalPath(filePath: string): Promise<string | null> {
+    if (!this.inner.resolveLocalPath) {
+      return null
+    }
+    return this.inner.resolveLocalPath(this.withPrefix(filePath))
+  }
 }

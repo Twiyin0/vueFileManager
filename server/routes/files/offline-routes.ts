@@ -12,13 +12,13 @@ import { buildDirectUrl, getStorageForRequest, resolvePoolId } from './shared'
 import db from '../../db'
 
 async function checkLocalQuota(userId: number, resolvedPoolId: number | undefined, size: number) {
-  const pool = db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
+  const pool = await db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
   if (pool?.storage_type !== 'local') {
-    return { allowed: true, pool }
+    return { allowed: true, pool, message: undefined as string | undefined }
   }
 
   const { checkQuota } = await import('../../services/quota')
-  const quotaCheck = checkQuota(userId, size)
+  const quotaCheck = await checkQuota(userId, size)
   return { ...quotaCheck, pool }
 }
 
@@ -27,7 +27,7 @@ export function registerOfflineTaskRoutes(router: Router) {
     try {
       const { url, dirPath, poolId } = req.body
       if (!url) {
-        return res.status(400).json({ error: '缺少URL' })
+        return res.status(400).json({ error: '缺少 URL' })
       }
 
       const storage = poolId ? getStorageByPoolId(req.userId!, poolId) : getStorageForRequest(req)
@@ -39,7 +39,7 @@ export function registerOfflineTaskRoutes(router: Router) {
       const arrayBuffer = await response.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
 
-      const resolvedPoolId = resolvePoolId(req.userId!, poolId)
+      const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
       const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, buffer.length)
       if (!quotaCheck.allowed) {
         return res.status(400).json({ error: quotaCheck.message })
@@ -66,47 +66,47 @@ export function registerOfflineTaskRoutes(router: Router) {
         return res.status(400).json({ error: '缺少 URL' })
       }
 
-      const resolvedPoolId = resolvePoolId(req.userId!, poolId)
+      const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
       if (!resolvedPoolId) {
         return res.status(400).json({ error: '存储池不存在' })
       }
 
-      const taskId = createOfflineDownloadTask(req.userId!, resolvedPoolId, url, dirPath || '')
+      const taskId = await createOfflineDownloadTask(req.userId!, resolvedPoolId, url, dirPath || '')
       res.json({ message: '离线下载任务已创建', taskId })
     } catch (err: any) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  router.get('/offline-download/tasks', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  router.get('/offline-download/tasks', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
     try {
-      res.json({ tasks: listOfflineDownloadTasks(req.userId!) })
+      res.json({ tasks: await listOfflineDownloadTasks(req.userId!) })
     } catch (err: any) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  router.post('/offline-download/tasks/:id/cancel', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  router.post('/offline-download/tasks/:id/cancel', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
     try {
-      cancelOfflineDownloadTask(req.userId!, Number(req.params.id))
+      await cancelOfflineDownloadTask(req.userId!, Number(req.params.id))
       res.json({ message: '任务已取消' })
     } catch (err: any) {
       res.status(400).json({ error: err.message })
     }
   })
 
-  router.post('/offline-download/tasks/:id/retry', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  router.post('/offline-download/tasks/:id/retry', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
     try {
-      retryOfflineDownloadTask(req.userId!, Number(req.params.id))
+      await retryOfflineDownloadTask(req.userId!, Number(req.params.id))
       res.json({ message: '任务已重新加入队列' })
     } catch (err: any) {
       res.status(400).json({ error: err.message })
     }
   })
 
-  router.post('/offline-download/tasks/clear-finished', flexibleAuth, requirePermission('write'), (req: ApiKeyRequest, res: Response) => {
+  router.post('/offline-download/tasks/clear-finished', flexibleAuth, requirePermission('write'), async (req: ApiKeyRequest, res: Response) => {
     try {
-      clearFinishedOfflineDownloadTasks(req.userId!)
+      await clearFinishedOfflineDownloadTasks(req.userId!)
       res.json({ message: '已清空已结束任务' })
     } catch (err: any) {
       res.status(400).json({ error: err.message })

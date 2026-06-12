@@ -8,7 +8,18 @@ const props = defineProps<{
 const svgContent = ref('')
 const iconCache = new Map<string, string>()
 const iconRequests = new Map<string, Promise<string>>()
+const warnedMissingIcons = new Set<string>()
 const iconBaseUrl = `${import.meta.env.BASE_URL}icon/iconlib/`
+const bundledIconModules = import.meta.glob('../assets/iconlib/{arrow-down,arrow-narrow-right-move,arrow-right-from-bracket,arrow-right-to-bracket,arrow-up,badge-check,ban,book-open,box-archive,check,chevron-down,chevron-left,chevron-left-double,chevron-right,circle-check,circle-information,circle-xmark,clipboard,cloud,code,container-storage,dots-vertical,download,exclamation,expand-alt,eye,file-alt,folder,folder-minus,folder-plus,gear,globe,grid,hard-drive,house-line,image,key,link,link-alt,list,lock,menu,minus,monitor,moon,music,network-wired,palette,pen,plus,refresh-cw,search,server,shield,sparkles,square-check,star-sharp,sun,text,trash,triangle-exclamation,upload,user,users,video,xmark}.svg', {
+  query: '?raw',
+  import: 'default'
+})
+const bundledIcons = new Map<string, () => Promise<string>>(
+  Object.entries(bundledIconModules).map(([path, loader]) => {
+    const name = path.split('/').pop()?.replace(/\.svg$/, '') || path
+    return [name, loader as () => Promise<string>]
+  })
+)
 const fallbackIcons: Record<string, string> = {
   database: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="12" cy="5.5" rx="7" ry="2.5" stroke="currentColor" stroke-width="2"/><path d="M5 5.5V12.5C5 13.8807 8.13401 15 12 15C15.866 15 19 13.8807 19 12.5V5.5" stroke="currentColor" stroke-width="2"/><path d="M5 12.5V18.5C5 19.8807 8.13401 21 12 21C15.866 21 19 19.8807 19 18.5V12.5" stroke="currentColor" stroke-width="2"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.6C3 6.03985 3 5.25978 3.30396 4.66403C3.57195 4.13803 3.99968 3.71029 4.52569 3.44231C5.12143 3.13835 5.90151 3.13835 7.46166 3.13835H9.21179C9.89256 3.13835 10.2329 3.13835 10.5531 3.21729C10.837 3.28724 11.1082 3.40007 11.3572 3.55198C11.6382 3.7233 11.8788 3.96388 12.36 4.44504L12.9159 5.00094C13.3971 5.48209 13.6377 5.72267 13.9187 5.89399C14.1677 6.0459 14.4389 6.15874 14.7228 6.22868C15.043 6.30763 15.3834 6.30763 16.0641 6.30763H16.5383C18.0985 6.30763 18.8786 6.30763 19.4743 6.61159C20.0003 6.87958 20.428 7.30731 20.696 7.83332C21 8.42906 21 9.20914 21 10.7693V16.5383C21 18.0985 21 18.8786 20.696 19.4743C20.428 20.0003 20.0003 20.428 19.4743 20.696C18.8786 21 18.0985 21 16.5383 21H7.46166C5.90151 21 5.12143 21 4.52569 20.696C3.99968 20.428 3.57195 20.0003 3.30396 19.4743C3 18.8786 3 18.0985 3 16.5383V7.6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -34,6 +45,31 @@ function normalizeSvg(text: string): string {
   return normalized.includes('<svg') ? normalized : ''
 }
 
+function getFallbackIcon(name: string): string {
+  if (fallbackIcons[name]) return fallbackIcons[name]
+  if (name.includes('folder')) return fallbackIcons.folder
+  if (name.includes('trash')) return fallbackIcons.trash
+  if (name.includes('image')) return fallbackIcons.image
+  if (name.includes('video')) return fallbackIcons.video
+  if (name.includes('music') || name.includes('audio')) return fallbackIcons.music
+  if (name.includes('database')) return fallbackIcons.database
+  return fallbackIcons['file-alt']
+}
+
+async function loadBundledIcon(name: string): Promise<string> {
+  const loader = bundledIcons.get(name)
+  if (!loader) return ''
+
+  const normalized = normalizeSvg(await loader())
+  return normalized || ''
+}
+
+function warnMissingIcon(name: string) {
+  if (import.meta.env.PROD || warnedMissingIcons.has(name)) return
+  warnedMissingIcons.add(name)
+  console.warn(`[Icon] Missing icon "${name}", using fallback.`)
+}
+
 async function fetchIcon(name: string): Promise<string> {
   if (iconCache.has(name)) {
     return iconCache.get(name) || ''
@@ -42,22 +78,31 @@ async function fetchIcon(name: string): Promise<string> {
     return iconRequests.get(name)!
   }
 
-  const request = fetch(`${iconBaseUrl}${name}.svg`, { cache: 'force-cache' })
-    .then(async res => {
-      if (!res.ok) {
-        return fallbackIcons[name] || ''
+  const request = (async () => {
+    const bundled = await loadBundledIcon(name)
+    if (bundled) {
+      iconCache.set(name, bundled)
+      return bundled
+    }
+
+    try {
+      const res = await fetch(`${iconBaseUrl}${name}.svg`, { cache: 'force-cache' })
+      if (res.ok) {
+        const normalized = normalizeSvg(await res.text())
+        if (normalized) {
+          iconCache.set(name, normalized)
+          return normalized
+        }
       }
+    } catch {
+      // Fall back to bundled inline SVGs below.
+    }
 
-      const normalized = normalizeSvg(await res.text())
-      const svg = normalized || fallbackIcons[name] || ''
-
-      if (svg) {
-        iconCache.set(name, svg)
-      }
-
-      return svg
-    })
-    .catch(() => fallbackIcons[name] || '')
+    const fallback = getFallbackIcon(name)
+    warnMissingIcon(name)
+    iconCache.set(name, fallback)
+    return fallback
+  })()
     .finally(() => {
       iconRequests.delete(name)
     })
@@ -70,7 +115,7 @@ async function loadIcon(name: string) {
   try {
     svgContent.value = await fetchIcon(name)
   } catch {
-    svgContent.value = fallbackIcons[name] || ''
+    svgContent.value = getFallbackIcon(name)
   }
 }
 

@@ -1,22 +1,19 @@
 import express from 'express'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import config from '../config'
 import { bootstrapApp } from './bootstrap'
 import { createPublicPlatformRouter } from './features'
 import { registerAppMiddleware } from './middleware'
 import { protectedRouteModules, publicRouteModules } from './routes'
 import { registerSpaFallback } from './spa'
+import { appRoot, resolveFromRoot } from '../runtime-paths'
 import { watchConfigFile } from './watch-config'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export function createServerApp() {
   bootstrapApp()
 
   const app = express()
-  const rootDir = path.join(__dirname, '..', '..')
-  const serverEntryPath = path.join(rootDir, 'server', 'index.ts')
+  const rootDir = appRoot
+  const serverEntryPath = resolveFromRoot('server', 'index.ts')
 
   watchConfigFile(rootDir, serverEntryPath)
   registerAppMiddleware(app, { rootDir })

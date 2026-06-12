@@ -122,15 +122,19 @@ export function useHomeView() {
     return pool?.name || ''
   })
   const canUseRemoteUpload = computed(() => !!currentPoolId.value)
+  let hasInitialized = false
 
   onMounted(async () => {
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-    try {
-      const res = await api.get<{ pools: Array<{ id: number; name: string }> }>('/storage-pools')
-      pools.value = res.pools.map((pool) => ({ id: pool.id, name: pool.name }))
-    } catch {}
-    await loadOfflineTasks()
-    filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+    if (!hasInitialized) {
+      try {
+        const res = await api.get<{ pools: Array<{ id: number; name: string }> }>('/storage-pools')
+        pools.value = res.pools.map((pool) => ({ id: pool.id, name: pool.name }))
+      } catch {}
+      await loadOfflineTasks()
+      await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+      hasInitialized = true
+    }
   })
 
   onUnmounted(() => {
@@ -147,7 +151,10 @@ export function useHomeView() {
     }
   }, { immediate: true })
 
-  watch([currentPath, currentPoolId], ([newPath]) => {
+  watch([currentPath, currentPoolId], ([newPath, newPoolId], [oldPath, oldPoolId]) => {
+    if (hasInitialized && newPath === oldPath && newPoolId === oldPoolId) {
+      return
+    }
     filesStore.fetchFiles(newPath, currentPoolId.value)
     showSearch.value = false
     searchQuery.value = ''

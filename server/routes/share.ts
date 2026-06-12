@@ -5,10 +5,10 @@ import fsSync from 'fs'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getStorage, getStorageByPoolId } from '../services/factory'
+import { resolvePreviewCacheFile } from '../services/preview-cache'
 import {
   isJunkFile,
   isTemporaryUploadFile,
-  resolveLocalMediaPath,
 } from './files/shared'
 
 const router = Router()
@@ -61,8 +61,8 @@ function verifySignToken(username: string, signKey: string, sign: string, timest
 }
 
 // 获取分享的用户名
-function getShareUsername(shareId: number): string | null {
-  const row = db.prepare(`
+async function getShareUsername(shareId: number): Promise<string | null> {
+  const row = await db.prepare(`
     SELECT u.username FROM shares s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ?
@@ -71,7 +71,7 @@ function getShareUsername(shareId: number): string | null {
 }
 
 // 生成分享链接
-router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
+router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { filePath, fileType, password, expiresIn, maxDownloads, storagePoolId } = req.body
     if (!filePath) {
@@ -85,13 +85,13 @@ router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
       expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1000).toISOString()
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO shares (user_id, file_path, file_type, share_code, password, expires_at, max_downloads, sign_key, storage_pool_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(req.userId!, filePath, fileType || 'file', shareCode, password || null, expiresAt, maxDownloads || null, signKey, storagePoolId || null)
 
     // 获取用户名用于生成签名
-    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
+    const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
     const { sign } = generateSignToken(user.username, signKey)
 
     // 构建签名 URL
@@ -110,9 +110,9 @@ router.post('/create', authMiddleware, (req: AuthRequest, res: Response) => {
 })
 
 // 获取用户的分享列表
-router.get('/list', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/list', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const shares = db.prepare(`
+    const shares = await db.prepare(`
       SELECT s.*, u.username FROM shares s
       JOIN users u ON s.user_id = u.id
       WHERE s.user_id = ?
@@ -135,9 +135,9 @@ router.get('/list', authMiddleware, (req: AuthRequest, res: Response) => {
 })
 
 // 删除分享
-router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const result = db.prepare('DELETE FROM shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
+    const result = await db.prepare('DELETE FROM shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
       return res.status(404).json({ error: '分享不存在' })
     }
@@ -148,9 +148,9 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
 })
 
 // 访问分享链接（公开，仅查看信息）
-router.get('/s/:code', (req: Request, res: Response) => {
+router.get('/s/:code', async (req: Request, res: Response) => {
   try {
-    const share = db.prepare(`
+    const share = await db.prepare(`
       SELECT s.*, u.username FROM shares s
       JOIN users u ON s.user_id = u.id
       WHERE s.share_code = ?
@@ -200,7 +200,7 @@ router.get('/s/:code', (req: Request, res: Response) => {
 // 获取分享文件夹内容列表（公开，需签名验证）
 router.get('/list/:code', async (req: Request, res: Response) => {
   try {
-    const share = db.prepare(`
+    const share = await db.prepare(`
       SELECT s.*, u.username FROM shares s
       JOIN users u ON s.user_id = u.id
       WHERE s.share_code = ?
@@ -237,7 +237,7 @@ router.get('/list/:code', async (req: Request, res: Response) => {
 // 下载分享的文件（需要 signToken 验证）
 router.get('/download/:code', async (req: Request, res: Response) => {
   try {
-    const share = db.prepare(`
+    const share = await db.prepare(`
       SELECT s.*, u.username FROM shares s
       JOIN users u ON s.user_id = u.id
       WHERE s.share_code = ?
@@ -286,7 +286,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     const fileName = downloadPath.split('/').pop() || 'download'
 
     // 增加下载计数
-    db.prepare('UPDATE shares SET download_count = download_count + 1 WHERE id = ?').run(share.id)
+    await db.prepare('UPDATE shares SET download_count = download_count + 1 WHERE id = ?').run(share.id)
 
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
     res.setHeader('Content-Type', 'application/octet-stream')
@@ -299,7 +299,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
 // 预览分享的文件（需要 signToken 验证）
 router.get('/preview/:code', async (req: Request, res: Response) => {
   try {
-    const share = db.prepare(`
+    const share = await db.prepare(`
       SELECT s.*, u.username FROM shares s
       JOIN users u ON s.user_id = u.id
       WHERE s.share_code = ?
@@ -344,10 +344,13 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     const ext = fileName.split('.').pop()?.toLowerCase() || ''
     const contentType = previewMimeTypes[ext] || 'application/octet-stream'
     const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
-    const localMediaPath = isMedia ? await resolveLocalMediaPath(storage as any, previewPath) : null
+    const cachedMedia = isMedia
+      ? await resolvePreviewCacheFile(`share:${share.share_code}`, storage, previewPath)
+      : null
 
-    if (isMedia && localMediaPath) {
-      const stat = await fs.stat(localMediaPath)
+    if (cachedMedia) {
+      const fileOnDisk = cachedMedia.path
+      const stat = cachedMedia.stat
       const fileSize = stat.size
       const etag = `"${fileSize}-${stat.mtimeMs}"`
       const range = req.headers.range
@@ -373,11 +376,11 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
         res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
         res.setHeader('Content-Length', chunkSize)
 
-        const stream = fsSync.createReadStream(localMediaPath, { start, end })
+        const stream = fsSync.createReadStream(fileOnDisk, { start, end })
         stream.pipe(res)
       } else {
         res.setHeader('Content-Length', fileSize)
-        const stream = fsSync.createReadStream(localMediaPath)
+        const stream = fsSync.createReadStream(fileOnDisk)
         stream.pipe(res)
       }
       return

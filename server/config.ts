@@ -1,10 +1,9 @@
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 import yaml from 'js-yaml'
+import { resolveFromRoot } from './runtime-paths'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const configPath = path.join(__dirname, '..', 'config.yml')
+const configPath = resolveFromRoot('config.yml')
 
 interface StoragePoolConfig {
   name: string
