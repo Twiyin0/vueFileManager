@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 interface TrashItem {
   id: number
@@ -31,9 +32,7 @@ const fileIconMap: Record<string, { icon: string; color: string }> = {
   file: { icon: 'file-alt', color: 'text-gray-400' },
 }
 
-onMounted(() => {
-  void loadTrash()
-})
+useKeepAliveRefresh(loadTrash)
 
 function getFileIcon(name: string, type: string): { icon: string; color: string } {
   if (type === 'folder') return fileIconMap.folder

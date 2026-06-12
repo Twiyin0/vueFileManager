@@ -4,7 +4,7 @@ A Vue 3 + Express file manager with multi-storage pools, guest sharing, WebDAV, 
 
 ## Status
 
-- Version: `1.0.1`
+- Version: `2.0.0-beta.1`
 - Frontend: Vue 3 + Vite
 - Backend: Express + TypeScript
 - Database runtime: `sqlite`, `mysql`, `postgres`

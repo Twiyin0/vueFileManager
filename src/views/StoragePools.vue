@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 type StorageType = 'local' | 'upyun' | 'ftp' | 'sftp' | 's3'
 
@@ -250,7 +251,7 @@ function getStorageLabel(type: StorageType) {
   return 'S3 / OSS'
 }
 
-onMounted(async () => {
+useKeepAliveRefresh(async () => {
   await loadPools()
   await loadStorageInfo()
 })

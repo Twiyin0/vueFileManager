@@ -12,12 +12,13 @@ const warnedMissingIcons = new Set<string>()
 const iconBaseUrl = `${import.meta.env.BASE_URL}icon/iconlib/`
 const bundledIconModules = import.meta.glob('../assets/iconlib/{arrow-down,arrow-narrow-right-move,arrow-right-from-bracket,arrow-right-to-bracket,arrow-up,badge-check,ban,book-open,box-archive,check,chevron-down,chevron-left,chevron-left-double,chevron-right,circle-check,circle-information,circle-xmark,clipboard,cloud,code,container-storage,dots-vertical,download,exclamation,expand-alt,eye,file-alt,folder,folder-minus,folder-plus,gear,globe,grid,hard-drive,house-line,image,key,link,link-alt,list,lock,menu,minus,monitor,moon,music,network-wired,palette,pen,plus,refresh-cw,search,server,shield,sparkles,square-check,star-sharp,sun,text,trash,triangle-exclamation,upload,user,users,video,xmark}.svg', {
   query: '?raw',
-  import: 'default'
+  import: 'default',
+  eager: true
 })
-const bundledIcons = new Map<string, () => Promise<string>>(
-  Object.entries(bundledIconModules).map(([path, loader]) => {
+const bundledIcons = new Map<string, string>(
+  Object.entries(bundledIconModules).map(([path, content]) => {
     const name = path.split('/').pop()?.replace(/\.svg$/, '') || path
-    return [name, loader as () => Promise<string>]
+    return [name, normalizeSvg(content as string)]
   })
 )
 const fallbackIcons: Record<string, string> = {
@@ -56,12 +57,8 @@ function getFallbackIcon(name: string): string {
   return fallbackIcons['file-alt']
 }
 
-async function loadBundledIcon(name: string): Promise<string> {
-  const loader = bundledIcons.get(name)
-  if (!loader) return ''
-
-  const normalized = normalizeSvg(await loader())
-  return normalized || ''
+function loadBundledIcon(name: string): string {
+  return bundledIcons.get(name) || ''
 }
 
 function warnMissingIcon(name: string) {
@@ -79,7 +76,7 @@ async function fetchIcon(name: string): Promise<string> {
   }
 
   const request = (async () => {
-    const bundled = await loadBundledIcon(name)
+    const bundled = loadBundledIcon(name)
     if (bundled) {
       iconCache.set(name, bundled)
       return bundled

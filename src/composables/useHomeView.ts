@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
@@ -123,6 +123,7 @@ export function useHomeView() {
   })
   const canUseRemoteUpload = computed(() => !!currentPoolId.value)
   let hasInitialized = false
+  let hasActivatedOnce = false
 
   onMounted(async () => {
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
@@ -135,6 +136,16 @@ export function useHomeView() {
       await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
       hasInitialized = true
     }
+  })
+
+  onActivated(() => {
+    if (!hasInitialized) return
+    if (!hasActivatedOnce) {
+      hasActivatedOnce = true
+      return
+    }
+    void filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+    void loadOfflineTasks()
   })
 
   onUnmounted(() => {

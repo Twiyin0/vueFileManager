@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { api } from '@/api'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import Icon from '@/components/Icon.vue'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 interface Share {
   id: number
@@ -39,7 +40,7 @@ async function fetchShares() {
   }
 }
 
-onMounted(fetchShares)
+useKeepAliveRefresh(fetchShares)
 
 function confirmDelete(share: Share) {
   shareToDelete.value = share

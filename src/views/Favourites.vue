@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import FilePreview from '@/components/FilePreview.vue'
 import Icon from '@/components/Icon.vue'
+import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 interface FavouriteItem {
   id: number
@@ -32,9 +33,7 @@ const fileIconMap: Record<string, { icon: string; color: string }> = {
   file: { icon: 'file-alt', color: 'text-gray-400' },
 }
 
-onMounted(() => {
-  void loadFavourites()
-})
+useKeepAliveRefresh(loadFavourites)
 
 function getFileType(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || ''
