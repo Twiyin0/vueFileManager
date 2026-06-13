@@ -283,6 +283,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       } else {
         await api.post('/files/write', { path: props.filePath, content: textContent.value, poolId: props.poolId })
       }
+      await loadTextContent({ preserveLoadingState: true, reinitializeEditor: false })
       saveMsg.value = '已保存'
     } catch (err: any) {
       saveMsg.value = '保存失败'
@@ -486,16 +487,29 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     }
   })
 
-  async function loadTextContent() {
+  async function loadTextContent(options: { preserveLoadingState?: boolean; reinitializeEditor?: boolean } = {}) {
+    const { preserveLoadingState = false, reinitializeEditor = true } = options
+    if (!preserveLoadingState) {
+      loading.value = true
+    }
     try {
-      const response = await fetch(previewUrl.value)
+      const response = await fetch(previewUrl.value, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       textContent.value = await response.text()
     } catch {
       textContent.value = '// Failed to load file content'
     }
-    loading.value = false
-    if (fileType.value === 'text' || markdownPreviewMode.value === 'text') {
+    if (!preserveLoadingState) {
+      loading.value = false
+    }
+    if (reinitializeEditor && (fileType.value === 'text' || markdownPreviewMode.value === 'text')) {
+      destroyCodeMirror()
       await nextTick()
       initCodeMirror()
     }

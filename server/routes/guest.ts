@@ -388,6 +388,18 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
     }
 
     const data = await storage.download(fullPath)
+
+    if (contentType.startsWith('text/') || contentType === 'application/json') {
+      res.setHeader('Content-Type', contentType)
+      res.setHeader('Content-Length', data.length)
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
+      res.send(data)
+      return
+    }
+
     const etag = `"${data.length}"`
     if (req.headers['if-none-match'] === etag) {
       res.status(304).end()

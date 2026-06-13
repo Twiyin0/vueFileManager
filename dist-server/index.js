@@ -1954,26 +1954,26 @@ __export(quota_exports, {
   formatBytes: () => formatBytes,
   getUserQuota: () => getUserQuota
 });
-import fs8 from "fs";
-import path11 from "path";
+import fs9 from "fs";
+import path12 from "path";
 async function calculateUserStorageUsage(userId) {
   const user = await db_default.prepare("SELECT username FROM users WHERE id = ?").get(userId);
   if (!user) return 0;
-  const userDir = path11.resolve(config_default.storage_root || "./uploads", user.username);
-  if (!fs8.existsSync(userDir)) return 0;
+  const userDir = path12.resolve(config_default.storage_root || "./uploads", user.username);
+  if (!fs9.existsSync(userDir)) return 0;
   return getDirSize(userDir);
 }
 function getDirSize(dirPath) {
   let size = 0;
   try {
-    const entries = fs8.readdirSync(dirPath, { withFileTypes: true });
+    const entries = fs9.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
-      const fullPath = path11.join(dirPath, entry.name);
+      const fullPath = path12.join(dirPath, entry.name);
       if (entry.isDirectory()) {
         size += getDirSize(fullPath);
       } else {
         try {
-          size += fs8.statSync(fullPath).size;
+          size += fs9.statSync(fullPath).size;
         } catch {
         }
       }
@@ -2376,6 +2376,9 @@ var LocalStorage = class {
     await walk(searchDir, prefix || "");
     return results.slice(0, 100);
   }
+  async resolveLocalPath(filePath) {
+    return this.resolvePath(filePath);
+  }
 };
 
 // server/services/factory.ts
@@ -2451,6 +2454,12 @@ var PrefixStorage = class {
       path: this.stripPrefix(f.path)
     }));
   }
+  async resolveLocalPath(filePath) {
+    if (!this.inner.resolveLocalPath) {
+      return null;
+    }
+    return this.inner.resolveLocalPath(this.withPrefix(filePath));
+  }
 };
 
 // server/services/factory.ts
@@ -2515,7 +2524,8 @@ function createDeferredStorage(getter) {
     rename: (oldPath, newName) => getter().then((storage) => storage.rename(oldPath, newName)),
     move: (srcPath, destPath) => getter().then((storage) => storage.move(srcPath, destPath)),
     copy: (srcPath, destPath) => getter().then((storage) => storage.copy(srcPath, destPath)),
-    search: (prefix, keyword) => getter().then((storage) => storage.search(prefix, keyword))
+    search: (prefix, keyword) => getter().then((storage) => storage.search(prefix, keyword)),
+    resolveLocalPath: (filePath) => getter().then((storage) => storage.resolveLocalPath ? storage.resolveLocalPath(filePath) : null)
   };
 }
 function getStorageByPoolId(userId, poolId) {
@@ -3152,7 +3162,6 @@ var auth_default = router;
 // server/routes/files.ts
 await init_db();
 import { Router as Router3 } from "express";
-import fs10 from "fs/promises";
 import fsSync2 from "fs";
 
 // server/middleware/apikey.ts
@@ -3166,7 +3175,9 @@ function isWebDavRequest(req) {
 }
 function sendUnauthorized(req, res, error) {
   if (isWebDavRequest(req)) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="VueFileManager WebDAV", charset="UTF-8"');
+    res.setHeader("WWW-Authenticate", 'Basic realm="VueFileManager WebDAV"');
+    res.setHeader("DAV", "1");
+    res.setHeader("MS-Author-Via", "DAV");
     return res.status(401).type("text/plain; charset=utf-8").send(error);
   }
   return res.status(401).json({ error });
@@ -3202,7 +3213,8 @@ function apiKeyMiddleware(req, res, next) {
       return sendUnauthorized(req, res, "\u7F3A\u5C11 API Key");
     }
     const keyRecord = await db_default.prepare(`
-      SELECT ak.*, u.role, u.banned FROM api_keys ak
+      SELECT ak.*, u.role, u.banned
+      FROM api_keys ak
       JOIN users u ON ak.user_id = u.id
       WHERE ak.key = ?
     `).get(apiKey);
@@ -3267,17 +3279,175 @@ function flexibleAuth(req, res, next) {
   });
 }
 
+// server/services/preview-cache.ts
+init_runtime_paths();
+import crypto4 from "crypto";
+import fs7 from "fs/promises";
+import path10 from "path";
+var PREVIEW_CACHE_DIR = resolveFromRoot("data", "preview-cache");
+var PREVIEW_CACHE_TTL_MS = 1e3 * 60 * 60 * 6;
+var MAX_PREVIEW_CACHE_BYTES = 64 * 1024 * 1024;
+function createCacheKey(scope, filePath) {
+  return crypto4.createHash("sha1").update(`${scope}:${filePath}`).digest("hex");
+}
+function getCachePath(cacheKey) {
+  return path10.join(PREVIEW_CACHE_DIR, cacheKey);
+}
+async function ensurePreviewCacheDir() {
+  await fs7.mkdir(PREVIEW_CACHE_DIR, { recursive: true });
+}
+async function readCachedFile(cachePath) {
+  try {
+    const stat = await fs7.stat(cachePath);
+    if (Date.now() - stat.mtimeMs > PREVIEW_CACHE_TTL_MS) {
+      await fs7.unlink(cachePath).catch(() => {
+      });
+      return null;
+    }
+    return {
+      path: cachePath,
+      stat
+    };
+  } catch {
+    return null;
+  }
+}
+async function resolvePreviewCacheFile(scope, storage, filePath) {
+  const localPath = storage.resolveLocalPath ? await storage.resolveLocalPath(filePath) : null;
+  if (localPath) {
+    const stat2 = await fs7.stat(localPath);
+    return { path: localPath, stat: stat2 };
+  }
+  const ext = path10.extname(filePath);
+  const cacheKey = createCacheKey(scope, filePath);
+  const cachePath = `${getCachePath(cacheKey)}${ext}`;
+  await ensurePreviewCacheDir();
+  const cached = await readCachedFile(cachePath);
+  if (cached) {
+    return cached;
+  }
+  const data = await storage.download(filePath);
+  if (data.length > MAX_PREVIEW_CACHE_BYTES) {
+    return null;
+  }
+  await fs7.writeFile(cachePath, data);
+  const stat = await fs7.stat(cachePath);
+  return { path: cachePath, stat };
+}
+
+// server/services/trash.ts
+function ensureLeadingSlash(filePath) {
+  return filePath.startsWith("/") ? filePath : `/${filePath}`;
+}
+function joinPath(base, name) {
+  const normalizedBase = ensureLeadingSlash(base).replace(/\/+$/, "");
+  const normalizedName = name.replace(/^\/+/, "");
+  return `${normalizedBase}/${normalizedName}`.replace(/\/+/g, "/");
+}
+function buildTrashPath(id, fileName) {
+  return `/.trash/${id}_${fileName}`;
+}
+function buildLegacyGuestTrashPath(fileName, id) {
+  return `/.trash/${fileName}_${id}`;
+}
+function getTrashPathCandidates(item) {
+  return [
+    buildTrashPath(item.id, item.file_name),
+    buildLegacyGuestTrashPath(item.file_name, item.id),
+    `/.trash/${item.file_name}`
+  ];
+}
+async function resolveTrashPathCandidates(storage, item) {
+  const candidates = new Set(getTrashPathCandidates(item));
+  try {
+    const entries = await storage.list("/.trash");
+    const fuzzyMatches = entries.filter((entry) => entry.name === item.file_name || entry.name.startsWith(`${item.file_name}_`)).sort((a, b) => {
+      const aSuffix = a.name.slice(item.file_name.length + 1);
+      const bSuffix = b.name.slice(item.file_name.length + 1);
+      const aTime = /^\d+$/.test(aSuffix) ? Number(aSuffix) : Number.POSITIVE_INFINITY;
+      const bTime = /^\d+$/.test(bSuffix) ? Number(bSuffix) : Number.POSITIVE_INFINITY;
+      const deletedAt = item.deleted_at ? new Date(item.deleted_at).getTime() : 0;
+      return Math.abs(aTime - deletedAt) - Math.abs(bTime - deletedAt);
+    });
+    for (const entry of fuzzyMatches) {
+      candidates.add(`/.trash/${entry.name}`);
+    }
+  } catch {
+  }
+  return Array.from(candidates);
+}
+async function ensureParentDirectories(storage, fullPath) {
+  const segments = ensureLeadingSlash(fullPath).split("/").filter(Boolean);
+  if (segments.length <= 1) return;
+  let current = "";
+  for (const segment of segments.slice(0, -1)) {
+    current = `${current}/${segment}`;
+    await storage.mkdir(current).catch(() => {
+    });
+  }
+}
+async function copyEntry(storage, sourcePath, targetPath, type) {
+  if (type === "folder") {
+    await storage.mkdir(targetPath);
+    const children = await storage.list(sourcePath);
+    for (const child of children) {
+      const childSourcePath = joinPath(sourcePath, child.name);
+      const childTargetPath = joinPath(targetPath, child.name);
+      await copyEntry(storage, childSourcePath, childTargetPath, child.type);
+    }
+    return;
+  }
+  const data = await storage.download(sourcePath);
+  await ensureParentDirectories(storage, targetPath);
+  await storage.upload(targetPath, data);
+}
+async function removeEntry(storage, targetPath, type) {
+  if (type === "folder") {
+    const children = await storage.list(targetPath).catch(() => []);
+    for (const child of children) {
+      await removeEntry(storage, joinPath(targetPath, child.name), child.type);
+    }
+  }
+  await storage.remove(targetPath).catch(() => {
+  });
+}
+async function moveToTrash(storage, filePath, trashPath, type) {
+  try {
+    await ensureParentDirectories(storage, trashPath);
+    await storage.move(filePath, trashPath);
+    return;
+  } catch {
+  }
+  await copyEntry(storage, filePath, trashPath, type);
+  await removeEntry(storage, filePath, type);
+}
+async function restoreFromTrash(storage, trashPath, originalPath, type) {
+  try {
+    await ensureParentDirectories(storage, originalPath);
+    await storage.move(trashPath, originalPath);
+    return true;
+  } catch {
+  }
+  try {
+    await copyEntry(storage, trashPath, originalPath, type);
+    await removeEntry(storage, trashPath, type);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // server/routes/files/shared.ts
 await init_db();
 import Busboy from "busboy";
 import os from "os";
-import fs7 from "fs/promises";
-import path10 from "path";
+import fs8 from "fs/promises";
+import path11 from "path";
 import { PassThrough as PassThrough3 } from "stream";
 import chardet from "chardet";
 import iconv from "iconv-lite";
 init_config();
-var UPLOAD_TEMP_DIR = path10.join(os.tmpdir(), "vue-file-manager", "uploads");
+var UPLOAD_TEMP_DIR = path11.join(os.tmpdir(), "vue-file-manager", "uploads");
 var RESUMABLE_UPLOAD_TTL_MS = Math.max(1, config_default.resumable_upload_cache_minutes || 120) * 60 * 1e3;
 var TEMP_UPLOAD_PREFIX = ".temp_";
 var JUNK_PATTERNS = [/^\._/, /^\.DS_Store$/, /^Thumbs\.db$/, /^__MACOSX\//, /^\.trash$/i];
@@ -3336,34 +3506,34 @@ function withDirectUrl(req, file, poolId) {
   return { ...file, directUrl, fileUrl: directUrl };
 }
 async function removeUploadTask(uploadId) {
-  const uploadDir = path10.join(UPLOAD_TEMP_DIR, uploadId);
-  await fs7.rm(uploadDir, { recursive: true, force: true }).catch(() => {
+  const uploadDir = path11.join(UPLOAD_TEMP_DIR, uploadId);
+  await fs8.rm(uploadDir, { recursive: true, force: true }).catch(() => {
   });
 }
 async function cleanupExpiredUploads() {
-  await fs7.mkdir(UPLOAD_TEMP_DIR, { recursive: true });
-  const entries = await fs7.readdir(UPLOAD_TEMP_DIR, { withFileTypes: true }).catch(() => []);
+  await fs8.mkdir(UPLOAD_TEMP_DIR, { recursive: true });
+  const entries = await fs8.readdir(UPLOAD_TEMP_DIR, { withFileTypes: true }).catch(() => []);
   const now = Date.now();
   await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-    const uploadDir = path10.join(UPLOAD_TEMP_DIR, entry.name);
-    const metaPath = path10.join(uploadDir, "meta.json");
+    const uploadDir = path11.join(UPLOAD_TEMP_DIR, entry.name);
+    const metaPath = path11.join(uploadDir, "meta.json");
     try {
-      const raw = await fs7.readFile(metaPath, "utf-8");
+      const raw = await fs8.readFile(metaPath, "utf-8");
       const meta = JSON.parse(raw);
       const updatedAt = meta.updatedAt || meta.createdAt || 0;
       if (!updatedAt || now - updatedAt > RESUMABLE_UPLOAD_TTL_MS) {
-        await fs7.rm(uploadDir, { recursive: true, force: true });
+        await fs8.rm(uploadDir, { recursive: true, force: true });
       }
     } catch {
-      await fs7.rm(uploadDir, { recursive: true, force: true }).catch(() => {
+      await fs8.rm(uploadDir, { recursive: true, force: true }).catch(() => {
       });
     }
   }));
 }
 async function readUploadMeta(uploadId) {
-  const uploadDir = path10.join(UPLOAD_TEMP_DIR, uploadId);
-  const metaPath = path10.join(uploadDir, "meta.json");
-  const raw = await fs7.readFile(metaPath, "utf-8");
+  const uploadDir = path11.join(UPLOAD_TEMP_DIR, uploadId);
+  const metaPath = path11.join(uploadDir, "meta.json");
+  const raw = await fs8.readFile(metaPath, "utf-8");
   return {
     uploadDir,
     metaPath,
@@ -3372,7 +3542,7 @@ async function readUploadMeta(uploadId) {
 }
 async function writeUploadMeta(metaPath, meta) {
   meta.updatedAt = Date.now();
-  await fs7.writeFile(metaPath, JSON.stringify(meta));
+  await fs8.writeFile(metaPath, JSON.stringify(meta));
 }
 function uploadSingle(field) {
   return (req, res, next) => {
@@ -3481,20 +3651,6 @@ async function processConcurrently(items, fn, concurrency = 3) {
 function createUploadPassThrough() {
   return new PassThrough3();
 }
-function resolveLocalMediaPath(storage, filePath) {
-  if (storage instanceof PrefixStorage) {
-    const inner = storage.inner;
-    const prefix = storage.prefix?.replace(/\/+$/, "") || "";
-    if (inner instanceof LocalStorage) {
-      const normalizedPath = filePath.startsWith("/") ? filePath : `/${filePath}`;
-      return inner.resolvePath(prefix ? `${prefix}${normalizedPath}` : normalizedPath);
-    }
-  }
-  if (storage instanceof LocalStorage) {
-    return storage.resolvePath(filePath);
-  }
-  return null;
-}
 
 // server/routes/files/offline-routes.ts
 await init_db();
@@ -3590,9 +3746,9 @@ function registerOfflineTaskRoutes(router15) {
 }
 
 // server/routes/files/upload-routes.ts
-import crypto4 from "crypto";
-import fs9 from "fs/promises";
-import path12 from "path";
+import crypto5 from "crypto";
+import fs10 from "fs/promises";
+import path13 from "path";
 await init_db();
 async function checkLocalQuota2(userId, resolvedPoolId, size) {
   const pool = await db_default.prepare("SELECT storage_type FROM storage_pools WHERE id = ?").get(resolvedPoolId);
@@ -3727,10 +3883,10 @@ function registerUploadRoutes(router15) {
         const directUrl2 = buildDirectUrl(req, filePath, resolvedPoolId);
         return res.json({ message: "\u6D41\u5F0F\u4E0A\u4F20\u6210\u529F", path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || "local", directUrl: directUrl2, fileUrl: directUrl2 });
       }
-      const tempId = crypto4.randomBytes(16).toString("hex");
-      tempPath = path12.join(UPLOAD_TEMP_DIR, tempId);
-      await fs9.mkdir(UPLOAD_TEMP_DIR, { recursive: true });
-      fileHandle = await fs9.open(tempPath, "w");
+      const tempId = crypto5.randomBytes(16).toString("hex");
+      tempPath = path13.join(UPLOAD_TEMP_DIR, tempId);
+      await fs10.mkdir(UPLOAD_TEMP_DIR, { recursive: true });
+      fileHandle = await fs10.open(tempPath, "w");
       let requestAborted = false;
       await new Promise((resolve, reject) => {
         req.on("data", async (chunk) => {
@@ -3752,10 +3908,10 @@ function registerUploadRoutes(router15) {
       if (requestAborted) {
         throw new Error("\u4E0A\u4F20\u5DF2\u53D6\u6D88");
       }
-      const buffer = await fs9.readFile(tempPath);
+      const buffer = await fs10.readFile(tempPath);
       const quotaCheck = await checkLocalQuota2(req.userId, resolvedPoolId, buffer.length);
       if (!quotaCheck.allowed) {
-        await fs9.unlink(tempPath).catch(() => {
+        await fs10.unlink(tempPath).catch(() => {
         });
         return res.status(400).json({ error: quotaCheck.message });
       }
@@ -3771,7 +3927,7 @@ function registerUploadRoutes(router15) {
         }
         throw err;
       }
-      await fs9.unlink(tempPath).catch(() => {
+      await fs10.unlink(tempPath).catch(() => {
       });
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId);
       res.json({ message: "\u6D41\u5F0F\u4E0A\u4F20\u6210\u529F", path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || "local", directUrl, fileUrl: directUrl });
@@ -3783,7 +3939,7 @@ function registerUploadRoutes(router15) {
     } finally {
       if (fileHandle) await fileHandle.close().catch(() => {
       });
-      if (tempPath) await fs9.unlink(tempPath).catch(() => {
+      if (tempPath) await fs10.unlink(tempPath).catch(() => {
       });
     }
   });
@@ -3798,10 +3954,10 @@ function registerUploadRoutes(router15) {
       if (isJunkFile(fileName)) {
         return res.status(400).json({ error: `\u5DF2\u62E6\u622A\u7CFB\u7EDF\u6587\u4EF6: ${fileName}` });
       }
-      const uploadId = crypto4.randomBytes(16).toString("hex");
-      const uploadDir = path12.join(UPLOAD_TEMP_DIR, uploadId);
-      await fs9.mkdir(uploadDir, { recursive: true });
-      await fs9.writeFile(path12.join(uploadDir, "meta.json"), JSON.stringify({
+      const uploadId = crypto5.randomBytes(16).toString("hex");
+      const uploadDir = path13.join(UPLOAD_TEMP_DIR, uploadId);
+      await fs10.mkdir(uploadDir, { recursive: true });
+      await fs10.writeFile(path13.join(uploadDir, "meta.json"), JSON.stringify({
         fileName,
         fileSize,
         dirPath: dirPath || "",
@@ -3844,8 +4000,8 @@ function registerUploadRoutes(router15) {
         return res.status(410).json({ error: "\u4E0A\u4F20\u4EFB\u52A1\u5DF2\u8FC7\u671F" });
       }
       const partIndex = meta.nextPartIndex ?? meta.uploadedParts.length;
-      const partPath = path12.join(uploadDir, `part-${String(partIndex).padStart(6, "0")}`);
-      const writeStream = await fs9.open(partPath, "w");
+      const partPath = path13.join(uploadDir, `part-${String(partIndex).padStart(6, "0")}`);
+      const writeStream = await fs10.open(partPath, "w");
       await new Promise((resolve, reject) => {
         req.on("data", async (chunk) => {
           try {
@@ -3916,23 +4072,23 @@ function registerUploadRoutes(router15) {
         await removeUploadTask(uploadId);
         return res.status(410).json({ error: "\u4E0A\u4F20\u4EFB\u52A1\u5DF2\u8FC7\u671F" });
       }
-      const parts = (await fs9.readdir(uploadDir)).filter((file) => file.startsWith("part-")).sort();
+      const parts = (await fs10.readdir(uploadDir)).filter((file) => file.startsWith("part-")).sort();
       const buffers = [];
       for (const part of parts) {
-        buffers.push(await fs9.readFile(path12.join(uploadDir, part)));
+        buffers.push(await fs10.readFile(path13.join(uploadDir, part)));
       }
       const finalBuffer = Buffer.concat(buffers);
       const resolvedPoolId = await resolvePoolId(req.userId, meta.poolId);
       const quotaCheck = await checkLocalQuota2(req.userId, resolvedPoolId, finalBuffer.length);
       if (!quotaCheck.allowed) {
-        await fs9.rm(uploadDir, { recursive: true, force: true }).catch(() => {
+        await fs10.rm(uploadDir, { recursive: true, force: true }).catch(() => {
         });
         return res.status(400).json({ error: quotaCheck.message });
       }
       const storage = meta.poolId ? getStorageByPoolId(req.userId, meta.poolId) : getStorage(req.userId);
       const filePath = meta.dirPath ? `${meta.dirPath}/${meta.fileName}` : meta.fileName;
       await storage.upload(filePath, finalBuffer);
-      await fs9.rm(uploadDir, { recursive: true, force: true }).catch(() => {
+      await fs10.rm(uploadDir, { recursive: true, force: true }).catch(() => {
       });
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId);
       res.json({ message: "\u5206\u7247\u4E0A\u4F20\u5B8C\u6210", path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || "local", directUrl, fileUrl: directUrl });
@@ -4064,7 +4220,9 @@ var handleDelete = async (req, res) => {
       }
       const stat = await storage.info(filePath).catch(() => ({ type: "file" }));
       const result = await db_default.prepare("INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)").run(req.userId, filePath, fileName, stat.type, storagePoolId);
-      const trashPath = `/.trash/${result.lastInsertRowid}_${fileName}`;
+      const trashPath = buildTrashPath(result.lastInsertRowid, fileName);
+      await moveToTrash(storage, filePath, trashPath, stat.type);
+      return res.json({ message: "\u5220\u9664\u6210\u529F" });
       try {
         const data = await storage.download(filePath);
         await storage.upload(trashPath, data);
@@ -4101,7 +4259,9 @@ router2.post("/batch-delete", flexibleAuth, requirePermission("delete"), async (
           const fileName = filePath.split("/").pop() || "";
           const stat = await storage.info(filePath).catch(() => ({ type: "file" }));
           const result = await db_default.prepare("INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)").run(req.userId, filePath, fileName, stat.type, storagePoolId);
-          const trashPath = `/.trash/${result.lastInsertRowid}_${fileName}`;
+          const trashPath = buildTrashPath(result.lastInsertRowid, fileName);
+          await moveToTrash(storage, filePath, trashPath, stat.type);
+          continue;
           try {
             const data = await storage.download(filePath);
             await storage.upload(trashPath, data);
@@ -4292,9 +4452,10 @@ router2.get("/preview", flexibleAuth, requirePermission("read"), async (req, res
     };
     const contentType = mimeTypes3[ext] || "application/octet-stream";
     const isMedia = contentType.startsWith("audio/") || contentType.startsWith("video/");
-    const fullPath = isMedia ? await resolveLocalMediaPath(storage, filePath) : null;
-    if (isMedia && fullPath) {
-      const stat = await fs10.stat(fullPath);
+    const cachedMedia = isMedia ? await resolvePreviewCacheFile(`user:${req.userId}:pool:${req.query.poolId || "default"}`, storage, filePath) : null;
+    if (cachedMedia) {
+      const fileOnDisk = cachedMedia.path;
+      const stat = cachedMedia.stat;
       const fileSize = stat.size;
       const etag2 = `"${fileSize}-${stat.mtimeMs}"`;
       const range = req.headers.range;
@@ -4314,16 +4475,25 @@ router2.get("/preview", flexibleAuth, requirePermission("read"), async (req, res
         res.status(206);
         res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
         res.setHeader("Content-Length", chunkSize);
-        const stream = fsSync2.createReadStream(fullPath, { start, end });
+        const stream = fsSync2.createReadStream(fileOnDisk, { start, end });
         stream.pipe(res);
       } else {
         res.setHeader("Content-Length", fileSize);
-        const stream = fsSync2.createReadStream(fullPath);
+        const stream = fsSync2.createReadStream(fileOnDisk);
         stream.pipe(res);
       }
       return;
     }
     const data = await storage.download(filePath);
+    if (contentType.startsWith("text/") || contentType === "application/json") {
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Length", data.length);
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.send(data);
+      return;
+    }
     const etag = `"${data.length}"`;
     if (req.headers["if-none-match"] === etag) {
       res.status(304).end();
@@ -4401,7 +4571,7 @@ var files_default = router2;
 // server/routes/user.ts
 await init_db();
 import { Router as Router4 } from "express";
-import crypto5 from "crypto";
+import crypto6 from "crypto";
 await init_quota();
 var router3 = Router4();
 router3.get("/info", authMiddleware, async (req, res) => {
@@ -4418,7 +4588,8 @@ router3.get("/info", authMiddleware, async (req, res) => {
     }
     const pools = await db_default.prepare(`
       SELECT id, name, storage_type, is_default, created_at
-      FROM storage_pools WHERE user_id = ?
+      FROM storage_pools
+      WHERE user_id = ?
       ORDER BY is_default DESC, created_at ASC
     `).all(req.userId);
     const trashCount = (await db_default.prepare("SELECT COUNT(*) as c FROM trash WHERE user_id = ?").get(req.userId)).c;
@@ -4426,7 +4597,7 @@ router3.get("/info", authMiddleware, async (req, res) => {
     const shareCount = (await db_default.prepare("SELECT COUNT(*) as c FROM shares WHERE user_id = ?").get(req.userId)).c;
     const apiKeyCount = (await db_default.prepare("SELECT COUNT(*) as c FROM api_keys WHERE user_id = ?").get(req.userId)).c;
     const guestShareCount = (await db_default.prepare("SELECT COUNT(*) as c FROM guest_shares WHERE user_id = ?").get(req.userId)).c;
-    const q = await getUserQuota(req.userId);
+    const quota = await getUserQuota(req.userId);
     res.json({
       user: {
         id: user.id,
@@ -4441,20 +4612,26 @@ router3.get("/info", authMiddleware, async (req, res) => {
           guestPath: user.guest_path,
           theme: user.theme
         },
-        pools: pools.map((p) => ({
-          id: p.id,
-          name: p.name,
-          storageType: p.storage_type,
-          isDefault: !!p.is_default,
-          createdAt: p.created_at
+        pools: pools.map((pool) => ({
+          id: pool.id,
+          name: pool.name,
+          storageType: pool.storage_type,
+          isDefault: !!pool.is_default,
+          createdAt: pool.created_at
         })),
-        stats: { trashCount, favCount, shareCount, apiKeyCount, guestShareCount },
+        stats: {
+          trashCount,
+          favCount,
+          shareCount,
+          apiKeyCount,
+          guestShareCount
+        },
         storage: {
-          quota: q.quota,
-          used: q.used,
-          remaining: q.remaining,
-          quotaFormatted: formatBytes(q.quota),
-          usedFormatted: formatBytes(q.used)
+          quota: quota.quota,
+          used: quota.used,
+          remaining: quota.remaining,
+          quotaFormatted: formatBytes(quota.quota),
+          usedFormatted: formatBytes(quota.used)
         }
       }
     });
@@ -4526,7 +4703,7 @@ router3.post("/apikeys", authMiddleware, async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: "\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A" });
     }
-    const key = `vfm_${crypto5.randomBytes(32).toString("hex")}`;
+    const key = `vfm_${crypto6.randomBytes(32).toString("hex")}`;
     const perms = permissions || "read";
     await db_default.prepare("INSERT INTO api_keys (user_id, name, key, permissions) VALUES (?, ?, ?, ?)").run(
       req.userId,
@@ -4576,7 +4753,7 @@ router3.post("/guest-shares", authMiddleware, async (req, res) => {
     }
     const existing = await db_default.prepare("SELECT id FROM guest_shares WHERE user_id = ? AND folder_path = ? AND storage_pool_id = ?").get(req.userId, folderPath, storagePoolId);
     if (existing) {
-      return res.status(409).json({ error: "\u8BE5\u6587\u4EF6\u5939\u5DF2\u5206\u4EAB\u81F3\u8BBF\u5BA2\u6A21\u5F0F" });
+      return res.status(409).json({ error: "\u8BE5\u6587\u4EF6\u5939\u5DF2\u7ECF\u5206\u4EAB\u81F3\u8BBF\u5BA2\u6A21\u5F0F" });
     }
     const perms = permissions || "read";
     const nextLabel = label || folderPath.split("/").pop() || "\u6839\u76EE\u5F55";
@@ -4607,7 +4784,14 @@ router3.put("/guest-shares/:id", authMiddleware, async (req, res) => {
     const newPermissions = permissions || share.permissions;
     const newLabel = label !== void 0 ? label : share.label;
     await db_default.prepare("UPDATE guest_shares SET permissions = ?, label = ? WHERE id = ? AND user_id = ?").run(newPermissions, newLabel, id, req.userId);
-    res.json({ message: "\u5DF2\u66F4\u65B0", share: { id, permissions: newPermissions, label: newLabel } });
+    res.json({
+      message: "\u5DF2\u66F4\u65B0",
+      share: {
+        id,
+        permissions: newPermissions,
+        label: newLabel
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4631,7 +4815,7 @@ import { Router as Router8 } from "express";
 // server/routes/admin/users.ts
 await init_db();
 import { Router as Router5 } from "express";
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 await init_quota();
 
 // server/routes/admin/shared.ts
@@ -4744,7 +4928,7 @@ router4.post("/users", authMiddleware, adminMiddleware, async (req, res) => {
     if (existing) {
       return res.status(409).json({ error: "\u7528\u6237\u540D\u5DF2\u5B58\u5728" });
     }
-    const hashedPassword = crypto6.createHash("md5").update(password).digest("hex");
+    const hashedPassword = crypto7.createHash("md5").update(password).digest("hex");
     const result = await db_default.prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)").run(
       username,
       hashedPassword,
@@ -4808,7 +4992,7 @@ router4.put("/users/:id/password", authMiddleware, adminMiddleware, async (req, 
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const hashedPassword = crypto6.createHash("md5").update(password).digest("hex");
+    const hashedPassword = crypto7.createHash("md5").update(password).digest("hex");
     await db_default.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, userId);
     res.json({ message: "\u5BC6\u7801\u5DF2\u91CD\u7F6E" });
   } catch (err) {
@@ -5173,49 +5357,46 @@ var admin_default = router7;
 // server/routes/guest.ts
 await init_db();
 import { Router as Router9 } from "express";
-import multer from "multer";
 import Busboy2 from "busboy";
 import chardet2 from "chardet";
 import iconv2 from "iconv-lite";
 init_config();
-import fs11 from "fs/promises";
 import fsSync3 from "fs";
 var router8 = Router9();
 var TEMP_UPLOAD_PREFIX2 = ".temp_";
 var mimeTypes = {
-  "jpg": "image/jpeg",
-  "jpeg": "image/jpeg",
-  "png": "image/png",
-  "gif": "image/gif",
-  "svg": "image/svg+xml",
-  "webp": "image/webp",
-  "mp4": "video/mp4",
-  "webm": "video/webm",
-  "ogg": "audio/ogg",
-  "mp3": "audio/mpeg",
-  "wav": "audio/wav",
-  "flac": "audio/flac",
-  "aac": "audio/aac",
-  "m4a": "audio/mp4",
-  "pdf": "application/pdf",
-  "txt": "text/plain",
-  "md": "text/markdown",
-  "json": "application/json",
-  "js": "text/javascript",
-  "ts": "text/typescript",
-  "html": "text/html",
-  "css": "text/css",
-  "xml": "text/xml",
-  "yaml": "text/yaml",
-  "yml": "text/yml",
-  "py": "text/x-python",
-  "java": "text/x-java",
-  "go": "text/x-go",
-  "rs": "text/x-rust",
-  "vue": "text/x-vue",
-  "sh": "text/x-shellscript"
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  ogg: "audio/ogg",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  flac: "audio/flac",
+  aac: "audio/aac",
+  m4a: "audio/mp4",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  json: "application/json",
+  js: "text/javascript",
+  ts: "text/typescript",
+  html: "text/html",
+  css: "text/css",
+  xml: "text/xml",
+  yaml: "text/yaml",
+  yml: "text/yml",
+  py: "text/x-python",
+  java: "text/x-java",
+  go: "text/x-go",
+  rs: "text/x-rust",
+  vue: "text/x-vue",
+  sh: "text/x-shellscript"
 };
-var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config_default.upload_limit * 1024 * 1024 } });
 function guestUploadSingle(field) {
   return (req, res, next) => {
     const limits = { fileSize: config_default.upload_limit * 1024 * 1024 };
@@ -5228,17 +5409,17 @@ function guestUploadSingle(field) {
       }
       let rawFilename = info.filename;
       try {
-        const fnameBuf = Buffer.from(info.filename, "latin1");
-        if (fnameBuf.some((b) => b > 127)) {
-          const charset = chardet2.detect(fnameBuf);
+        const filenameBuffer = Buffer.from(info.filename, "latin1");
+        if (filenameBuffer.some((byte) => byte > 127)) {
+          const charset = chardet2.detect(filenameBuffer);
           if (charset && iconv2.encodingExists(charset)) {
-            rawFilename = iconv2.decode(fnameBuf, charset);
+            rawFilename = iconv2.decode(filenameBuffer, charset);
           } else {
-            const tryUtf8 = fnameBuf.toString("utf8");
-            if (!tryUtf8.includes("\uFFFD")) {
-              rawFilename = tryUtf8;
+            const asUtf8 = filenameBuffer.toString("utf8");
+            if (!asUtf8.includes("\uFFFD")) {
+              rawFilename = asUtf8;
             } else if (iconv2.encodingExists("gbk")) {
-              rawFilename = iconv2.decode(fnameBuf, "gbk");
+              rawFilename = iconv2.decode(filenameBuffer, "gbk");
             }
           }
         }
@@ -5257,7 +5438,8 @@ function guestUploadSingle(field) {
       });
       stream.on("end", () => {
         if (totalSize > limits.fileSize && !res.headersSent) {
-          return res.status(413).json({ error: `\u6587\u4EF6\u5927\u5C0F\u8D85\u8FC7\u9650\u5236 (${config_default.upload_limit}MB)` });
+          res.status(413).json({ error: `\u6587\u4EF6\u5927\u5C0F\u8D85\u8FC7\u9650\u5236 (${config_default.upload_limit}MB)` });
+          return;
         }
         ;
         req.file = {
@@ -5277,11 +5459,16 @@ function guestUploadSingle(field) {
       req.body[name] = value;
     });
     bb.on("close", () => {
-      if (!fileReceived && !res.headersSent) return res.status(400).json({ error: "\u6CA1\u6709\u6587\u4EF6" });
+      if (!fileReceived && !res.headersSent) {
+        res.status(400).json({ error: "\u6CA1\u6709\u6587\u4EF6" });
+        return;
+      }
       if (!res.headersSent) next();
     });
     bb.on("error", (err) => {
-      if (!res.headersSent) res.status(400).json({ error: err.message });
+      if (!res.headersSent) {
+        res.status(400).json({ error: err.message });
+      }
     });
     req.pipe(bb);
   };
@@ -5293,17 +5480,18 @@ var permissionAliases = {
 };
 function hasPermission(permissions, action) {
   if (!permissions) return false;
-  const perms = permissions.split(",").map((s) => s.trim());
-  if (perms.includes(action)) return true;
+  const items = permissions.split(",").map((item) => item.trim());
+  if (items.includes(action)) return true;
   for (const [parent, aliases] of Object.entries(permissionAliases)) {
-    if (aliases.includes(action) && perms.includes(parent)) return true;
+    if (aliases.includes(action) && items.includes(parent)) {
+      return true;
+    }
   }
   return false;
 }
 function isPathSafe(targetPath) {
   if (!targetPath) return true;
-  if (/\.\./.test(targetPath)) return false;
-  return true;
+  return !/\.\./.test(targetPath);
 }
 function isTemporaryUploadFile2(filename) {
   const name = filename.split("/").pop() || filename;
@@ -5322,12 +5510,21 @@ function buildTemporaryUploadPath2(filePath) {
   const name = normalized.slice(lastSlashIndex + 1);
   return `${dir}/${TEMP_UPLOAD_PREFIX2}${name}`;
 }
-function getUserByUsername(username) {
-  return db_default.prepare("SELECT id, username FROM users WHERE username = ?").get(username);
+async function getUserByUsername(username) {
+  return await db_default.prepare("SELECT id, username FROM users WHERE username = ?").get(username);
 }
-router8.get("/", (req, res) => {
+async function getGuestSettings(userId) {
+  return await db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(userId);
+}
+async function getGuestShare(userId, shareId) {
+  return await db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(shareId, userId);
+}
+function getShareIdParam(req) {
+  return String(req.params.shareId || "");
+}
+router8.get("/", async (_req, res) => {
   try {
-    const users = db_default.prepare(`
+    const users = await db_default.prepare(`
       SELECT u.username, COUNT(gs.id) as share_count
       FROM users u
       JOIN user_settings s ON u.id = s.user_id
@@ -5342,15 +5539,15 @@ router8.get("/", (req, res) => {
 });
 router8.get("/:username/list", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const shares = db_default.prepare(`
+    const shares = await db_default.prepare(`
       SELECT gs.id, gs.folder_path, gs.label, gs.permissions, gs.created_at, sp.name as pool_name
       FROM guest_shares gs
       JOIN storage_pools sp ON gs.storage_pool_id = sp.id
@@ -5364,15 +5561,15 @@ router8.get("/:username/list", async (req, res) => {
 });
 router8.get("/:username/:shareId/list", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare(`
+    const share = await db_default.prepare(`
       SELECT gs.*, sp.name as pool_name
       FROM guest_shares gs
       JOIN storage_pools sp ON gs.storage_pool_id = sp.id
@@ -5386,10 +5583,10 @@ router8.get("/:username/:shareId/list", async (req, res) => {
     const basePath = (share.folder_path || "").replace(/\\/g, "/");
     const fullPath = basePath ? relativePath ? `${basePath}/${relativePath}` : basePath : relativePath;
     const files = await storage.list(fullPath);
-    const prefix = basePath ? basePath + "/" : "";
-    const result = files.filter((f) => !isJunkFile(f.name) && !isTemporaryUploadFile2(f.name)).map((f) => ({
-      ...f,
-      path: prefix ? f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path : f.path
+    const prefix = basePath ? `${basePath}/` : "";
+    const result = files.filter((file) => !isJunkFile(file.name) && !isTemporaryUploadFile2(file.name)).map((file) => ({
+      ...file,
+      path: prefix ? file.path.startsWith(prefix) ? file.path.slice(prefix.length) : file.path : file.path
     }));
     let readme = null;
     const readmeFile = result.find(
@@ -5404,22 +5601,28 @@ router8.get("/:username/:shareId/list", async (req, res) => {
         fileUrl: previewUrl
       };
     }
-    res.json({ files: result, owner: user.username, shareLabel: share.label, permissions: share.permissions, readme });
+    res.json({
+      files: result,
+      owner: user.username,
+      shareLabel: share.label,
+      permissions: share.permissions,
+      readme
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 router8.get("/:username/:shareId/preview", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5444,10 +5647,10 @@ router8.get("/:username/:shareId/preview", async (req, res) => {
     const fileName = relativePath.split("/").pop() || "file";
     const contentType = mimeTypes[ext] || "application/octet-stream";
     const isMedia = contentType.startsWith("audio/") || contentType.startsWith("video/");
-    const innerStorage = storage instanceof PrefixStorage ? storage.inner : storage;
-    if (isMedia && innerStorage instanceof LocalStorage) {
-      const resolvedPath = await innerStorage.resolvePath(fullPath);
-      const stat = await fs11.stat(resolvedPath);
+    const cachedMedia = isMedia ? await resolvePreviewCacheFile(`guest:${user.username}:share:${share.id}`, storage, fullPath) : null;
+    if (cachedMedia) {
+      const fileOnDisk = cachedMedia.path;
+      const stat = cachedMedia.stat;
       const fileSize = stat.size;
       const etag2 = `"${fileSize}-${stat.mtimeMs}"`;
       const range = req.headers.range;
@@ -5468,16 +5671,26 @@ router8.get("/:username/:shareId/preview", async (req, res) => {
         res.status(206);
         res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
         res.setHeader("Content-Length", chunkSize);
-        const stream = fsSync3.createReadStream(resolvedPath, { start, end });
+        const stream = fsSync3.createReadStream(fileOnDisk, { start, end });
         stream.pipe(res);
       } else {
         res.setHeader("Content-Length", fileSize);
-        const stream = fsSync3.createReadStream(resolvedPath);
+        const stream = fsSync3.createReadStream(fileOnDisk);
         stream.pipe(res);
       }
       return;
     }
     const data = await storage.download(fullPath);
+    if (contentType.startsWith("text/") || contentType === "application/json") {
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Length", data.length);
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(fileName)}"`);
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.send(data);
+      return;
+    }
     const etag = `"${data.length}"`;
     if (req.headers["if-none-match"] === etag) {
       res.status(304).end();
@@ -5498,15 +5711,15 @@ router8.get("/:username/:shareId/preview", async (req, res) => {
 });
 router8.get("/:username/:shareId/download", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5537,15 +5750,15 @@ router8.get("/:username/:shareId/download", async (req, res) => {
 });
 router8.post("/:username/:shareId/upload", guestUploadSingle("file"), async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5572,7 +5785,7 @@ router8.post("/:username/:shareId/upload", guestUploadSingle("file"), async (req
     const storage = getStorageByPoolId(user.id, share.storage_pool_id);
     const basePath = (share.folder_path || "").replace(/\\/g, "/");
     const filePath = basePath ? dirPath ? `${basePath}/${dirPath}/${normalizedName}` : `${basePath}/${normalizedName}` : dirPath ? `${dirPath}/${normalizedName}` : normalizedName;
-    const pool = db_default.prepare("SELECT storage_type FROM storage_pools WHERE id = ?").get(share.storage_pool_id);
+    const pool = await db_default.prepare("SELECT storage_type FROM storage_pools WHERE id = ?").get(share.storage_pool_id);
     const uploadPath = shouldUseAtomicTempUpload2(pool?.storage_type) ? buildTemporaryUploadPath2(filePath) : filePath;
     try {
       await storage.upload(uploadPath, req.file.buffer);
@@ -5595,7 +5808,7 @@ router8.post("/:username/:shareId/upload", guestUploadSingle("file"), async (req
       }
       throw err;
     }
-    const relativePath = basePath ? filePath.replace(basePath + "/", "").replace(basePath, "") : filePath;
+    const relativePath = basePath ? filePath.replace(`${basePath}/`, "").replace(basePath, "") : filePath;
     res.json({ message: "\u4E0A\u4F20\u6210\u529F", path: relativePath });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -5603,15 +5816,15 @@ router8.post("/:username/:shareId/upload", guestUploadSingle("file"), async (req
 });
 router8.post("/:username/:shareId/write", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5639,15 +5852,15 @@ router8.post("/:username/:shareId/write", async (req, res) => {
 });
 router8.post("/:username/:shareId/delete", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5666,13 +5879,20 @@ router8.post("/:username/:shareId/delete", async (req, res) => {
     const fullPath = basePath ? `${basePath}/${filePath}` : filePath;
     const stat = await storage.info(fullPath).catch(() => ({ type: "file" }));
     const fileName = filePath.split("/").pop() || filePath;
-    const trashPath = `/.trash/${fileName}_${Date.now()}`;
+    const result = await db_default.prepare(
+      "INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `\u8BBF\u5BA2: ${req.params.username}`);
+    const trashPath = buildTrashPath(result.lastInsertRowid, fileName);
+    await moveToTrash(storage, fullPath, trashPath, stat.type);
+    return res.json({ message: "\u5220\u9664\u6210\u529F" });
     try {
       const data = await storage.download(fullPath);
       await storage.upload(trashPath, data);
     } catch {
     }
-    db_default.prepare("INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)").run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `\u8BBF\u5BA2: ${req.params.username}`);
+    await db_default.prepare(
+      "INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `\u8BBF\u5BA2: ${req.params.username}`);
     await storage.remove(fullPath);
     res.json({ message: "\u5220\u9664\u6210\u529F" });
   } catch (err) {
@@ -5684,15 +5904,15 @@ router8.post("/:username/:shareId/delete", async (req, res) => {
 });
 router8.post("/:username/:shareId/mkdir", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5717,15 +5937,15 @@ router8.post("/:username/:shareId/mkdir", async (req, res) => {
 });
 router8.post("/:username/:shareId/rename", async (req, res) => {
   try {
-    const user = getUserByUsername(req.params.username);
+    const user = await getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" });
     }
-    const settings = db_default.prepare("SELECT guest_enabled FROM user_settings WHERE user_id = ?").get(user.id);
+    const settings = await getGuestSettings(user.id);
     if (!settings || !settings.guest_enabled) {
       return res.status(403).json({ error: "\u8BE5\u7528\u6237\u672A\u5F00\u542F\u8BBF\u5BA2\u6A21\u5F0F" });
     }
-    const share = db_default.prepare("SELECT * FROM guest_shares WHERE id = ? AND user_id = ?").get(req.params.shareId, user.id);
+    const share = await getGuestShare(user.id, getShareIdParam(req));
     if (!share) {
       return res.status(404).json({ error: "\u5206\u4EAB\u4E0D\u5B58\u5728" });
     }
@@ -5754,8 +5974,7 @@ var guest_default = router8;
 // server/routes/share.ts
 await init_db();
 import { Router as Router10 } from "express";
-import crypto7 from "crypto";
-import fs12 from "fs/promises";
+import crypto8 from "crypto";
 import fsSync4 from "fs";
 var router9 = Router10();
 var previewMimeTypes = {
@@ -5803,12 +6022,12 @@ var previewMimeTypes = {
 function generateSignToken(username, signKey) {
   const timestamp = Math.floor(Date.now() / 1e3);
   const raw = username + signKey;
-  const hash = crypto7.createHash("md5").update(raw).digest("hex");
+  const hash = crypto8.createHash("md5").update(raw).digest("hex");
   const sign = hash.slice(4, 12) + timestamp;
   return { sign, timestamp };
 }
 function verifySignToken(username, signKey, sign, timestamp) {
-  const expectedHash = crypto7.createHash("md5").update(username + signKey).digest("hex");
+  const expectedHash = crypto8.createHash("md5").update(username + signKey).digest("hex");
   const expectedSign = expectedHash.slice(4, 12) + timestamp;
   return sign === expectedSign;
 }
@@ -5818,8 +6037,8 @@ router9.post("/create", authMiddleware, async (req, res) => {
     if (!filePath) {
       return res.status(400).json({ error: "\u7F3A\u5C11\u6587\u4EF6\u8DEF\u5F84" });
     }
-    const shareCode = crypto7.randomBytes(8).toString("hex");
-    const signKey = crypto7.randomBytes(8).toString("hex");
+    const shareCode = crypto8.randomBytes(8).toString("hex");
+    const signKey = crypto8.randomBytes(8).toString("hex");
     let expiresAt = null;
     if (expiresIn) {
       expiresAt = new Date(Date.now() + expiresIn * 60 * 60 * 1e3).toISOString();
@@ -6023,9 +6242,10 @@ router9.get("/preview/:code", async (req, res) => {
     const ext = fileName.split(".").pop()?.toLowerCase() || "";
     const contentType = previewMimeTypes[ext] || "application/octet-stream";
     const isMedia = contentType.startsWith("audio/") || contentType.startsWith("video/");
-    const localMediaPath = isMedia ? await resolveLocalMediaPath(storage, previewPath) : null;
-    if (isMedia && localMediaPath) {
-      const stat = await fs12.stat(localMediaPath);
+    const cachedMedia = isMedia ? await resolvePreviewCacheFile(`share:${share.share_code}`, storage, previewPath) : null;
+    if (cachedMedia) {
+      const fileOnDisk = cachedMedia.path;
+      const stat = cachedMedia.stat;
       const fileSize = stat.size;
       const etag2 = `"${fileSize}-${stat.mtimeMs}"`;
       const range = req.headers.range;
@@ -6046,11 +6266,11 @@ router9.get("/preview/:code", async (req, res) => {
         res.status(206);
         res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
         res.setHeader("Content-Length", chunkSize);
-        const stream = fsSync4.createReadStream(localMediaPath, { start, end });
+        const stream = fsSync4.createReadStream(fileOnDisk, { start, end });
         stream.pipe(res);
       } else {
         res.setHeader("Content-Length", fileSize);
-        const stream = fsSync4.createReadStream(localMediaPath);
+        const stream = fsSync4.createReadStream(fileOnDisk);
         stream.pipe(res);
       }
       return;
@@ -6077,7 +6297,7 @@ var share_default = router9;
 await init_db();
 init_config();
 import { Router as Router11 } from "express";
-import path13 from "path";
+import path14 from "path";
 var router10 = Router11();
 function maskSecrets(rawConfig) {
   const cfg = { ...rawConfig };
@@ -6133,8 +6353,8 @@ router10.get("/", authMiddleware, async (req, res) => {
       const cfg = maskSecrets(JSON.parse(pool.config || "{}"));
       let resolvedPath = "";
       if (pool.storage_type === "local") {
-        const base = path13.resolve(config_default.storage_root || "./uploads", username);
-        resolvedPath = cfg.rootPath && cfg.rootPath !== "/" ? path13.join(base, cfg.rootPath) : base;
+        const base = path14.resolve(config_default.storage_root || "./uploads", username);
+        resolvedPath = cfg.rootPath && cfg.rootPath !== "/" ? path14.join(base, cfg.rootPath) : base;
       }
       return {
         id: pool.id,
@@ -6317,11 +6537,11 @@ router10.post("/:id/test", authMiddleware, async (req, res) => {
     }
     const poolConfig = JSON.parse(pool.config || "{}");
     if (pool.storage_type === "local") {
-      const fs14 = await import("fs/promises");
+      const fs12 = await import("fs/promises");
       const user = await db_default.prepare("SELECT username FROM users WHERE id = ?").get(req.userId);
-      const localPath = path13.resolve(config_default.storage_root || "./uploads", user?.username || "");
+      const localPath = path14.resolve(config_default.storage_root || "./uploads", user?.username || "");
       try {
-        await fs14.access(localPath);
+        await fs12.access(localPath);
         return res.json({ success: true, message: `\u672C\u5730\u8DEF\u5F84\u53EF\u8BBF\u95EE: ${localPath}` });
       } catch {
         return res.json({ success: false, message: `\u672C\u5730\u8DEF\u5F84\u4E0D\u53EF\u8BBF\u95EE: ${localPath}` });
@@ -6406,25 +6626,20 @@ router11.post("/:id/restore", authMiddleware, async (req, res) => {
     const storage = getStorageByPoolId(req.userId, item.storage_pool_id);
     const exists = await storage.exists(item.original_path).catch(() => false);
     if (exists) {
-      return res.status(400).json({ error: "\u539F\u8DEF\u5F84\u5DF2\u5B58\u5728\u540C\u540D\u6587\u4EF6\uFF0C\u65E0\u6CD5\u6062\u590D" });
+      return res.status(400).json({ error: "\u539F\u8DEF\u5F84\u5DF2\u5B58\u5728\u540C\u540D\u6587\u4EF6\u6216\u76EE\u5F55\uFF0C\u65E0\u6CD5\u6062\u590D" });
     }
-    const trashPathNew = `/.trash/${item.id}_${item.file_name}`;
-    const trashPathOld = `/.trash/${item.file_name}`;
     let restored = false;
-    for (const trashPath of [trashPathNew, trashPathOld]) {
-      try {
-        const data = await storage.download(trashPath);
-        await storage.upload(item.original_path, data);
-        await storage.remove(trashPath);
-        restored = true;
-        break;
-      } catch {
-      }
+    for (const trashPath of await resolveTrashPathCandidates(storage, item)) {
+      restored = await restoreFromTrash(storage, trashPath, item.original_path, item.file_type);
+      if (restored) break;
     }
-    if (!restored) {
+    if (!restored && item.file_type === "folder") {
+      await storage.mkdir(item.original_path).catch(() => {
+      });
+      restored = await storage.exists(item.original_path).catch(() => false);
     }
     await db_default.prepare("DELETE FROM trash WHERE id = ?").run(item.id);
-    res.json({ message: "\u6587\u4EF6\u5DF2\u6062\u590D" });
+    res.json({ message: restored ? "\u5DF2\u6062\u590D" : "\u5DF2\u79FB\u9664\u56DE\u6536\u7AD9\u8BB0\u5F55" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -6436,10 +6651,10 @@ router11.delete("/:id", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "\u56DE\u6536\u7AD9\u9879\u76EE\u4E0D\u5B58\u5728" });
     }
     const storage = getStorageByPoolId(req.userId, item.storage_pool_id);
-    await storage.remove(`/.trash/${item.id}_${item.file_name}`).catch(() => {
-    });
-    await storage.remove(`/.trash/${item.file_name}`).catch(() => {
-    });
+    for (const trashPath of await resolveTrashPathCandidates(storage, item)) {
+      await storage.remove(trashPath).catch(() => {
+      });
+    }
     await db_default.prepare("DELETE FROM trash WHERE id = ?").run(item.id);
     res.json({ message: "\u5DF2\u6C38\u4E45\u5220\u9664" });
   } catch (err) {
@@ -6451,10 +6666,10 @@ router11.delete("/", authMiddleware, async (req, res) => {
     const items = await db_default.prepare("SELECT * FROM trash WHERE user_id = ?").all(req.userId);
     for (const item of items) {
       const storage = getStorageByPoolId(req.userId, item.storage_pool_id);
-      await storage.remove(`/.trash/${item.id}_${item.file_name}`).catch(() => {
-      });
-      await storage.remove(`/.trash/${item.file_name}`).catch(() => {
-      });
+      for (const trashPath of await resolveTrashPathCandidates(storage, item)) {
+        await storage.remove(trashPath).catch(() => {
+        });
+      }
     }
     await db_default.prepare("DELETE FROM trash WHERE user_id = ?").run(req.userId);
     res.json({ message: "\u56DE\u6536\u7AD9\u5DF2\u6E05\u7A7A" });
@@ -6468,39 +6683,34 @@ var trash_default = router11;
 await init_db();
 import { Router as Router13 } from "express";
 var router12 = Router13();
-router12.get("/", authMiddleware, (req, res) => {
+router12.get("/", authMiddleware, async (req, res) => {
   try {
     const poolId = req.query.poolId;
-    let items;
-    if (poolId) {
-      items = db_default.prepare(`
-        SELECT f.*, sp.name as pool_name, sp.storage_type
-        FROM favourites f
-        JOIN storage_pools sp ON f.storage_pool_id = sp.id
-        WHERE f.user_id = ? AND f.storage_pool_id = ?
-        ORDER BY f.created_at DESC
-      `).all(req.userId, parseInt(poolId));
-    } else {
-      items = db_default.prepare(`
-        SELECT f.*, sp.name as pool_name, sp.storage_type
-        FROM favourites f
-        JOIN storage_pools sp ON f.storage_pool_id = sp.id
-        WHERE f.user_id = ?
-        ORDER BY f.created_at DESC
-      `).all(req.userId);
-    }
+    const items = poolId ? await db_default.prepare(`
+          SELECT f.*, sp.name as pool_name, sp.storage_type
+          FROM favourites f
+          JOIN storage_pools sp ON f.storage_pool_id = sp.id
+          WHERE f.user_id = ? AND f.storage_pool_id = ?
+          ORDER BY f.created_at DESC
+        `).all(req.userId, parseInt(poolId, 10)) : await db_default.prepare(`
+          SELECT f.*, sp.name as pool_name, sp.storage_type
+          FROM favourites f
+          JOIN storage_pools sp ON f.storage_pool_id = sp.id
+          WHERE f.user_id = ?
+          ORDER BY f.created_at DESC
+        `).all(req.userId);
     res.json({ items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-router12.post("/", authMiddleware, (req, res) => {
+router12.post("/", authMiddleware, async (req, res) => {
   try {
     const { filePath, fileName, fileType, storagePoolId } = req.body;
     if (!filePath || !fileName || !fileType || !storagePoolId) {
       return res.status(400).json({ error: "\u7F3A\u5C11\u5FC5\u8981\u53C2\u6570" });
     }
-    db_default.prepare(`
+    await db_default.prepare(`
       INSERT OR IGNORE INTO favourites (user_id, file_path, file_name, file_type, storage_pool_id)
       VALUES (?, ?, ?, ?, ?)
     `).run(req.userId, filePath, fileName, fileType, storagePoolId);
@@ -6509,25 +6719,25 @@ router12.post("/", authMiddleware, (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-router12.delete("/", authMiddleware, (req, res) => {
+router12.delete("/", authMiddleware, async (req, res) => {
   try {
     const { filePath, storagePoolId } = req.query;
     if (!filePath || !storagePoolId) {
       return res.status(400).json({ error: "\u7F3A\u5C11\u5FC5\u8981\u53C2\u6570" });
     }
-    db_default.prepare("DELETE FROM favourites WHERE user_id = ? AND file_path = ? AND storage_pool_id = ?").run(req.userId, filePath, parseInt(storagePoolId));
+    await db_default.prepare("DELETE FROM favourites WHERE user_id = ? AND file_path = ? AND storage_pool_id = ?").run(req.userId, filePath, parseInt(storagePoolId, 10));
     res.json({ message: "\u5DF2\u53D6\u6D88\u6536\u85CF" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-router12.get("/check", authMiddleware, (req, res) => {
+router12.get("/check", authMiddleware, async (req, res) => {
   try {
     const { filePath, storagePoolId } = req.query;
     if (!filePath || !storagePoolId) {
       return res.status(400).json({ error: "\u7F3A\u5C11\u5FC5\u8981\u53C2\u6570" });
     }
-    const item = db_default.prepare("SELECT id FROM favourites WHERE user_id = ? AND file_path = ? AND storage_pool_id = ?").get(req.userId, filePath, parseInt(storagePoolId));
+    const item = await db_default.prepare("SELECT id FROM favourites WHERE user_id = ? AND file_path = ? AND storage_pool_id = ?").get(req.userId, filePath, parseInt(storagePoolId, 10));
     res.json({ isFavourited: !!item });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -6623,15 +6833,29 @@ var public_default = router13;
 import { Router as Router15 } from "express";
 await init_db();
 var router14 = Router15();
-function getPoolId(userId, poolId) {
+var DAV_ALLOW = "OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE, PROPPATCH, COPY, LOCK, UNLOCK";
+function applyDavHeaders(res) {
+  res.setHeader("Allow", DAV_ALLOW);
+  res.setHeader("Public", DAV_ALLOW);
+  res.setHeader("DAV", "1");
+  res.setHeader("MS-Author-Via", "DAV");
+  res.setHeader("Accept-Ranges", "bytes");
+}
+function detectDavClient(req) {
+  const ua = (req.get("user-agent") || "").toLowerCase();
+  if (ua.includes("microsoft-webdav-miniredir")) return "windows";
+  if (ua.includes("webdavfs") || ua.includes("finder")) return "finder";
+  return "generic";
+}
+async function getPoolId(userId, poolId) {
   if (poolId) return Number(poolId);
-  const pool = db_default.prepare("SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1").get(userId);
+  const pool = await db_default.prepare("SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1").get(userId);
   return pool?.id;
 }
 function normalizeDavPath(inputPath) {
   return decodeURIComponent((inputPath || "").replace(/^\/+/, "").replace(/\\/g, "/"));
 }
-function extractPoolScope(userId, rawRoutePath, queryPoolId) {
+async function extractPoolScope(userId, rawRoutePath, queryPoolId) {
   const normalized = normalizeDavPath(rawRoutePath);
   const match = normalized.match(/^(?:pool|p)\/(\d+)(?:\/(.*))?$/);
   if (match) {
@@ -6642,7 +6866,7 @@ function extractPoolScope(userId, rawRoutePath, queryPoolId) {
       usingPathPool: true
     };
   }
-  const poolId = getPoolId(userId, queryPoolId);
+  const poolId = await getPoolId(userId, queryPoolId);
   return {
     poolId,
     storagePath: normalized,
@@ -6655,31 +6879,46 @@ function appendEncodedPath(basePath, filePath) {
   const encodedPath = filePath.split("/").filter(Boolean).map(encodeURIComponent).join("/");
   return encodedPath ? `${trimmedBasePath}/${encodedPath}` : `${trimmedBasePath}/`;
 }
-function buildHref(baseUrl, filePath, searchParams) {
+function buildHref(baseUrl, filePath, profile, searchParams) {
   const url = new URL(baseUrl);
   url.pathname = appendEncodedPath(url.pathname, filePath);
   url.search = searchParams?.toString() || "";
+  if (profile === "windows") {
+    return `${url.pathname}${url.search ? `?${url.searchParams.toString()}` : ""}`;
+  }
   return url.toString();
 }
 function escapeXml(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
-function createPropResponse(baseUrl, item, searchParams) {
-  const hrefValue = buildHref(baseUrl, item.path, searchParams);
-  const href = escapeXml(item.type === "folder" && !hrefValue.endsWith("/") ? `${hrefValue}/` : hrefValue);
-  const displayName = escapeXml(item.name || "/");
+function createPropResponse(baseUrl, item, profile, searchParams, isSelf = false) {
+  const hrefValue = buildHref(baseUrl, item.path, profile, searchParams);
+  const normalizedHref = profile === "windows" ? hrefValue : item.type === "folder" && !hrefValue.endsWith("/") ? `${hrefValue}/` : hrefValue;
+  const href = escapeXml(normalizedHref);
+  const fallbackName = decodeURIComponent(new URL(baseUrl, "http://localhost").pathname.split("/").filter(Boolean).pop() || "/");
+  const displayName = escapeXml(item.name || fallbackName);
   const contentLength = String(item.size || 0);
+  const created = escapeXml(new Date(item.modified).toISOString());
   const modified = escapeXml(new Date(item.modified).toUTCString());
   const resourceType = item.type === "folder" ? "<D:collection />" : "";
+  const contentType = escapeXml(item.type === "folder" ? "httpd/unix-directory" : "application/octet-stream");
+  const etag = escapeXml(`"${item.size || 0}-${new Date(item.modified).getTime()}"`);
+  const isCollection = item.type === "folder" ? "1" : "0";
   return `
     <D:response>
       <D:href>${href}</D:href>
       <D:propstat>
         <D:prop>
           <D:displayname>${displayName}</D:displayname>
+          <D:creationdate>${created}</D:creationdate>
+          <D:getcontenttype>${contentType}</D:getcontenttype>
           <D:getcontentlength>${contentLength}</D:getcontentlength>
           <D:getlastmodified>${modified}</D:getlastmodified>
+          <D:getetag>${etag}</D:getetag>
+          <D:iscollection>${isCollection}</D:iscollection>
           <D:resourcetype>${resourceType}</D:resourcetype>
+          ${isSelf ? "<D:supportedlock />" : ""}
+          ${isSelf ? "<D:lockdiscovery />" : ""}
         </D:prop>
         <D:status>HTTP/1.1 200 OK</D:status>
       </D:propstat>
@@ -6687,16 +6926,15 @@ function createPropResponse(baseUrl, item, searchParams) {
   `.trim();
 }
 router14.options("/*", (_req, res) => {
-  res.setHeader("Allow", "OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE");
-  res.setHeader("DAV", "1, 2");
-  res.setHeader("MS-Author-Via", "DAV");
+  applyDavHeaders(res);
   res.status(200).end();
 });
 router14.use(flexibleAuth);
 router14.all("/*", async (req, res) => {
   try {
+    const clientProfile = detectDavClient(req);
     const rawRoutePath = req.params[0] || "";
-    const scope = extractPoolScope(req.userId, rawRoutePath, req.query.poolId);
+    const scope = await extractPoolScope(req.userId, rawRoutePath, req.query.poolId);
     const poolId = scope.poolId;
     if (!poolId) {
       return res.status(400).json({ error: "\u5B58\u50A8\u6C60\u4E0D\u5B58\u5728" });
@@ -6719,12 +6957,17 @@ router14.all("/*", async (req, res) => {
       }
     }
     if (req.method === "PROPFIND") {
+      applyDavHeaders(res);
       const depth = req.headers.depth === "0" ? 0 : 1;
       const info = pathFromRoute ? await storage.info(pathFromRoute).catch(() => null) : null;
+      if (pathFromRoute && !info) {
+        res.status(404).end();
+        return;
+      }
       const items = pathFromRoute ? info?.type === "folder" ? await storage.list(pathFromRoute) : info ? [info] : [] : await storage.list("");
       const responses = [];
       if (pathFromRoute && info) {
-        responses.push(createPropResponse(baseUrl, info, sharedSearchParams));
+        responses.push(createPropResponse(baseUrl, info, clientProfile, sharedSearchParams, true));
       } else if (!pathFromRoute) {
         responses.push(createPropResponse(baseUrl, {
           path: "",
@@ -6732,11 +6975,11 @@ router14.all("/*", async (req, res) => {
           type: "folder",
           size: 0,
           modified: (/* @__PURE__ */ new Date()).toISOString()
-        }, sharedSearchParams));
+        }, clientProfile, sharedSearchParams, true));
       }
       if (depth !== 0) {
         for (const item of items) {
-          responses.push(createPropResponse(baseUrl, item, sharedSearchParams));
+          responses.push(createPropResponse(baseUrl, item, clientProfile, sharedSearchParams));
         }
       }
       const xml = `<?xml version="1.0" encoding="utf-8"?>
@@ -6747,20 +6990,27 @@ ${responses.join("\n")}
       return;
     }
     if (req.method === "HEAD") {
+      applyDavHeaders(res);
       if (!pathFromRoute) {
-        res.status(200).setHeader("DAV", "1, 2").setHeader("MS-Author-Via", "DAV").setHeader("Allow", "OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE").end();
+        res.status(200).end();
         return;
       }
       const info = await storage.info(pathFromRoute);
       if (info.type === "folder") {
-        res.status(200).setHeader("DAV", "1, 2").setHeader("MS-Author-Via", "DAV").setHeader("Allow", "OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE").end();
+        res.status(200).end();
         return;
       }
-      res.status(200).setHeader("Content-Length", info.size || 0).setHeader("Allow", "OPTIONS, HEAD, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE").end();
+      res.status(200).setHeader("Content-Length", info.size || 0).end();
       return;
     }
     if (req.method === "GET") {
+      applyDavHeaders(res);
       if (!pathFromRoute) {
+        const clientProfile2 = detectDavClient(req);
+        if (clientProfile2 === "windows") {
+          res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").send("<html><body>WebDAV endpoint</body></html>");
+          return;
+        }
         res.status(200).type("text/plain; charset=utf-8").send(`WebDAV endpoint is reachable.
 Pool ID: ${poolId}
 Finder/Cyberduck should prefer ${scope.basePath}
@@ -6768,10 +7018,12 @@ Use a WebDAV client or PROPFIND to browse directories.`);
         return;
       }
       const data = await storage.download(pathFromRoute);
+      res.setHeader("Content-Length", data.length);
       res.send(data);
       return;
     }
     if (req.method === "PUT") {
+      applyDavHeaders(res);
       const chunks = [];
       for await (const chunk of req) {
         chunks.push(Buffer.from(chunk));
@@ -6781,29 +7033,79 @@ Use a WebDAV client or PROPFIND to browse directories.`);
       return;
     }
     if (req.method === "DELETE") {
+      applyDavHeaders(res);
       await storage.remove(pathFromRoute);
       res.status(204).end();
       return;
     }
     if (req.method === "MKCOL") {
+      applyDavHeaders(res);
       await storage.mkdir(pathFromRoute);
       res.status(201).end();
       return;
     }
     if (req.method === "MOVE") {
+      applyDavHeaders(res);
       const destination = Array.isArray(req.headers.destination) ? req.headers.destination[0] : req.headers.destination;
       if (!destination) {
         return res.status(400).json({ error: "\u7F3A\u5C11 Destination" });
       }
       const targetUrl = new URL(destination);
       const targetRawPath = normalizeDavPath(targetUrl.pathname.replace(/^\/dav\/?/, ""));
-      const targetScope = extractPoolScope(req.userId, targetRawPath);
+      const targetScope = await extractPoolScope(req.userId, targetRawPath);
       if (targetScope.poolId !== poolId) {
         return res.status(400).json({ error: "\u6682\u4E0D\u652F\u6301\u8DE8\u5B58\u50A8\u6C60\u79FB\u52A8" });
       }
-      const targetPath = targetScope.storagePath;
-      await storage.move(pathFromRoute, targetPath);
+      await storage.move(pathFromRoute, targetScope.storagePath);
       res.status(201).end();
+      return;
+    }
+    if (req.method === "COPY") {
+      const destination = Array.isArray(req.headers.destination) ? req.headers.destination[0] : req.headers.destination;
+      if (!destination) {
+        return res.status(400).json({ error: "\u7F3A\u5C11 Destination" });
+      }
+      const targetUrl = new URL(destination);
+      const targetRawPath = normalizeDavPath(targetUrl.pathname.replace(/^\/dav\/?/, ""));
+      const targetScope = await extractPoolScope(req.userId, targetRawPath);
+      if (targetScope.poolId !== poolId) {
+        return res.status(400).json({ error: "\u6682\u4E0D\u652F\u6301\u8DE8\u5B58\u50A8\u6C60\u590D\u5236" });
+      }
+      await storage.copy(pathFromRoute, targetScope.storagePath);
+      res.status(201).end();
+      return;
+    }
+    if (req.method === "PROPPATCH") {
+      res.status(207).setHeader("Content-Type", "application/xml; charset=utf-8").send(`<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>${escapeXml(buildHref(baseUrl, pathFromRoute, clientProfile, sharedSearchParams))}</D:href>
+    <D:propstat>
+      <D:prop />
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>`);
+      return;
+    }
+    if (req.method === "LOCK") {
+      res.status(200).setHeader("Lock-Token", "<opaquelocktoken:vuefilemanager>").setHeader("Content-Type", "application/xml; charset=utf-8").send(`<?xml version="1.0" encoding="utf-8"?>
+<D:prop xmlns:D="DAV:">
+  <D:lockdiscovery>
+    <D:activelock>
+      <D:locktype><D:write/></D:locktype>
+      <D:lockscope><D:exclusive/></D:lockscope>
+      <D:depth>Infinity</D:depth>
+      <D:owner><D:href>VueFileManager</D:href></D:owner>
+      <D:timeout>Second-3600</D:timeout>
+      <D:locktoken><D:href>opaquelocktoken:vuefilemanager</D:href></D:locktoken>
+    </D:activelock>
+  </D:lockdiscovery>
+</D:prop>`);
+      return;
+    }
+    if (req.method === "UNLOCK") {
+      res.status(204).end();
       return;
     }
     res.status(405).end();
@@ -6831,14 +7133,14 @@ var publicRouteModules = [
 ];
 
 // server/app/spa.ts
-import path14 from "path";
+import path15 from "path";
 function isAppFallbackPath(pathname) {
   return !(pathname === "/api" || pathname.startsWith("/api/") || pathname === "/dav" || pathname.startsWith("/dav/") || pathname === "/f" || pathname.startsWith("/f/") || pathname === "/plugins" || pathname.startsWith("/plugins/"));
 }
 function registerSpaFallback(app2, rootDir) {
   app2.get("*", (req, res) => {
     if (isAppFallbackPath(req.path)) {
-      res.sendFile(path14.join(rootDir, "dist", "index.html"));
+      res.sendFile(path15.join(rootDir, "dist", "index.html"));
     }
   });
 }
@@ -6847,19 +7149,19 @@ function registerSpaFallback(app2, rootDir) {
 init_runtime_paths();
 
 // server/app/watch-config.ts
-import fs13 from "fs";
-import path15 from "path";
+import fs11 from "fs";
+import path16 from "path";
 function watchConfigFile(rootDir, serverEntryPath) {
-  const configFilePath = path15.join(rootDir, "config.yml");
+  const configFilePath = path16.join(rootDir, "config.yml");
   let configWatchDebounce = null;
   try {
-    fs13.watch(configFilePath, () => {
+    fs11.watch(configFilePath, () => {
       if (configWatchDebounce) return;
       configWatchDebounce = setTimeout(() => {
         configWatchDebounce = null;
         console.log("\n\u{1F504} \u68C0\u6D4B\u5230 config.yml \u53D8\u66F4\uFF0C\u6B63\u5728\u91CD\u542F...");
         const time = /* @__PURE__ */ new Date();
-        fs13.utimesSync(serverEntryPath, time, time);
+        fs11.utimesSync(serverEntryPath, time, time);
       }, 500);
     });
   } catch {
