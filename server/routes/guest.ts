@@ -583,7 +583,12 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
     const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const fullPath = basePath ? `${basePath}/${filePath}` : filePath
 
-    await storage.upload(fullPath, Buffer.from(content, 'utf-8'))
+    const buffer = Buffer.from(content, 'utf-8')
+    await storage.upload(fullPath, buffer)
+    const savedBuffer = await storage.download(fullPath)
+    if (savedBuffer.toString('utf-8') !== content) {
+      throw new Error('Saved content verification failed')
+    }
     res.json({ success: true, path: filePath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })

@@ -164,6 +164,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
   let pdfDoc: any = null
 
   const textContent = ref('')
+  const textReloadVersion = ref(0)
   const isSaving = ref(false)
   const saveMsg = ref('')
   let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -282,7 +283,8 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         })
       } else {
         await api.post('/files/write', { path: props.filePath, content: textContent.value, poolId: props.poolId })
-      }
+        }
+      textReloadVersion.value = Date.now()
       await loadTextContent({ preserveLoadingState: true, reinitializeEditor: false })
       saveMsg.value = '已保存'
     } catch (err: any) {
@@ -493,7 +495,9 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       loading.value = true
     }
     try {
-      const response = await fetch(previewUrl.value, {
+      const requestUrl = new URL(previewUrl.value, window.location.origin)
+      requestUrl.searchParams.set('_t', String(textReloadVersion.value || Date.now()))
+      const response = await fetch(requestUrl.toString(), {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',

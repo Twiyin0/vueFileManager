@@ -71,13 +71,19 @@ export class LocalStorage implements StorageProvider {
   }
 
   async upload(filePath: string, data: Buffer): Promise<void> {
-    const fullPath = this.fullPath(filePath)
+    let fullPath = this.fullPath(filePath)
+    if (await this.exists(filePath)) {
+      fullPath = await this.resolvePath(filePath)
+    }
     await fs.mkdir(path.dirname(fullPath), { recursive: true })
     await fs.writeFile(fullPath, data)
   }
 
   async uploadStream(filePath: string, stream: NodeJS.ReadableStream): Promise<void> {
-    const fullPath = this.fullPath(filePath)
+    let fullPath = this.fullPath(filePath)
+    if (await this.exists(filePath)) {
+      fullPath = await this.resolvePath(filePath)
+    }
     await fs.mkdir(path.dirname(fullPath), { recursive: true })
     const writeStream = fsSync.createWriteStream(fullPath)
     await pipeline(stream, writeStream)

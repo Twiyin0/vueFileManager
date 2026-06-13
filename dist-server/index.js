@@ -2247,12 +2247,18 @@ var LocalStorage = class {
     }
   }
   async upload(filePath, data) {
-    const fullPath = this.fullPath(filePath);
+    let fullPath = this.fullPath(filePath);
+    if (await this.exists(filePath)) {
+      fullPath = await this.resolvePath(filePath);
+    }
     await fs5.mkdir(path5.dirname(fullPath), { recursive: true });
     await fs5.writeFile(fullPath, data);
   }
   async uploadStream(filePath, stream) {
-    const fullPath = this.fullPath(filePath);
+    let fullPath = this.fullPath(filePath);
+    if (await this.exists(filePath)) {
+      fullPath = await this.resolvePath(filePath);
+    }
     await fs5.mkdir(path5.dirname(fullPath), { recursive: true });
     const writeStream = fsSync.createWriteStream(fullPath);
     await pipeline(stream, writeStream);
@@ -5844,7 +5850,12 @@ router8.post("/:username/:shareId/write", async (req, res) => {
     const storage = getStorageByPoolId(user.id, share.storage_pool_id);
     const basePath = (share.folder_path || "").replace(/\\/g, "/");
     const fullPath = basePath ? `${basePath}/${filePath}` : filePath;
-    await storage.upload(fullPath, Buffer.from(content, "utf-8"));
+    const buffer = Buffer.from(content, "utf-8");
+    await storage.upload(fullPath, buffer);
+    const savedBuffer = await storage.download(fullPath);
+    if (savedBuffer.toString("utf-8") !== content) {
+      throw new Error("Saved content verification failed");
+    }
     res.json({ success: true, path: filePath });
   } catch (err) {
     res.status(500).json({ error: err.message });
