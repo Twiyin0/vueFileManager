@@ -1,9 +1,10 @@
 import fs from 'fs'
-import path from 'path'
 import yaml from 'js-yaml'
 import { resolveFromRoot } from './runtime-paths'
 
 const configPath = resolveFromRoot('config.yml')
+
+export type AppLanguage = 'zh-CN' | 'en-US'
 
 interface StoragePoolConfig {
   name: string
@@ -66,8 +67,10 @@ interface Config {
     host: string
     jwt_secret: string
   }
+  language: AppLanguage
   storage_root: string
   upload_limit: number
+  max_concurrent_uploads: number
   resumable_upload_cache_minutes: number
   ip_list_mode: 'blacklist' | 'whitelist'
   site: {
@@ -90,8 +93,10 @@ const defaultConfig: Config = {
     host: '',
     jwt_secret: 'vue-file-manager-secret-key-2024'
   },
+  language: 'zh-CN',
   storage_root: './uploads',
   upload_limit: 100,
+  max_concurrent_uploads: 3,
   resumable_upload_cache_minutes: 120,
   ip_list_mode: 'blacklist',
   site: {
@@ -143,14 +148,20 @@ const defaultConfig: Config = {
   }
 }
 
+function normalizeLanguage(language: unknown): AppLanguage {
+  return language === 'en-US' ? 'en-US' : 'zh-CN'
+}
+
 function mergeConfig(loaded: any): Config {
   return {
     admin: { ...defaultConfig.admin, ...loaded.admin },
     server: { ...defaultConfig.server, ...loaded.server },
+    language: normalizeLanguage(loaded.language),
     storage_root: loaded.storage_root || defaultConfig.storage_root,
-    upload_limit: loaded.upload_limit || defaultConfig.upload_limit,
+    upload_limit: Number(loaded.upload_limit || defaultConfig.upload_limit),
+    max_concurrent_uploads: Number(loaded.max_concurrent_uploads || defaultConfig.max_concurrent_uploads),
     resumable_upload_cache_minutes: loaded.resumable_upload_cache_minutes ?? defaultConfig.resumable_upload_cache_minutes,
-    ip_list_mode: loaded.ip_list_mode || defaultConfig.ip_list_mode,
+    ip_list_mode: loaded.ip_list_mode === 'whitelist' ? 'whitelist' : 'blacklist',
     site: { ...defaultConfig.site, ...loaded.site },
     database: {
       type: loaded.database?.type || defaultConfig.database.type,
@@ -158,7 +169,9 @@ function mergeConfig(loaded: any): Config {
       mysql: { ...defaultConfig.database.mysql, ...loaded.database?.mysql },
       postgres: { ...defaultConfig.database.postgres, ...loaded.database?.postgres }
     },
-    storage_pools: loaded.storage_pools || defaultConfig.storage_pools,
+    storage_pools: Array.isArray(loaded.storage_pools) && loaded.storage_pools.length > 0
+      ? loaded.storage_pools
+      : defaultConfig.storage_pools,
     smtp: { ...defaultConfig.smtp, ...loaded.smtp },
     plugins: { ...defaultConfig.plugins, ...loaded.plugins }
   }

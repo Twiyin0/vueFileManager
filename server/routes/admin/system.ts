@@ -1,27 +1,54 @@
 import { Router, Response } from 'express'
-import config, { updateConfigFile } from '../../config'
+import config, { type AppLanguage, updateConfigFile } from '../../config'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../../middleware/auth'
 import { getDatabaseStatus, testDatabaseConnection } from '../../services/database'
 import { sendServerError } from './shared'
 
 const router = Router()
 
+function isSupportedLanguage(language: unknown): language is AppLanguage {
+  return language === 'zh-CN' || language === 'en-US'
+}
+
 router.get('/upload-limit', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {
-  res.json({ upload_limit: config.upload_limit })
+  res.json({
+    upload_limit: config.upload_limit,
+    max_concurrent_uploads: config.max_concurrent_uploads,
+    language: config.language
+  })
 })
 
 router.put('/upload-limit', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
-  const { upload_limit } = req.body
+  const { upload_limit, max_concurrent_uploads, language } = req.body
+
   if (typeof upload_limit !== 'number' || upload_limit < 1 || upload_limit > 10240) {
-    return res.status(400).json({ error: 'Upload limit must be between 1 and 10240 MB' })
+    return res.status(400).json({ error: 'upload_limit must be between 1 and 10240 MB' })
+  }
+
+  if (typeof max_concurrent_uploads !== 'number' || max_concurrent_uploads < 1 || max_concurrent_uploads > 16) {
+    return res.status(400).json({ error: 'max_concurrent_uploads must be between 1 and 16' })
+  }
+
+  if (!isSupportedLanguage(language)) {
+    return res.status(400).json({ error: 'language must be zh-CN or en-US' })
   }
 
   config.upload_limit = upload_limit
+  config.max_concurrent_uploads = max_concurrent_uploads
+  config.language = language
+
   updateConfigFile((rawConfig) => {
     rawConfig.upload_limit = upload_limit
+    rawConfig.max_concurrent_uploads = max_concurrent_uploads
+    rawConfig.language = language
   })
 
-  res.json({ upload_limit, message: 'Upload limit saved. Restart the service to fully apply it.' })
+  res.json({
+    upload_limit,
+    max_concurrent_uploads,
+    language,
+    message: 'System settings saved. Restart the service to fully apply them.'
+  })
 })
 
 router.get('/database', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {

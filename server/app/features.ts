@@ -8,12 +8,13 @@ export function createPublicPlatformRouter() {
 
   router.get('/site-config', (_req, res) => {
     res.json({
+      language: config.language,
       icp_beian: config.site?.icp_beian || '',
       police_beian: config.site?.police_beian || '',
       smtp_enabled: config.smtp?.enabled || false,
       themes_enabled: config.plugins?.enabled || false,
       plugins_enabled: config.plugins?.enabled || false,
-      webdav_enabled: true,
+      webdav_enabled: true
     })
   })
 
@@ -48,7 +49,9 @@ export function createPublicPlatformRouter() {
     const success = togglePlugin(name, enabled)
     if (!success) return res.status(404).json({ error: '插件不存在' })
 
-    res.json({ message: enabled ? '插件已启用（重启后生效）' : '插件已禁用（重启后生效）' })
+    res.json({
+      message: enabled ? '插件已启用，重启服务后生效' : '插件已禁用，重启服务后生效'
+    })
   })
 
   router.put('/themes/:name/toggle', (req, res) => {
@@ -70,7 +73,9 @@ export function createPublicPlatformRouter() {
     const success = toggleTheme(name, enabled)
     if (!success) return res.status(404).json({ error: '主题不存在' })
 
-    res.json({ message: enabled ? '主题已启用（重启后生效）' : '主题已禁用（重启后生效）' })
+    res.json({
+      message: enabled ? '主题已启用，重启服务后生效' : '主题已禁用，重启服务后生效'
+    })
   })
 
   return router

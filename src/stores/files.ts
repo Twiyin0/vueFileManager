@@ -70,7 +70,7 @@ export const useFilesStore = defineStore('files', () => {
     await fetchFiles(currentPath.value)
   }
 
-  async function downloadFile(path: string, poolId?: number) {
+  async function fetchDownloadBlob(path: string, poolId?: number) {
     const token = localStorage.getItem('token')
     const params = new URLSearchParams({ path })
     if (poolId) params.set('poolId', String(poolId))
@@ -78,14 +78,55 @@ export const useFilesStore = defineStore('files', () => {
     const response = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
-    if (!response.ok) throw new Error('下载失败')
-    const blob = await response.blob()
-    const fileName = path.split('/').pop() || 'download'
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(a.href)
+
+    if (!response.ok) {
+      throw new Error('下载失败')
+    }
+
+    return response.blob()
+  }
+
+  function triggerBrowserDownload(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  async function downloadFile(path: string, poolId?: number) {
+    const blob = await fetchDownloadBlob(path, poolId)
+    triggerBrowserDownload(blob, path.split('/').pop() || 'download')
+  }
+
+  async function downloadFiles(items: Array<{ path: string; poolId?: number }>, concurrency: number = 3) {
+    if (items.length === 0) return
+
+    const limit = Math.max(1, Math.min(concurrency, items.length))
+    const failures: string[] = []
+    let nextIndex = 0
+
+    const worker = async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex++
+        const item = items[currentIndex]
+
+        try {
+          const blob = await fetchDownloadBlob(item.path, item.poolId)
+          triggerBrowserDownload(blob, item.path.split('/').pop() || `download-${currentIndex + 1}`)
+        } catch (err) {
+          console.error('Download failed:', item.path, err)
+          failures.push(item.path.split('/').pop() || item.path)
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: limit }, () => worker()))
+
+    if (failures.length > 0) {
+      throw new Error(`部分文件下载失败：${failures.slice(0, 3).join('、')}${failures.length > 3 ? ' 等' : ''}`)
+    }
   }
 
   function formatSize(bytes: number): string {
@@ -101,8 +142,18 @@ export const useFilesStore = defineStore('files', () => {
   }
 
   return {
-    files, currentPath, loading, error, readme,
-    fetchFiles, uploadFile, deleteFile, createFolder, downloadFile,
-    formatSize, formatDate
+    files,
+    currentPath,
+    loading,
+    error,
+    readme,
+    fetchFiles,
+    uploadFile,
+    deleteFile,
+    createFolder,
+    downloadFile,
+    downloadFiles,
+    formatSize,
+    formatDate
   }
 })

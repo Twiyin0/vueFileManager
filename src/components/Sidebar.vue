@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/Icon.vue'
 import { getSidebarSections } from '@/app/modules'
+import { useI18n } from '@/composables/useI18n'
 
 const props = defineProps<{
   collapsed?: boolean
@@ -16,15 +17,15 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const route = useRoute()
+const { t } = useI18n()
 
-// 侧边栏宽度（可拖拽调节）
 const sidebarWidth = ref(Number(localStorage.getItem('sidebarWidth')) || 224)
 const isDragging = ref(false)
 const MIN_WIDTH = 160
 const MAX_WIDTH = 400
 
-function onDragStart(e: MouseEvent) {
-  e.preventDefault()
+function onDragStart(event: MouseEvent) {
+  event.preventDefault()
   isDragging.value = true
   document.addEventListener('mousemove', onDragMove)
   document.addEventListener('mouseup', onDragEnd)
@@ -32,10 +33,9 @@ function onDragStart(e: MouseEvent) {
   document.body.style.userSelect = 'none'
 }
 
-function onDragMove(e: MouseEvent) {
+function onDragMove(event: MouseEvent) {
   if (!isDragging.value) return
-  const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, e.clientX))
-  sidebarWidth.value = newWidth
+  sidebarWidth.value = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, event.clientX))
 }
 
 function onDragEnd() {
@@ -61,68 +61,67 @@ function isActive(path: string) {
 
 <template>
   <aside
-    class="sidebar-aside flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden relative"
+    class="sidebar-aside relative flex flex-shrink-0 flex-col overflow-hidden transition-all duration-300"
     :class="collapsed ? 'w-16' : ''"
-    :style="collapsed ? '' : { width: sidebarWidth + 'px' }"
+    :style="collapsed ? '' : { width: `${sidebarWidth}px` }"
   >
-    <!-- 收缩按钮 -->
-    <div class="px-2 pt-2 pb-1">
+    <div class="px-2 pb-1 pt-2">
       <button
-        @click="emit('toggle')"
-        class="w-full flex items-center justify-center p-2 transition-colors rounded-md"
+        class="w-full rounded-md p-2 transition-colors"
         style="color: var(--text-secondary-color)"
-        :title="collapsed ? '展开侧边栏' : '收缩侧边栏'"
+        :title="collapsed ? t('common.expand', '展开') : t('common.collapse', '收起')"
+        @click="emit('toggle')"
       >
-        <Icon name="chevron-left-double" class="w-4 h-4 transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''" />
+        <div class="flex items-center justify-center">
+          <Icon name="chevron-left-double" class="h-4 w-4 transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''" />
+        </div>
       </button>
     </div>
 
-    <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+    <nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
       <template v-for="section in sections" :key="section.id">
-        <div v-if="section.title" class="sidebar-divider my-2 mx-1">
-          <p v-if="!collapsed" class="px-2 pt-1 pb-0.5 text-xs uppercase tracking-wider" style="color: var(--text-secondary-color); opacity: 0.6">{{ section.title }}</p>
+        <div v-if="section.title" class="sidebar-divider mx-1 my-2">
+          <p v-if="!collapsed" class="px-2 pb-0.5 pt-1 text-xs uppercase tracking-wider" style="color: var(--text-secondary-color); opacity: 0.6">
+            {{ section.titleKey ? t(section.titleKey, section.title) : section.title }}
+          </p>
         </div>
 
         <router-link
           v-for="item in section.items"
           :key="item.path"
           :to="item.path"
-          class="sidebar-item flex items-center text-sm transition-all duration-150 relative"
+          class="sidebar-item relative flex items-center text-sm transition-all duration-150"
           :class="[
             collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5',
             isActive(item.path) ? 'sidebar-item-active' : ''
           ]"
-          :title="collapsed ? item.label : undefined"
+          :title="collapsed ? (item.labelKey ? t(item.labelKey, item.label) : item.label) : undefined"
         >
-          <Icon :name="item.icon" class="w-5 h-5 flex-shrink-0" />
-          <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
+          <Icon :name="item.icon" class="h-5 w-5 flex-shrink-0" />
+          <span v-if="!collapsed" class="truncate">{{ item.labelKey ? t(item.labelKey, item.label) : item.label }}</span>
         </router-link>
       </template>
 
-      <!-- 访客模式入口 -->
-      <div class="sidebar-divider my-2 mx-1" />
+      <div class="sidebar-divider mx-1 my-2" />
       <router-link
         to="/guest"
-        class="sidebar-item flex items-center text-sm transition-all duration-150 relative"
+        class="sidebar-item relative flex items-center text-sm transition-all duration-150"
         :class="collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5'"
-        :title="collapsed ? '访客模式' : undefined"
+        :title="collapsed ? t('app.guestMode', '访客模式') : undefined"
       >
-        <Icon name="globe" class="w-5 h-5 flex-shrink-0" />
-        <span v-if="!collapsed" class="truncate">访客模式</span>
+        <Icon name="globe" class="h-5 w-5 flex-shrink-0" />
+        <span v-if="!collapsed" class="truncate">{{ t('app.guestMode', '访客模式') }}</span>
       </router-link>
     </nav>
 
-    <!-- 底部留白（给 APlayer 收缩图标留空间） -->
     <div class="h-12 flex-shrink-0" />
 
-    <!-- 拖拽调节条（桌面端展开时显示） -->
     <div
       v-if="!collapsed && !mobile"
-      class="absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-10 group"
+      class="group absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize"
       @mousedown="onDragStart"
     >
-      <div class="absolute top-0 right-0 w-0.5 h-full transition-colors"
-        :class="isDragging ? 'bg-blue-500' : 'bg-transparent group-hover:bg-blue-400'" />
+      <div class="absolute right-0 top-0 h-full w-0.5 transition-colors" :class="isDragging ? 'bg-blue-500' : 'bg-transparent group-hover:bg-blue-400'" />
     </div>
   </aside>
 </template>
@@ -134,13 +133,11 @@ function isActive(path: string) {
   border-radius: 0.5rem;
 }
 
-/* 分隔线 */
 .sidebar-divider {
   border-top: 1px solid var(--border-color);
   opacity: 0.6;
 }
 
-/* 导航项基础样式 */
 .sidebar-item {
   color: var(--text-secondary-color);
   border-radius: 0.375rem;
@@ -152,7 +149,6 @@ function isActive(path: string) {
   color: var(--text-color);
 }
 
-/* 激活项：左侧竖条 + 背景高亮 */
 .sidebar-item-active {
   background-color: var(--accent-soft-color);
   color: var(--accent-color) !important;

@@ -1,20 +1,20 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { api } from '@/api'
-import { useRouter } from 'vue-router'
 import Icon from '@/components/Icon.vue'
+import { useI18n } from '@/composables/useI18n'
 
-const router = useRouter()
+const emit = defineEmits<{
+  (e: 'navigate', path: string, poolId?: number): void
+}>()
+
+const { t } = useI18n()
 const visible = ref(false)
 const query = ref('')
 const results = ref<any[]>([])
 const loading = ref(false)
 const selectedIndex = ref(0)
 const searchTimeout = ref<number>()
-
-const emit = defineEmits<{
-  (e: 'navigate', path: string, poolId?: number): void
-}>()
 
 function toggle() {
   visible.value = !visible.value
@@ -42,16 +42,16 @@ async function search() {
   }
 }
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'ArrowDown') {
-    e.preventDefault()
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
     selectedIndex.value = Math.min(selectedIndex.value + 1, results.value.length - 1)
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault()
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
     selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
-  } else if (e.key === 'Enter' && results.value[selectedIndex.value]) {
+  } else if (event.key === 'Enter' && results.value[selectedIndex.value]) {
     selectResult(results.value[selectedIndex.value])
-  } else if (e.key === 'Escape') {
+  } else if (event.key === 'Escape') {
     visible.value = false
   }
 }
@@ -64,9 +64,9 @@ function selectResult(item: any) {
   visible.value = false
 }
 
-function handleGlobalKeydown(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-    e.preventDefault()
+function handleGlobalKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+    event.preventDefault()
     toggle()
   }
 }
@@ -87,41 +87,47 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh] bg-black/50"
-      @click.self="visible = false">
-      <div class="w-full max-w-lg bg-white dark:bg-dark-card rounded-xl shadow-sm border dark:border-dark-border overflow-hidden">
-        <div class="flex items-center px-4 border-b dark:border-dark-border border-light-border">
-          <Icon name="search" class="w-5 h-5 text-gray-400" />
-          <input v-model="query" @keydown="handleKeydown"
-            class="flex-1 px-3 py-4 bg-transparent outline-none dark:text-dark-text text-light-text"
-            placeholder="搜索文件和文件夹... (Ctrl+K)" autofocus />
-          <kbd class="text-xs text-gray-400 bg-gray-100 dark:bg-dark-hover px-2 py-1 rounded">ESC</kbd>
+    <div v-if="visible" class="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-[20vh]" @click.self="visible = false">
+      <div class="w-full max-w-lg overflow-hidden rounded-xl border border-light-border bg-white shadow-sm dark:border-dark-border dark:bg-dark-card">
+        <div class="flex items-center border-b border-light-border px-4 dark:border-dark-border">
+          <Icon name="search" class="h-5 w-5 text-gray-400" />
+          <input
+            v-model="query"
+            class="flex-1 bg-transparent px-3 py-4 text-light-text outline-none dark:text-dark-text"
+            :placeholder="t('spotlight.placeholder', '搜索文件和文件夹... (Ctrl+K)')"
+            autofocus
+            @keydown="handleKeydown"
+          />
+          <kbd class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-400 dark:bg-dark-hover">ESC</kbd>
         </div>
 
         <div v-if="loading" class="p-4 text-center text-gray-500 dark:text-dark-text-secondary">
-          搜索中...
+          {{ t('spotlight.loading', '搜索中...') }}
         </div>
 
         <div v-else-if="results.length > 0" class="max-h-[300px] overflow-y-auto">
-          <button v-for="(item, index) in results" :key="item.path"
+          <button
+            v-for="(item, index) in results"
+            :key="item.path"
+            class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
+            :class="selectedIndex === index ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-dark-hover'"
             @click="selectResult(item)"
             @mouseenter="selectedIndex = index"
-            class="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors"
-            :class="selectedIndex === index ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-dark-hover'">
-            <Icon :name="item.type === 'folder' ? 'folder' : 'file-alt'" :class="['w-5 h-5', item.type === 'folder' ? 'text-blue-500' : 'text-gray-400']" />
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium dark:text-dark-text text-light-text truncate">{{ item.name }}</p>
-              <p class="text-xs text-gray-500 dark:text-dark-text-secondary truncate">{{ item.path }}</p>
+          >
+            <Icon :name="item.type === 'folder' ? 'folder' : 'file-alt'" :class="['h-5 w-5', item.type === 'folder' ? 'text-blue-500' : 'text-gray-400']" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-light-text dark:text-dark-text">{{ item.name }}</p>
+              <p class="truncate text-xs text-gray-500 dark:text-dark-text-secondary">{{ item.path }}</p>
             </div>
           </button>
         </div>
 
         <div v-else-if="query" class="p-8 text-center text-gray-500 dark:text-dark-text-secondary">
-          未找到匹配结果
+          {{ t('spotlight.noResults', '未找到匹配结果') }}
         </div>
 
-        <div v-else class="p-8 text-center text-gray-400 dark:text-dark-text-secondary text-sm">
-          输入关键词搜索文件和文件夹
+        <div v-else class="p-8 text-center text-sm text-gray-400 dark:text-dark-text-secondary">
+          {{ t('spotlight.emptyHint', '输入关键词搜索文件和文件夹') }}
         </div>
       </div>
     </div>

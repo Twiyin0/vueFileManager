@@ -22,6 +22,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
         guest_enabled INTEGER DEFAULT 0,
         guest_path TEXT DEFAULT '',
         theme TEXT DEFAULT 'system',
+        upload_concurrency INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -135,6 +136,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
         guest_enabled TINYINT(1) DEFAULT 0,
         guest_path TEXT,
         theme VARCHAR(32) DEFAULT 'system',
+        upload_concurrency INT DEFAULT 0,
         CONSTRAINT fk_user_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
@@ -246,7 +248,8 @@ export async function createBaseTables(database: DatabaseAdapter) {
       user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       guest_enabled INTEGER DEFAULT 0,
       guest_path TEXT DEFAULT '',
-      theme TEXT DEFAULT 'system'
+      theme TEXT DEFAULT 'system',
+      upload_concurrency INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS storage_pools (
@@ -516,6 +519,10 @@ async function migrateStorageQuota(db: DatabaseAdapter) {
   await addColumnIfMissing(db, 'users', 'storage_quota', db.dialect === 'mysql' || db.dialect === 'postgres' ? 'BIGINT DEFAULT 10737418240' : 'INTEGER DEFAULT 10737418240')
 }
 
+async function migrateUploadConcurrency(db: DatabaseAdapter) {
+  await addColumnIfMissing(db, 'user_settings', 'upload_concurrency', db.dialect === 'mysql' ? 'INT DEFAULT 0' : 'INTEGER DEFAULT 0')
+}
+
 async function migrateCleanLocalPath(db: DatabaseAdapter) {
   const pools = await db.prepare("SELECT id, config FROM storage_pools WHERE storage_type = 'local'").all<{ id: number; config: string }>()
   for (const pool of pools) {
@@ -585,6 +592,7 @@ export async function initializeDatabase(db: DatabaseAdapter, options: Initializ
   await migrateUserEmail(db)
   await migrateUserVerified(db)
   await migrateStorageQuota(db)
+  await migrateUploadConcurrency(db)
   await migrateCleanLocalPath(db)
   if (options.ensureAdmin !== false) {
     await ensureAdminUser(db)

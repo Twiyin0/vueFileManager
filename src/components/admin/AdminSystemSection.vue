@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import Icon from '@/components/Icon.vue'
 import type { DatabaseConfigForm, DatabaseStatus } from '@/composables/useAdminPage'
+import { useI18n } from '@/composables/useI18n'
 
 defineProps<{
   uploadLimit: number
+  maxConcurrentUploads: number
+  language: 'zh-CN' | 'en-US'
   databaseSaving: boolean
   databaseTesting: boolean
   databaseMessage: string
@@ -18,6 +21,7 @@ defineEmits<{
 }>()
 
 const databaseForm = defineModel<DatabaseConfigForm>('databaseForm', { required: true })
+const { t } = useI18n()
 </script>
 
 <template>
@@ -25,37 +29,45 @@ const databaseForm = defineModel<DatabaseConfigForm>('databaseForm', { required:
     <div class="mb-4 flex items-center justify-between">
       <h2 class="flex items-center gap-2 text-lg font-bold text-light-text dark:text-dark-text">
         <Icon name="upload" class="h-5 w-5 text-blue-500" />
-        上传限制
+        {{ t('admin.uploadLimit', '上传限制') }}
       </h2>
       <button class="btn-secondary flex items-center gap-1.5 text-sm" @click="$emit('openUploadLimit')">
         <Icon name="pen" class="h-4 w-4" />
-        修改
+        {{ t('admin.editUploadLimit', '修改系统设置') }}
       </button>
     </div>
 
-    <div class="card">
+    <div class="card space-y-3">
       <div class="flex items-center gap-3">
-        <span class="text-sm" style="color: var(--text-secondary-color)">单文件上传大小限制：</span>
+        <span class="text-sm" style="color: var(--text-secondary-color)">{{ t('admin.uploadLimitMb', '单文件上传大小限制（MB）') }}：</span>
         <span class="text-lg font-semibold" style="color: var(--text-color)">{{ uploadLimit }} MB</span>
       </div>
-      <p class="mt-2 text-xs" style="color: var(--text-secondary-color)">
-        对应 `config.yml` 中的 `upload_limit`，修改后重启服务可完全生效。
+      <div class="flex items-center gap-3">
+        <span class="text-sm" style="color: var(--text-secondary-color)">{{ t('admin.maxConcurrentUploads', '最大同时上传文件数') }}：</span>
+        <span class="text-lg font-semibold" style="color: var(--text-color)">{{ maxConcurrentUploads }}</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-sm" style="color: var(--text-secondary-color)">{{ t('admin.language', '默认语言') }}：</span>
+        <span class="text-lg font-semibold" style="color: var(--text-color)">{{ t(`language.${language}`, language) }}</span>
+      </div>
+      <p class="text-xs" style="color: var(--text-secondary-color)">
+        {{ t('admin.languageHint', '保存后会立即更新当前页面语言，其他用户刷新后生效') }}
       </p>
     </div>
 
     <div class="mb-4 mt-8 flex items-center justify-between">
       <h2 class="flex items-center gap-2 text-lg font-bold text-light-text dark:text-dark-text">
         <Icon name="database" class="h-5 w-5 text-cyan-500" />
-        数据库配置
+        {{ t('admin.database', '数据库配置') }}
       </h2>
       <div class="flex items-center gap-2">
         <button class="btn-secondary flex items-center gap-1.5 text-sm" :disabled="databaseTesting" @click="$emit('testDatabase')">
           <Icon name="check" class="h-4 w-4" />
-          {{ databaseTesting ? '测试中...' : '测试连接' }}
+          {{ databaseTesting ? t('admin.testing', '测试中...') : t('admin.testConnection', '测试连接') }}
         </button>
         <button class="btn-primary flex items-center gap-1.5 text-sm" :disabled="databaseSaving" @click="$emit('saveDatabase')">
           <Icon name="save" class="h-4 w-4" />
-          {{ databaseSaving ? '保存中...' : '保存配置' }}
+          {{ databaseSaving ? t('admin.saving', '保存中...') : t('admin.saveConfig', '保存配置') }}
         </button>
       </div>
     </div>
@@ -75,7 +87,7 @@ const databaseForm = defineModel<DatabaseConfigForm>('databaseForm', { required:
 
       <div class="grid gap-4 md:grid-cols-2">
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">数据库类型</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.databaseType', '数据库类型') }}</label>
           <select v-model="databaseForm.type" class="input-field">
             <option value="sqlite">SQLite</option>
             <option value="mysql">MySQL</option>
@@ -84,8 +96,8 @@ const databaseForm = defineModel<DatabaseConfigForm>('databaseForm', { required:
         </div>
 
         <div class="rounded-lg border px-3 py-3 text-sm" style="border-color: var(--border-color); background-color: var(--surface-color)">
-          <div class="mb-1 font-medium" style="color: var(--text-color)">运行状态</div>
-          <div style="color: var(--text-secondary-color)">{{ databaseStatus?.message || '未获取状态' }}</div>
+          <div class="mb-1 font-medium" style="color: var(--text-color)">{{ t('admin.runtimeStatus', '运行状态') }}</div>
+          <div style="color: var(--text-secondary-color)">{{ databaseStatus?.message || t('admin.unavailable', '暂未获取状态') }}</div>
           <div v-if="databaseStatus?.note" class="mt-2 text-xs" style="color: var(--text-secondary-color)">
             {{ databaseStatus.note }}
           </div>
@@ -93,61 +105,61 @@ const databaseForm = defineModel<DatabaseConfigForm>('databaseForm', { required:
       </div>
 
       <div v-if="databaseForm.type === 'sqlite'">
-        <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">SQLite 文件路径</label>
+        <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.sqlitePath', 'SQLite 文件路径') }}</label>
         <input v-model="databaseForm.sqlite.path" type="text" class="input-field" placeholder="./data/filemanager.db" />
       </div>
 
       <div v-if="databaseForm.type === 'mysql'" class="grid gap-4 md:grid-cols-2">
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Host</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.host', '主机') }}</label>
           <input v-model="databaseForm.mysql.host" type="text" class="input-field" placeholder="127.0.0.1" />
         </div>
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Port</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.port', '端口') }}</label>
           <input v-model.number="databaseForm.mysql.port" type="number" class="input-field" placeholder="3306" />
         </div>
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">User</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.username', '用户名') }}</label>
           <input v-model="databaseForm.mysql.user" type="text" class="input-field" />
         </div>
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Password</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.password', '密码') }}</label>
           <input v-model="databaseForm.mysql.password" type="password" class="input-field" />
         </div>
         <div class="md:col-span-2">
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Database</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.database', '数据库') }}</label>
           <input v-model="databaseForm.mysql.database" type="text" class="input-field" />
         </div>
         <label class="flex items-center gap-2 text-sm" style="color: var(--text-color)">
           <input v-model="databaseForm.mysql.ssl" type="checkbox" />
-          启用 SSL
+          {{ t('admin.ssl', '启用 SSL') }}
         </label>
       </div>
 
       <div v-if="databaseForm.type === 'postgres'" class="grid gap-4 md:grid-cols-2">
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Host</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.host', '主机') }}</label>
           <input v-model="databaseForm.postgres.host" type="text" class="input-field" placeholder="127.0.0.1" />
         </div>
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Port</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.port', '端口') }}</label>
           <input v-model.number="databaseForm.postgres.port" type="number" class="input-field" placeholder="5432" />
         </div>
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">User</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.username', '用户名') }}</label>
           <input v-model="databaseForm.postgres.user" type="text" class="input-field" />
         </div>
         <div>
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Password</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.password', '密码') }}</label>
           <input v-model="databaseForm.postgres.password" type="password" class="input-field" />
         </div>
         <div class="md:col-span-2">
-          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">Database</label>
+          <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.database', '数据库') }}</label>
           <input v-model="databaseForm.postgres.database" type="text" class="input-field" />
         </div>
         <label class="flex items-center gap-2 text-sm" style="color: var(--text-color)">
           <input v-model="databaseForm.postgres.ssl" type="checkbox" />
-          启用 SSL
+          {{ t('admin.ssl', '启用 SSL') }}
         </label>
       </div>
     </div>

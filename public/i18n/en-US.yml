@@ -1,0 +1,440 @@
+app:
+  name: VueFileManager
+  login: Login
+  logout: Logout
+  settings: Settings
+  guestMode: Guest Mode
+  github: GitHub
+  loading: Loading...
+nav:
+  fileManager: File Manager
+  offlineTasks: Offline Tasks
+  favourites: Favourites
+  myShares: My Shares
+  trash: Trash
+  storagePools: Storage Pools
+  webdav: WebDAV
+  settings: Settings
+  apiKeys: API Keys
+  plugins: Plugins
+  admin: Admin Panel
+  apiDocs: API Docs
+  themeDocs: Plugin Development
+common:
+  close: Close
+  confirm: Confirm
+  cancel: Cancel
+  delete: Delete
+  save: Save
+  edit: Edit
+  create: Create
+  search: Search
+  refresh: Refresh
+  loading: Loading...
+  noData: No data
+  unknown: Unknown
+  path: Path
+  user: User
+  username: Username
+  password: Password
+  role: Role
+  status: Status
+  email: Email
+  actions: Actions
+  quota: Quota
+  details: Details
+  host: Host
+  port: Port
+  database: Database
+  enabled: Enabled
+  disabled: Disabled
+  yes: Yes
+  no: No
+  default: Default
+  backToTop: Back to top
+language:
+  zh-CN: Simplified Chinese
+  en-US: English
+theme:
+  light: Light
+  dark: Dark
+  system: Follow System
+search:
+  shortcutHint: Ctrl+K Search
+  resultsCount: "Search results: {count} items"
+spotlight:
+  placeholder: Search files and folders... (Ctrl+K)
+  loading: Searching...
+  noResults: No matching results
+  emptyHint: Type keywords to search files and folders
+file:
+  open: Open
+  preview: Preview
+  download: Download
+  rename: Rename
+  renamePlaceholder: New name
+  move: Move
+  moveTo: Move to
+  copy: Copy
+  share: Share
+  favourite: Favourite
+  shareToGuest: Share to Guest
+  allPools: All Storage Pools
+  goUp: Up
+  listView: List View
+  gridView: Grid View
+  newFolder: New Folder
+  newFolderShort: New
+  newFolderPlaceholder: Folder name
+  uploadFile: Upload File
+  remoteUpload: Remote Upload
+  remoteUploadTitle: Remote URL Upload
+  remoteUploadMode: Upload Mode
+  remoteUploadInstant: Upload Now
+  remoteUploadOffline: Offline Download
+  remoteUploadInstantHint: The server will request the remote resource and write it to storage immediately.
+  remoteUploadOfflineHint: The server will download in the background and write into the current directory.
+  selectAll: Select All
+  unselectAll: Unselect All
+  selectedItems: "{count} items selected"
+  batchActions: Batch Actions
+  batchCopy: Batch Copy
+  batchMove: Batch Move
+  batchDownload: Download as Archive
+  batchDelete: Batch Delete
+  clearSelection: Clear Selection
+  clear: Clear
+  paste: Paste
+  pasteCount: "Paste ({count})"
+  items: items
+  details: Details
+  confirmDeleteTitle: Confirm Delete
+  confirmDeleteMessage: 'Delete "{name}"?'
+  empty: No files yet
+  name: Name
+  size: Size
+  modified: Modified
+upload:
+  shortTitle: Upload
+  title: Upload Files
+  targetPath: "Upload to: {path}"
+  rootPath: Root Directory
+  targetPool: Target Storage Pool
+  currentPool: Current Storage Pool
+  busyHint: Upload is in progress. You can close this window and keep watching progress at the bottom-right corner.
+  dropHint: Click or drag files here to upload
+  dropOverlay: Drop files here to upload
+  limitHint: Single file size is controlled by the server upload limit
+  queue: Upload Queue
+  pendingFiles: Pending Files
+  skippedFiles: "Skipped {count} system files automatically: {files}"
+  start: Start Upload
+  cancel: Cancel Upload
+  hideWindow: Hide Window
+  uploading: Uploading...
+  progressTitle: Upload Progress
+  summaryCollapsed: "Total {total}, completed {completed}, failed {failed}, active {active}"
+  summaryExpanded: "Total {total}, completed {completed}, failed {failed}, cancelled {cancelled}"
+  concurrentCount: "Active {count}"
+  statusCompleted: Completed
+  statusProcessing: Processing
+  statusCancelled: Cancelled
+  statusFailed: Failed
+player:
+  title: Player
+  expand: Expand Player
+  collapse: Collapse
+offline:
+  showPanel: Show Offline Tasks
+  panelTitle: Offline Download Tasks
+  panelDescription: Remote URL downloads are queued and executed on the server side.
+  pageTitle: Background Offline Tasks
+  pageDescription: This page shows the server-side remote download queue. Active tasks refresh automatically, and failed tasks can be retried directly.
+  statusPending: Queued
+  statusRunning: Running
+  statusCompleted: Completed
+  statusFailed: Failed
+  statusCancelled: Cancelled
+  clearFinished: Clear Finished
+  emptyTitle: No offline tasks yet
+  emptyDescription: Create one from File Manager by selecting Remote Upload and switching to offline mode.
+  unknownSize: Unknown size
+  retry: Retry
+move:
+  title: Move To
+  targetPool: Target Storage Pool
+  goUp: Go Up
+  noSubfolders: No subfolders in the current directory
+  targetSummary: "Target: {pool} / {path}"
+  selectCurrent: Select Current Directory
+  confirmHere: Move Here
+share:
+  neverExpire: Never Expires
+  hour: hour
+  day: day
+  copied: Copied
+  createdTitle: Share Link Created
+  createTitle: Create Share Link
+  fileLabel: "File: {name}"
+  signedLink: Share link (signed access required)
+  signKey: Signature key (signKey)
+  signKeyHint: "Used to generate temporary signed access. Formula: MD5(username + signKey).slice(4,12) + timestamp"
+  accessPassword: Access Password
+  copyLink: Copy Link
+  copySignedLink: Copy Signed Link
+  passwordProtection: Password Protection
+  passwordPlaceholder: Set access password
+  expiration: Expiration
+  maxDownloads: Max Downloads
+  maxDownloadsPlaceholder: Leave empty for unlimited
+  creating: Creating...
+  createAction: Create Share
+sharePage:
+  errorTitle: Access Failed
+  passwordRequiredTitle: Password Required
+  passwordRequiredDescription: This share link requires a password to access.
+  owner: "Shared by: {owner}"
+  passwordPlaceholder: Enter access password
+  verifying: Verifying...
+  verify: Verify
+  emptyFolder: Empty folder
+  signatureRequired: This share link requires signature parameters for download. Please open it with the complete signed URL.
+  downloadFile: Download File
+  previewFile: Preview File
+guestShare:
+  createTitle: Share to Guest Mode
+  editTitle: Edit Guest Share
+  createDescription: "Share folder {name} to guest mode."
+  editDescription: Update guest share permissions and display name.
+  displayName: Display Name
+  displayNamePlaceholder: Folder name shown to guests
+  permissionsTitle: Guest Permissions
+  readHint: (preview and download files)
+  writeHint: (upload files and create folders)
+  deleteHint: (delete files and folders)
+  editHint: (edit file content and rename)
+  saving: Saving...
+  sharing: Sharing...
+  confirmShare: Confirm Share
+favourites:
+  remove: Remove Favourite
+  emptyTitle: No favourites yet
+  emptyDescription: Click the star icon in the file list to add favourites.
+myShares:
+  emptyTitle: No share links yet
+  emptyDescription: Right-click a file in the file list to create a share
+  expired: Expired
+  maxedOut: Limit Reached
+  active: Active
+  downloadCount: "Downloads: {count}"
+  hasPassword: Password Protected
+  expireAt: "Expires: {time}"
+  createdAt: "Created: {time}"
+  deleteTitle: Delete Share
+  deleteMessage: 'Delete the share link for "{name}"?'
+trash:
+  loadFailed: Failed to load trash
+  restored: Restored
+  restoreFailed: Restore failed
+  deleteConfirm: 'Permanently delete "{name}"? This action cannot be undone.'
+  deleted: Permanently deleted
+  deleteFailed: Delete failed
+  emptyConfirm: Empty the trash? This action cannot be undone.
+  emptied: Trash emptied
+  emptyFailed: Failed to empty trash
+  emptyAction: Empty Trash
+  originalPath: "Original path: {path}"
+  metaLine: "Pool: {pool} · Deleted at: {time}"
+  restore: Restore
+  deletePermanent: Delete Permanently
+  emptyTitle: Trash is Empty
+  emptyDescription: Deleted files and folders will appear here.
+webdav:
+  copied: Copied
+  copy: Copy
+  title: WebDAV Access
+  description: This page centralizes WebDAV URLs, auth modes, and per-pool endpoints for desktop clients and automation.
+  manageApiKey: Manage API Keys
+  recommendedTitle: Recommended Access Methods
+  desktopClient: Desktop Clients
+  desktopClientDesc: Use /dav or /dav/pool/storagePoolId and sign in with your site username and password.
+  devHint: In development, connect to the backend on port 3000 directly instead of the frontend on port 5173.
+  browserTest: Browser Quick Test
+  browserTestDesc: Use a tokenized URL to quickly verify reachability in the browser.
+  automation: Automation Scripts
+  automationDesc: Scripts can still use Bearer Token, X-API-Key, or the apiKey query parameter.
+  loginInfo: Login Information
+  passwordHint: Use your site login password. The plain password is not shown on this page.
+  baseEndpoint: Base Endpoint
+  poolEndpoints: Storage Pool Endpoints
+  poolEndpointsDesc: Generate a dedicated WebDAV URL for each pool so clients do not need to switch context manually.
+  loadingPools: Loading storage pools...
+  noPools: No storage pools available
+  noPoolsHint: Create or verify a default storage pool first from the Storage Pools page.
+  clientUrl: Client URL
+  browserUrl: Browser Test URL
+  tipsTitle: Integration Tips
+  tip1: Windows Explorer, macOS Finder, Cyberduck, RaiDrive, and similar clients should prefer the client URL with username/password.
+  tip2: For quick endpoint checks, use the browser test URL, which already includes the current login token.
+  tip3: Desktop clients should prefer /dav/pool/ID. Without a pool ID, the default storage pool is used.
+apiKeys:
+  create: Create Key
+  description: "API Keys are used for programmatic access to the file management API. Add this request header:"
+  emptyTitle: No API Keys Yet
+  copy: Copy
+  createdTitle: API Key Created
+  createdHint: Save this key securely. After closing, the full value cannot be viewed again.
+  copyAndClose: Copy and Close
+  createTitle: Create API Key
+  name: Name
+  namePlaceholder: "Example: My App"
+  permissions: Permissions
+  creating: Creating...
+  deleteTitle: Delete API Key
+  deleteMessage: 'Delete "{name}"? Applications using this key will no longer be able to access the service.'
+  readDesc: View file list, preview, and download files
+  writeDesc: Upload files, create directories, and edit content
+  deleteDesc: Delete files or directories
+admin:
+  uploadLimit: Upload Limits
+  editUploadLimit: Edit System Settings
+  uploadLimitMb: Single file upload size limit (MB)
+  uploadLimitHint: Enter an integer between 1 and 10240
+  maxConcurrentUploads: Max concurrent uploads
+  maxConcurrentUploadsHint: Enter an integer between 1 and 16
+  language: Default language
+  languageHint: The current page updates immediately after save; other users need a refresh
+  database: Database Configuration
+  databaseType: Database Type
+  sqlitePath: SQLite File Path
+  testConnection: Test Connection
+  saveConfig: Save Configuration
+  testing: Testing...
+  saving: Saving...
+  runtimeStatus: Runtime Status
+  unavailable: Status unavailable
+  ssl: Enable SSL
+  users: User Management
+  createUser: Create User
+  totalUsers: Total Users
+  adminUsers: Admins
+  bannedUsers: Banned
+  guestEnabledUsers: Guest Enabled
+  userSearchPlaceholder: Search username, email, role, or IP
+  noMatchedUsers: No matching users
+  noUsers: No users yet
+  storageUsage: Storage Usage
+  loginIp: Login IP
+  registerTime: Created At
+  lastLoginTime: Last Login
+  verifyUser: Verify User
+  resetPassword: Reset Password
+  banUser: Ban User
+  unbanUser: Unban User
+  deleteUser: Delete User
+  promoteToAdmin: Promote to Admin
+  demoteToUser: Demote to User
+  userDetails: User Details
+  registerIp: Register IP
+  lastLoginIp: Last Login IP
+  theme: Theme
+  guestModeStatus: Guest Mode
+  guestPath: Guest Path
+  stats: Statistics
+  storagePools: Storage Pools
+  noStoragePools: No storage pools
+  localStorage: Local Storage
+  remoteStorage: Remote Storage
+  setNewPasswordFor: "Set a new password for {username}"
+  newPasswordPlaceholder: New password, at least 6 characters
+  editQuota: Adjust Storage Quota
+  quotaMb: Quota (MB)
+  currentQuota: Current Quota
+  addIpEntry: Add IP Entry
+  ipPattern: IP or CIDR
+  ipPatternPlaceholder: For example 192.168.1.1 or 192.168.1.0/24
+  reason: Reason
+  reasonOptional: Reason (optional)
+  reasonPlaceholder: For example malicious scanning
+  ipList: IP List
+  blacklist: Blacklist
+  whitelist: Whitelist
+  blacklistMode: Blacklist Mode
+  whitelistMode: Whitelist Mode
+  switchToBlacklist: Switch to Blacklist
+  switchToWhitelist: Switch to Whitelist
+  noIpEntries: No IP entries
+  createdBy: Created By
+  createdAt: Created At
+  whitelistProtected: 127.0.0.1 cannot be removed in whitelist mode
+  confirmRoleTitleAdmin: Promote to Admin
+  confirmRoleTitleUser: Demote to User
+  confirmRoleMessageAdmin: 'Promote "{username}" to admin?'
+  confirmRoleMessageUser: 'Demote "{username}" to a regular user?'
+  confirmBanTitle: Ban User
+  confirmUnbanTitle: Unban User
+  confirmBanMessage: 'Ban "{username}"? The user will no longer be able to sign in.'
+  confirmUnbanMessage: 'Unban "{username}"?'
+  confirmDeleteUserMessage: 'Delete user "{username}"? Related user data will be removed permanently.'
+  confirmDeleteIpMessage: 'Delete IP entry "{pattern}"?'
+  verifyUserMessage: 'Verify "{username}" manually?'
+  switchWhitelistWarning: After switching to whitelist mode, only listed IPs can access the site. Continue?
+  switchBlacklistWarning: After switching to blacklist mode, only listed IPs will be blocked. Continue?
+  userCreated: User created successfully
+  passwordReset: Password has been reset
+  settingsSaved: System settings saved
+  databaseSaved: Database configuration saved. Restart the service to switch runtime connections
+  uploadLimitValidation: Enter an upload limit between 1 and 10240
+  concurrencyValidation: Enter a concurrency value between 1 and 16
+settings:
+  title: User Settings
+  theme: Theme Settings
+  upload: Upload Settings
+  uploadConcurrency: Max concurrent uploads
+  uploadConcurrencyHint: Set to 0 to follow the server default
+  storage: Storage Management
+  manageStoragePools: Manage Storage Pools
+  guestMode: Guest Mode
+  enableGuestMode: Enable Guest Mode
+  guestLink: Guest Link
+  guestShares: Shared Folders
+  noGuestShares: No shared folders yet. Create guest shares from the file list.
+  editPermissions: Edit Permissions
+  cancelShare: Cancel Share
+  userInfo: User Information
+  roleUser: User
+  roleAdmin: Admin
+  followSystem: Follow System
+  save: Save Settings
+  saved: Settings saved
+  storageDescription: Manage local, UpYun, and other backends from the storage pools page.
+permissions:
+  read: Read
+  write: Write
+  delete: Delete
+  edit: Text Edit
+  preview: Preview
+  download: Download
+  upload: Upload
+preview:
+  previousImage: Previous image
+  nextImage: Next image
+  fullscreen: Fullscreen
+  exitFullscreen: Exit fullscreen
+  prevPage: Previous page
+  nextPage: Next page
+  zoomOut: Zoom out
+  resetZoom: Reset zoom
+  zoomIn: Zoom in
+  markdownRendered: Rendered
+  markdownSource: Source
+  saving: Saving...
+  saved: Saved
+  saveFailed: Save failed
+  loadContentFailed: Failed to load file content
+  pdfLoadFailed: Failed to load the PDF preview runtime
+  emptySheet: Empty worksheet
+  docLegacyUnsupported: Online preview for .doc is not supported. Please convert it to .docx.
+  pptLegacyUnsupported: Online preview for PPT is not supported. Please download the file instead.
+  unsupported: Preview is not available for this file type
+  downloadFile: Download File

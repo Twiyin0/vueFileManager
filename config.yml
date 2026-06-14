@@ -1,120 +1,43 @@
-# VueFileManager 配置文件
-
-# ============================================================
-# 默认管理员账户
-# ============================================================
 admin:
   username: admin
-  # 密码的 MD5 值，默认为 MD5("admin") = 21232f297a57a5a743894a0e4a801fc3
-  # 计算方式: echo -n "your-password" | md5
   password: 21232f297a57a5a743894a0e4a801fc3
-
-# ============================================================
-# 服务器配置
-# ============================================================
 server:
   port: 3000
-  # 监听地址：localhost（仅本机访问）、0.0.0.0（可从局域网访问）
-  # 留空或 localhost 仅本机可访问，设为 0.0.0.0 可从局域网其他设备访问
-  host: '0.0.0.0'
-  # JWT 密钥，用于 Token 签名，生产环境请修改
+  host: 0.0.0.0
   jwt_secret: vue-file-manager-secret-key-2024
-
-# ============================================================
-# 本地存储根目录
-# ============================================================
-# 所有用户的本地存储池都基于此目录，按用户名自动隔离
-# 例如设为 ./uploads，则用户 alice 的文件在 ./uploads/alice/
+language: en-US
 storage_root: ./uploads
-
-# ============================================================
-# 上传限制
-# ============================================================
-# 单文件上传大小限制（单位 MB），默认 100
 upload_limit: 100
-
-# 断点续传缓存保留时间（单位 分钟），未完成上传超时后自动清理
+max_concurrent_uploads: 3
 resumable_upload_cache_minutes: 120
-
-# ============================================================
-# IP 访问控制
-# ============================================================
-# 模式: blacklist（黑名单，拦截列表中的 IP）/ whitelist（白名单，仅允许列表中的 IP）
-# 默认 blacklist，可在管理面板中切换
 ip_list_mode: blacklist
-
-# ============================================================
-# 站点信息
-# ============================================================
 site:
-  # ICP 备案号（留空不显示）
-  icp_beian: '备案码'
-  # 公安备案号（留空不显示）
-  police_beian: '公安备案码'
-
-# ============================================================
-# 存储池配置
-# ============================================================
-# 在这里预配置存储池，新注册用户会自动继承这些配置
-# 也可以在前端「存储池」页面中管理
-#
-# 格式说明：
-#   name: 存储池名称
-#   type: 存储类型 (local / upyun)
-#   default: 是否为默认存储池
-#   config: 存储配置（根据类型不同）
-#
-# 本地存储 config：
-#   localPath: 本地目录路径
-#
-# 又拍云 config：
-#   upyunOperator: 操作员名称
-#   upyunPassword: 操作员密码
-#   upyunBucket: 服务名（Bucket）
-#   upyunEndpoint: API 端点（默认 v0.api.upyun.com）
+  icp_beian: ''
+  police_beian: ''
+database:
+  type: sqlite
+  sqlite:
+    path: ./data/filemanager.db
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    password: ''
+    database: vue_file_manager
+    ssl: false
+  postgres:
+    host: 127.0.0.1
+    port: 5432
+    user: postgres
+    password: ''
+    database: vue_file_manager
+    ssl: false
 storage_pools:
   - name: 本地存储
     type: local
     default: true
     config:
       localPath: ./uploads
-
-  # 又拍云示例（取消注释并填入真实信息）
-  # - name: 又拍云存储
-  #   type: upyun
-  #   default: false
-  #   config:
-  #     upyunOperator: your-operator
-  #     upyunPassword: your-password
-  #     upyunBucket: your-bucket
-  #     upyunEndpoint: v0.api.upyun.com
-
-  # FTP 示例
-  # - name: FTP 存储
-  #   type: ftp
-  #   default: false
-  #   config:
-  #     ftpHost: ftp.example.com
-  #     ftpPort: 21
-  #     ftpUser: admin
-  #     ftpPassword: your-password
-  #     ftpRemotePath: /uploads
-
-  # S3/OSS 示例
-  # - name: S3 存储
-  #   type: s3
-  #   default: false
-  #   config:
-  #     s3Endpoint: https://s3.amazonaws.com
-  #     s3Region: us-east-1
-  #     s3AccessKeyId: your-access-key
-  #     s3SecretAccessKey: your-secret-key
-  #     s3Bucket: your-bucket
-  #     s3Prefix: uploads/
-
-# ============================================================
-# SMTP 邮箱配置（用于注册验证码）
-# ============================================================
 smtp:
   enabled: false
   host: smtp.example.com
@@ -123,10 +46,6 @@ smtp:
   user: noreply@example.com
   pass: your-password
   from: VueFileManager <noreply@example.com>
-
-# ============================================================
-# 插件系统
-# ============================================================
 plugins:
   enabled: true
   dir: ./plugins

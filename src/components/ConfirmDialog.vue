@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n'
+
 defineProps<{
   show: boolean
   title: string
@@ -12,23 +14,23 @@ const emit = defineEmits<{
   confirm: []
   cancel: []
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <Teleport to="body">
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <!-- 遮罩 -->
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('cancel')"/>
-      <!-- 对话框 -->
-      <div class="relative card w-full max-w-sm max-h-[90vh] overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="text-lg font-semibold mb-2" style="color: var(--text-color)">{{ title }}</h3>
-        <p class="text-sm mb-6" style="color: var(--text-secondary-color)">{{ message }}</p>
+      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('cancel')" />
+      <div class="relative card max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
+        <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ title }}</h3>
+        <p class="mb-6 text-sm" style="color: var(--text-secondary-color)">{{ message }}</p>
         <div class="flex justify-end gap-3">
-          <button @click="emit('cancel')" class="btn-secondary text-sm">
-            {{ cancelText || '取消' }}
+          <button class="btn-secondary text-sm" @click="emit('cancel')">
+            {{ cancelText || t('common.cancel', '取消') }}
           </button>
-          <button @click="emit('confirm')" :class="danger ? 'btn-danger text-sm' : 'btn-primary text-sm'">
-            {{ confirmText || '确认' }}
+          <button :class="danger ? 'btn-danger text-sm' : 'btn-primary text-sm'" @click="emit('confirm')">
+            {{ confirmText || t('common.confirm', '确认') }}
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { api } from '@/api'
 import type ArtPlayer from 'artplayer'
 import APlayer from 'aplayer'
 import type Viewer from 'viewerjs'
+import { useI18n } from '@/composables/useI18n'
 
 import 'aplayer/dist/APlayer.min.css'
 
@@ -27,6 +28,8 @@ export interface FilePreviewProps {
 }
 
 export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') => void) {
+  const { t } = useI18n()
+
   const previewUrl = computed(() => {
     if (props.fileUrl) return props.fileUrl
     if (!props.filePath) return ''
@@ -34,12 +37,12 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     if (props.guestBaseUrl) {
       return `${props.guestBaseUrl}?path=${encodeURIComponent(props.filePath)}`
     }
-    const base = '/api/files/preview'
+
     const params = new URLSearchParams({ path: props.filePath })
     if (props.poolId) params.set('poolId', String(props.poolId))
     const token = localStorage.getItem('token')
     if (token) params.set('token', token)
-    return `${base}?${params.toString()}`
+    return `/api/files/preview?${params.toString()}`
   })
 
   function getImagePreviewUrl(file: PreviewFileListItem) {
@@ -47,13 +50,13 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     if (props.guestBaseUrl) {
       return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
     }
-    const base = '/api/files/preview'
+
     const params = new URLSearchParams({ path: file.path })
     const poolId = file.poolId || props.poolId
     if (poolId) params.set('poolId', String(poolId))
     const token = localStorage.getItem('token')
     if (token) params.set('token', token)
-    return `${base}?${params.toString()}`
+    return `/api/files/preview?${params.toString()}`
   }
 
   const fileType = computed(() => {
@@ -80,37 +83,66 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
   let artPlayer: ArtPlayer | null = null
   let aplayerInst: APlayer | null = null
   let viewer: Viewer | null = null
-
-  let imageBlobUrl: string | null = null
-  let pdfBlobUrl: string | null = null
+  let pdfDoc: any = null
+  let cmView: any = null
+  let themeCompartment: any = null
+  let isProgrammaticDestroy = false
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
 
   const docxContainer = ref<HTMLDivElement>()
   const excelSheets = ref<{ name: string; html: string }[]>([])
   const excelActiveSheet = ref(0)
-
-  let isProgrammaticDestroy = false
-
   const imageContainer = ref<HTMLDivElement>()
   const videoContainer = ref<HTMLDivElement>()
   const audioContainer = ref<HTMLDivElement>()
   const pdfCanvas = ref<HTMLCanvasElement>()
+  const editorContainer = ref<HTMLDivElement>()
+
   function setImageContainer(element: Element | ComponentPublicInstance | null) {
     imageContainer.value = element instanceof HTMLDivElement ? element : undefined
   }
+
   function setVideoContainer(element: Element | ComponentPublicInstance | null) {
     videoContainer.value = element instanceof HTMLDivElement ? element : undefined
   }
+
   function setAudioContainer(element: Element | ComponentPublicInstance | null) {
     audioContainer.value = element instanceof HTMLDivElement ? element : undefined
   }
+
   function setPdfCanvas(element: Element | ComponentPublicInstance | null) {
     pdfCanvas.value = element instanceof HTMLCanvasElement ? element : undefined
   }
 
+  function setEditorContainer(element: Element | ComponentPublicInstance | null) {
+    editorContainer.value = element instanceof HTMLDivElement ? element : undefined
+  }
+
+  function setDocxContainer(element: Element | ComponentPublicInstance | null) {
+    docxContainer.value = element instanceof HTMLDivElement ? element : undefined
+  }
+
   const loading = ref(true)
   const isFullscreen = ref(false)
+  const showVideo = ref(false)
   const videoAspectRatio = ref(16 / 9)
+  const galleryFiles = ref<PreviewFileListItem[]>([])
+  const galleryIndex = ref(0)
+  const pdfPageNum = ref(1)
+  const pdfTotalPages = ref(0)
+  const pdfScale = ref(1.5)
+  const pdfLoading = ref(false)
+  const textContent = ref('')
+  const textReloadVersion = ref(0)
+  const isSaving = ref(false)
+  const saveMsg = ref('')
+  const saveState = ref<'success' | 'error' | ''>('')
+  const markdownPreviewMode = ref<'rendered' | 'text'>('rendered')
+
   const isPortraitVideo = computed(() => fileType.value === 'video' && videoAspectRatio.value < 1)
+  const isEditorReadOnly = computed(() => props.guestBaseUrl ? !props.editable : false)
+  const isMarkdownRenderedMode = computed(() => fileType.value === 'markdown' && markdownPreviewMode.value === 'rendered')
+
   const dialogClass = computed(() => {
     if (isFullscreen.value) return 'w-full h-full flex flex-col rounded-none'
     if (fileType.value !== 'video') return 'relative overflow-hidden w-full max-w-5xl flex flex-col rounded-xl'
@@ -119,6 +151,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       isPortraitVideo.value ? 'max-w-[calc(100vw-1rem)]' : 'max-w-6xl'
     ].join(' ')
   })
+
   const dialogStyle = computed(() => {
     if (isFullscreen.value) {
       return {
@@ -143,6 +176,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         : 'min(calc(100vw - 1rem), 96rem)',
     }
   })
+
   const videoContainerStyle = computed(() => {
     const availableHeight = isFullscreen.value ? 'calc(100dvh - 3rem)' : 'calc(90dvh - 4.5rem)'
     return {
@@ -154,31 +188,6 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     }
   })
 
-  const galleryFiles = ref<PreviewFileListItem[]>([])
-  const galleryIndex = ref(0)
-
-  const pdfPageNum = ref(1)
-  const pdfTotalPages = ref(0)
-  const pdfScale = ref(1.5)
-  const pdfLoading = ref(false)
-  let pdfDoc: any = null
-
-  const textContent = ref('')
-  const textReloadVersion = ref(0)
-  const isSaving = ref(false)
-  const saveMsg = ref('')
-  let saveTimer: ReturnType<typeof setTimeout> | null = null
-  const markdownPreviewMode = ref<'rendered' | 'text'>('rendered')
-
-  const editorContainer = ref<HTMLDivElement>()
-  function setEditorContainer(element: Element | ComponentPublicInstance | null) {
-    editorContainer.value = element instanceof HTMLDivElement ? element : undefined
-  }
-  let cmView: any = null
-  let themeCompartment: any = null
-
-  const isEditorReadOnly = computed(() => props.guestBaseUrl ? !props.editable : false)
-  const isMarkdownRenderedMode = computed(() => fileType.value === 'markdown' && markdownPreviewMode.value === 'rendered')
   const cmLanguageName = computed(() => {
     const ext = props.fileName?.split('.').pop()?.toLowerCase() || ''
     const map: Record<string, string> = {
@@ -194,14 +203,10 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     return map[ext] || 'Plain Text'
   })
 
-  const showVideo = ref(false)
-  function setDocxContainer(element: Element | ComponentPublicInstance | null) {
-    docxContainer.value = element instanceof HTMLDivElement ? element : undefined
-  }
-
   async function loadPdfJs(): Promise<any> {
     const win = window as any
     if (win.pdfjsLib) return win.pdfjsLib
+
     return new Promise((resolve, reject) => {
       const script = document.createElement('script')
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs'
@@ -210,7 +215,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         win.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs'
         resolve(win.pdfjsLib)
       }
-      script.onerror = () => reject(new Error('PDF.js CDN 加载失败'))
+      script.onerror = () => reject(new Error(t('preview.pdfLoadFailed', 'PDF 预览组件加载失败')))
       document.head.appendChild(script)
     })
   }
@@ -225,8 +230,8 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       const dpr = window.devicePixelRatio || 1
       canvas.width = Math.floor(viewport.width * dpr)
       canvas.height = Math.floor(viewport.height * dpr)
-      canvas.style.width = Math.floor(viewport.width) + 'px'
-      canvas.style.height = Math.floor(viewport.height) + 'px'
+      canvas.style.width = `${Math.floor(viewport.width)}px`
+      canvas.style.height = `${Math.floor(viewport.height)}px`
       const ctx = canvas.getContext('2d')!
       ctx.scale(dpr, dpr)
       await page.render({ canvasContext: ctx, viewport }).promise
@@ -267,33 +272,46 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   async function saveTextFile() {
     if (isSaving.value) return
+
     isSaving.value = true
-    saveMsg.value = '保存中...'
+    saveState.value = ''
+    saveMsg.value = t('preview.saving', '保存中...')
+
     try {
       if (props.guestSaveUrl) {
-        await fetch(props.guestSaveUrl, {
+        const response = await fetch(props.guestSaveUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: props.filePath, content: textContent.value })
-        }).then(async (response) => {
-          if (!response.ok) {
-            const data = await response.json()
-            throw new Error(data.error || '保存失败')
-          }
         })
-      } else {
-        await api.post('/files/write', { path: props.filePath, content: textContent.value, poolId: props.poolId })
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error || t('preview.saveFailed', '保存失败'))
         }
+      } else {
+        await api.post('/files/write', {
+          path: props.filePath,
+          content: textContent.value,
+          poolId: props.poolId
+        })
+      }
+
       textReloadVersion.value = Date.now()
       await loadTextContent({ preserveLoadingState: true, reinitializeEditor: false })
-      saveMsg.value = '已保存'
+      saveState.value = 'success'
+      saveMsg.value = t('preview.saved', '已保存')
     } catch (err: any) {
-      saveMsg.value = '保存失败'
+      saveState.value = 'error'
+      saveMsg.value = err?.message || t('preview.saveFailed', '保存失败')
       console.error('Save error:', err)
     } finally {
       isSaving.value = false
       if (saveTimer) clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => { saveMsg.value = '' }, 2000)
+      saveTimer = setTimeout(() => {
+        saveMsg.value = ''
+        saveState.value = ''
+      }, 2000)
     }
   }
 
@@ -371,6 +389,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       { tag: tags.monospace, color: '#b45309', backgroundColor: '#fef3c7' },
       { tag: tags.list, color: '#0f766e' },
     ])
+
     const darkHighlight = HighlightStyle.define([
       { tag: tags.keyword, color: '#c586c0' },
       { tag: tags.string, color: '#ce9178' },
@@ -388,6 +407,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       { tag: tags.monospace, color: '#fbbf24', backgroundColor: '#3f2d16' },
       { tag: tags.list, color: '#4fd1c5' },
     ])
+
     const lightTheme = EditorView.theme({
       '&': { backgroundColor: '#ffffff', color: '#24292e' },
       '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '14px', caretColor: '#24292e' },
@@ -398,6 +418,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       '.cm-activeLine': { backgroundColor: '#f0f4f8' },
       '.cm-activeLineGutter': { backgroundColor: '#e8ecf0' },
     })
+
     const darkTheme = EditorView.theme({
       '&': { backgroundColor: '#1e1e1e', color: '#d4d4d4' },
       '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '14px', caretColor: '#aeafad' },
@@ -408,6 +429,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       '.cm-activeLine': { backgroundColor: '#2a2d2e' },
       '.cm-activeLineGutter': { backgroundColor: '#2a2d2e' },
     })
+
     return { lightHighlight, darkHighlight, lightTheme, darkTheme }
   }
 
@@ -442,10 +464,17 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         bracketMatching(),
         indentOnInput(),
         EditorView.lineWrapping,
-        keymap.of([...defaultKeymap, ...historyKeymap, {
-          key: 'Mod-s',
-          run() { saveTextFile(); return true },
-        }]),
+        keymap.of([
+          ...defaultKeymap,
+          ...historyKeymap,
+          {
+            key: 'Mod-s',
+            run() {
+              saveTextFile()
+              return true
+            },
+          }
+        ]),
         langExt,
         syntaxHighlighting(isDark.value ? darkHighlight : lightHighlight),
         themeCompartment.of(isDark.value ? darkTheme : lightTheme),
@@ -469,31 +498,36 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
   }
 
   watch(isDark, async (dark) => {
-    if (cmView && themeCompartment) {
-      const [
-        { EditorView },
-        { syntaxHighlighting, HighlightStyle },
-        { tags },
-      ] = await Promise.all([
-        import('@codemirror/view'),
-        import('@codemirror/language'),
-        import('@lezer/highlight'),
-      ])
-      const { lightHighlight, darkHighlight, lightTheme, darkTheme } = await getCmThemes(EditorView, HighlightStyle, tags)
-      cmView.dispatch({
-        effects: themeCompartment.reconfigure(dark ? darkTheme : lightTheme),
-      })
-      cmView.dispatch({
-        effects: syntaxHighlighting(dark ? darkHighlight : lightHighlight)
-      })
-    }
+    if (!cmView || !themeCompartment) return
+
+    const [
+      { EditorView },
+      { syntaxHighlighting, HighlightStyle },
+      { tags },
+    ] = await Promise.all([
+      import('@codemirror/view'),
+      import('@codemirror/language'),
+      import('@lezer/highlight'),
+    ])
+
+    const { lightHighlight, darkHighlight, lightTheme, darkTheme } = await getCmThemes(EditorView, HighlightStyle, tags)
+
+    cmView.dispatch({
+      effects: themeCompartment.reconfigure(dark ? darkTheme : lightTheme),
+    })
+
+    cmView.dispatch({
+      effects: syntaxHighlighting(dark ? darkHighlight : lightHighlight)
+    })
   })
 
   async function loadTextContent(options: { preserveLoadingState?: boolean; reinitializeEditor?: boolean } = {}) {
     const { preserveLoadingState = false, reinitializeEditor = true } = options
+
     if (!preserveLoadingState) {
       loading.value = true
     }
+
     try {
       const requestUrl = new URL(previewUrl.value, window.location.origin)
       requestUrl.searchParams.set('_t', String(textReloadVersion.value || Date.now()))
@@ -507,11 +541,13 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       textContent.value = await response.text()
     } catch {
-      textContent.value = '// Failed to load file content'
+      textContent.value = `// ${t('preview.loadContentFailed', '文件内容加载失败')}`
     }
+
     if (!preserveLoadingState) {
       loading.value = false
     }
+
     if (reinitializeEditor && (fileType.value === 'text' || markdownPreviewMode.value === 'text')) {
       destroyCodeMirror()
       await nextTick()
@@ -521,6 +557,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   async function setMarkdownPreviewMode(mode: 'rendered' | 'text') {
     if (fileType.value !== 'markdown' || markdownPreviewMode.value === mode) return
+
     markdownPreviewMode.value = mode
 
     if (mode === 'text') {
@@ -539,7 +576,11 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       const ext = file.name?.split('.').pop()?.toLowerCase() || ''
       return imageExts.includes(ext)
     })
-    if (!list.find((file) => file.path === props.filePath)) list.push(fallbackFile)
+
+    if (!list.find((file) => file.path === props.filePath)) {
+      list.push(fallbackFile)
+    }
+
     const index = list.findIndex((file) => file.path === props.filePath)
     galleryFiles.value = list
     galleryIndex.value = index >= 0 ? index : 0
@@ -547,6 +588,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   async function initImageViewer() {
     if (!imageContainer.value) return
+
     destroyImageViewer()
     imageContainer.value.innerHTML = ''
 
@@ -561,8 +603,11 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       img.alt = file.name
       img.src = index === galleryIndex.value ? '' : getImagePreviewUrl(file)
       Object.assign(img.style, {
-        position: 'absolute', top: '0', left: '0',
-        width: '1px', height: '1px',
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '1px',
+        height: '1px',
         visibility: 'hidden',
       })
       imageContainer.value!.appendChild(img)
@@ -577,37 +622,49 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       initialViewIndex: galleryIndex.value,
       navbar: true,
       toolbar: {
-        zoomIn: true, zoomOut: true, oneToOne: true, reset: true,
-        prev: false, play: false, next: false,
-        rotateLeft: true, rotateRight: true,
-        flipHorizontal: true, flipVertical: true,
+        zoomIn: true,
+        zoomOut: true,
+        oneToOne: true,
+        reset: true,
+        prev: false,
+        play: false,
+        next: false,
+        rotateLeft: true,
+        rotateRight: true,
+        flipHorizontal: true,
+        flipVertical: true,
       },
-      title: [1, (_image: any, imageData: any) =>
-        `${imageData.alt || list[galleryIndex.value].name} (${imageData.width}×${imageData.height})`],
-      hidden: () => { if (!isProgrammaticDestroy) emit('close'); isProgrammaticDestroy = false },
+      title: [1, (_image: any, imageData: any) => `${imageData.alt || list[galleryIndex.value].name} (${imageData.width}x${imageData.height})`],
+      hidden: () => {
+        if (!isProgrammaticDestroy) emit('close')
+        isProgrammaticDestroy = false
+      },
     })
+
     viewer.show()
+
     imageContainer.value.addEventListener('viewed', ((event: CustomEvent) => {
       galleryIndex.value = event.detail?.index ?? galleryIndex.value
     }) as EventListener)
+
     loading.value = false
   }
 
   function destroyImageViewer() {
     if (viewer) {
-      try { viewer.destroy() } catch {}
+      try {
+        viewer.destroy()
+      } catch {}
       viewer = null
-    }
-    if (imageBlobUrl) {
-      URL.revokeObjectURL(imageBlobUrl)
-      imageBlobUrl = null
     }
   }
 
   function navigateImage(dir: number) {
     if (!viewer) return
+
     const nextIndex = galleryIndex.value + dir
     if (nextIndex < 0 || nextIndex >= galleryFiles.value.length) return
+
     galleryIndex.value = nextIndex
     viewer.view(nextIndex)
   }
@@ -625,11 +682,9 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       }
 
       video.onloadedmetadata = () => {
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          videoAspectRatio.value = video.videoWidth / video.videoHeight
-        } else {
-          videoAspectRatio.value = 16 / 9
-        }
+        videoAspectRatio.value = video.videoWidth > 0 && video.videoHeight > 0
+          ? video.videoWidth / video.videoHeight
+          : 16 / 9
         cleanup()
         resolve()
       }
@@ -646,6 +701,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   async function initVideoPlayer() {
     if (!videoContainer.value) return
+
     try {
       const { default: ArtPlayerClass } = await import('artplayer')
       artPlayer = new ArtPlayerClass({
@@ -676,6 +732,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
   async function initAudioPlayer() {
     if (!audioContainer.value) return
+
     try {
       aplayerInst = new APlayer({
         container: audioContainer.value,
@@ -684,7 +741,9 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         theme: isDark.value ? '#6b7cff' : '#4f6ef7',
         audio: [{ name: props.fileName, url: previewUrl.value, artist: 'VueFileManager', cover: '' }],
       })
-      try { aplayerInst.play() } catch {}
+      try {
+        aplayerInst.play()
+      } catch {}
       loading.value = false
     } catch (err) {
       console.error('APlayer init error:', err)
@@ -698,7 +757,6 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       const response = await fetch(previewUrl.value)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const blob = await response.blob()
-      pdfBlobUrl = URL.createObjectURL(blob)
       const arrayBuffer = await blob.arrayBuffer()
       pdfDoc = await pdfjs.getDocument({ data: arrayBuffer }).promise
       pdfTotalPages.value = pdfDoc.numPages
@@ -721,7 +779,10 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       loading.value = false
       await nextTick()
       if (docxContainer.value) {
-        await docxPreview.renderAsync(blob, docxContainer.value, undefined, { ignoreWidth: true, ignoreHeight: true })
+        await docxPreview.renderAsync(blob, docxContainer.value, undefined, {
+          ignoreWidth: true,
+          ignoreHeight: true
+        })
       }
     } catch (err) {
       console.error('DOCX viewer init error:', err)
@@ -740,6 +801,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
       excelSheets.value = workbook.worksheets.map((worksheet) => {
         const rows: string[][] = []
+
         worksheet.eachRow({ includeEmpty: false }, (row) => {
           const cells: string[] = []
           row.eachCell({ includeEmpty: true }, (_cell, colNumber) => {
@@ -750,20 +812,23 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         })
 
         if (rows.length === 0) {
-          return { name: worksheet.name, html: '<p class="text-sm p-4" style="color:var(--text-secondary-color)">空工作表</p>' }
+          return {
+            name: worksheet.name,
+            html: `<p class="text-sm p-4" style="color:var(--text-secondary-color)">${t('preview.emptySheet', '空工作表')}</p>`
+          }
         }
 
         const maxCols = Math.max(...rows.map((row) => row.length))
-        rows.forEach((row) => { while (row.length < maxCols) row.push('') })
+        rows.forEach((row) => {
+          while (row.length < maxCols) row.push('')
+        })
 
         const header = rows[0]
         const body = rows.slice(1)
 
         let html = '<table>'
-        html += '<thead><tr>' + header.map((item) => `<th>${item || ''}</th>`).join('') + '</tr></thead>'
-        html += '<tbody>' + body.map((row) =>
-          '<tr>' + row.map((cell) => `<td>${cell || ''}</td>`).join('') + '</tr>'
-        ).join('') + '</tbody>'
+        html += `<thead><tr>${header.map((item) => `<th>${item || ''}</th>`).join('')}</tr></thead>`
+        html += `<tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${cell || ''}</td>`).join('')}</tr>`).join('')}</tbody>`
         html += '</table>'
 
         return { name: worksheet.name, html }
@@ -780,11 +845,23 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
   function destroyPlayers() {
     loading.value = true
     isProgrammaticDestroy = true
-    if (artPlayer) { try { artPlayer.destroy() } catch {}; artPlayer = null }
-    if (aplayerInst) { try { aplayerInst.destroy() } catch {}; aplayerInst = null }
+
+    if (artPlayer) {
+      try {
+        artPlayer.destroy()
+      } catch {}
+      artPlayer = null
+    }
+
+    if (aplayerInst) {
+      try {
+        aplayerInst.destroy()
+      } catch {}
+      aplayerInst = null
+    }
+
     destroyImageViewer()
     destroyCodeMirror()
-    if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null }
     pdfDoc = null
     pdfTotalPages.value = 0
     pdfPageNum.value = 1
@@ -794,40 +871,68 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     markdownPreviewMode.value = 'rendered'
     excelSheets.value = []
     excelActiveSheet.value = 0
+    saveMsg.value = ''
+    saveState.value = ''
     if (docxContainer.value) docxContainer.value.innerHTML = ''
   }
 
   function initPlayer() {
     loading.value = true
     const type = fileType.value
+
     if (type === 'video') {
       nextTick().then(async () => {
         await loadVideoAspectRatio()
         await nextTick()
         initVideoPlayer()
       })
+      return
     }
-    else if (type === 'audio') nextTick().then(initAudioPlayer)
-    else if (type === 'image') {
+
+    if (type === 'audio') {
+      nextTick().then(initAudioPlayer)
+      return
+    }
+
+    if (type === 'image') {
       buildGallery()
       nextTick().then(initImageViewer)
+      return
     }
-    else if (type === 'text' || type === 'markdown') loadTextContent()
-    else if (type === 'pdf') initPdfViewer()
-    else if (type === 'docx') initDocxViewer()
-    else if (type === 'xlsx') initExcelViewer()
-    else loading.value = false
+
+    if (type === 'text' || type === 'markdown') {
+      loadTextContent()
+      return
+    }
+
+    if (type === 'pdf') {
+      initPdfViewer()
+      return
+    }
+
+    if (type === 'docx') {
+      initDocxViewer()
+      return
+    }
+
+    if (type === 'xlsx') {
+      initExcelViewer()
+      return
+    }
+
+    loading.value = false
   }
 
   onMounted(() => {
-    if (props.show) {
-      if (fileType.value === 'video') {
-        showVideo.value = true
-        nextTick().then(() => nextTick().then(initPlayer))
-      } else {
-        nextTick().then(initPlayer)
-      }
+    if (!props.show) return
+
+    if (fileType.value === 'video') {
+      showVideo.value = true
+      nextTick().then(() => nextTick().then(initPlayer))
+      return
     }
+
+    nextTick().then(initPlayer)
   })
 
   watch([() => props.show, () => props.filePath], async ([show], [oldShow]) => {
@@ -837,6 +942,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         showVideo.value = false
         await nextTick()
       }
+
       if (fileType.value === 'video') {
         showVideo.value = true
         await nextTick()
@@ -844,13 +950,15 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       } else {
         showVideo.value = false
       }
+
       await nextTick()
       initPlayer()
-    } else {
-      destroyPlayers()
-      showVideo.value = false
-      isFullscreen.value = false
+      return
     }
+
+    destroyPlayers()
+    showVideo.value = false
+    isFullscreen.value = false
   })
 
   onUnmounted(() => {
@@ -891,6 +999,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     textContent,
     isSaving,
     saveMsg,
+    saveState,
     markdownPreviewMode,
     isMarkdownRenderedMode,
     editorContainer,
