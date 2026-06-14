@@ -31,36 +31,86 @@ function matchIp(clientIp: string, pattern: string): boolean {
   return cleanIp === cleanPattern
 }
 
+let ipTableState:
+  | null
+  | {
+      checkedAt: number
+      hasConfig: boolean
+      hasBlacklist: boolean
+      hasWhitelist: boolean
+    } = null
+
+async function getIpTableState() {
+  const now = Date.now()
+  if (ipTableState && now - ipTableState.checkedAt < 30_000) {
+    return ipTableState
+  }
+
+  const [hasConfig, hasBlacklist, hasWhitelist] = await Promise.all([
+    db.tableExists('ip_list_config'),
+    db.tableExists('ip_blacklist'),
+    db.tableExists('ip_whitelist')
+  ])
+
+  ipTableState = {
+    checkedAt: now,
+    hasConfig,
+    hasBlacklist,
+    hasWhitelist
+  }
+
+  return ipTableState
+}
+
 export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFunction) {
   ;(async () => {
-    const clientIp = getClientIp(req)
-    const cleanIp = clientIp.replace(/^::ffff:/, '')
-
-    const configRow = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
-    const mode = configRow?.mode || 'blacklist'
-
-    if (mode === 'whitelist') {
-      if (cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost') {
+    try {
+      const state = await getIpTableState()
+      if (!state.hasConfig || (!state.hasBlacklist && !state.hasWhitelist)) {
         return next()
       }
-      const entries = await db.prepare('SELECT ip_pattern FROM ip_whitelist').all<{ ip_pattern: string }>()
-      for (const entry of entries) {
-        if (matchIp(clientIp, entry.ip_pattern)) {
+
+      const clientIp = getClientIp(req)
+      const cleanIp = clientIp.replace(/^::ffff:/, '')
+      const configRow = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
+      const mode = configRow?.mode || 'blacklist'
+
+      if (mode === 'whitelist') {
+        if (cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost') {
           return next()
         }
-      }
-      return res.status(403).json({ error: 'IP 不在白名单中' })
-    }
+        if (!state.hasWhitelist) {
+          return next()
+        }
 
-    const entries = await db.prepare('SELECT ip_pattern FROM ip_blacklist').all<{ ip_pattern: string }>()
-    for (const entry of entries) {
-      if (matchIp(clientIp, entry.ip_pattern)) {
-        return res.status(403).json({ error: 'IP 已被封禁' })
+        const entries = await db.prepare('SELECT ip_pattern FROM ip_whitelist').all<{ ip_pattern: string }>()
+        for (const entry of entries) {
+          if (matchIp(clientIp, entry.ip_pattern)) {
+            return next()
+          }
+        }
+        return res.status(403).json({ error: 'IP 不在白名单中' })
       }
+
+      if (!state.hasBlacklist) {
+        return next()
+      }
+
+      const entries = await db.prepare('SELECT ip_pattern FROM ip_blacklist').all<{ ip_pattern: string }>()
+      for (const entry of entries) {
+        if (matchIp(clientIp, entry.ip_pattern)) {
+          return res.status(403).json({ error: 'IP 已被封禁' })
+        }
+      }
+
+      return next()
+    } catch (err: any) {
+      console.error('[ipBlacklistMiddleware] fallback to allow request:', err?.message || err)
+      return next()
     }
-    return next()
   })().catch((err: any) => {
-    res.status(500).json({ error: err.message || 'IP 访问控制校验失败' })
+    console.error('[ipBlacklistMiddleware] unexpected failure:', err?.message || err)
+    return next()
   })
 }
 

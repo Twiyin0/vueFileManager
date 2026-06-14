@@ -94,7 +94,7 @@ onUnmounted(() => {
           <input
             v-model="query"
             class="flex-1 bg-transparent px-3 py-4 text-light-text outline-none dark:text-dark-text"
-            :placeholder="t('spotlight.placeholder', '搜索文件和文件夹... (Ctrl+K)')"
+            :placeholder="t('spotlight.placeholder', 'Search files and folders... (Ctrl+K)')"
             autofocus
             @keydown="handleKeydown"
           />
@@ -102,7 +102,7 @@ onUnmounted(() => {
         </div>
 
         <div v-if="loading" class="p-4 text-center text-gray-500 dark:text-dark-text-secondary">
-          {{ t('spotlight.loading', '搜索中...') }}
+          {{ t('spotlight.loading', 'Searching...') }}
         </div>
 
         <div v-else-if="results.length > 0" class="max-h-[300px] overflow-y-auto">
@@ -123,11 +123,11 @@ onUnmounted(() => {
         </div>
 
         <div v-else-if="query" class="p-8 text-center text-gray-500 dark:text-dark-text-secondary">
-          {{ t('spotlight.noResults', '未找到匹配结果') }}
+          {{ t('spotlight.noResults', 'No matching results') }}
         </div>
 
         <div v-else class="p-8 text-center text-sm text-gray-400 dark:text-dark-text-secondary">
-          {{ t('spotlight.emptyHint', '输入关键词搜索文件和文件夹') }}
+          {{ t('spotlight.emptyHint', 'Type keywords to search files and folders') }}
         </div>
       </div>
     </div>

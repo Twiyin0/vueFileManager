@@ -81,6 +81,7 @@ yarn build
 - `dist/`
 - `dist-server/`
 - `config.yml`
+- `.env`
 - `package.json`
 - `yarn.lock`
 - `.yarn/`
@@ -116,10 +117,6 @@ node dist-server/index.js
 
 关键配置项：
 
-- `language`
-  - 可选值：`zh-CN`、`en-US`
-  - 默认值：`zh-CN`
-  - 影响站点默认界面语言
 - `upload_limit`
   - 单文件上传大小限制，单位 MB
 - `max_concurrent_uploads`
@@ -129,10 +126,34 @@ node dist-server/index.js
 
 管理员也可以在管理面板中修改：
 
-- 默认语言
 - 上传大小限制
 - 最大并发上传数
 - 数据库连接配置
+
+## 语言设置说明
+
+- `config.yml` 不再配置语言
+- `.env` 中的 `DEFAULT_LANGUAGE` 只在首次初始化 `user_settings.language` 时作为默认值使用
+- 用户创建完成后，界面语言会保存到 `user_settings.language`
+- 后续启动、登录和切换语言时，始终以当前账户保存的语言设置为准
+- 修改语言不会重启前后端服务
+- 旧版遗留的 `config.yml` 中 `language` 或 `default_language` 字段会被忽略，并在后续保存配置时移除
+
+`.env` 示例：
+
+```env
+DEFAULT_LANGUAGE=zh-CN
+```
+
+可选值：
+
+- `zh-CN`
+- `en-US`
+
+如果是已有数据库升级：
+
+- 系统会自动给 `user_settings` 增加 `language` 字段
+- 旧用户在首次迁移时，如果语言为空，会写入 `.env` 中的 `DEFAULT_LANGUAGE`
 
 ## i18n 约定
 
@@ -140,10 +161,8 @@ node dist-server/index.js
 - 当前内置语言：
   - `public/i18n/zh-CN.yml`
   - `public/i18n/en-US.yml`
-- 默认语言来源：
-  - 优先读取服务端 `/api/site-config`
-  - 服务端值来自 `config.yml` 中的 `language`
-- 管理员在管理面板修改语言后，会写回 `config.yml`
+- 页面中通过 `useI18n().t('key.path')` 调用
+- 用户语言保存在账户设置中，而不是 `config.yml`
 
 新增文案时建议：
 
@@ -200,92 +219,3 @@ chmod +x migrate-sqlite-wal.sh
 ## 数据库迁移
 
 可以把现有 SQLite 数据迁移到 MySQL 或 PostgreSQL。
-
-开发环境命令：
-
-```bash
-yarn migrate:db --target mysql --truncate
-```
-
-```bash
-yarn migrate:db --target postgres --truncate
-```
-
-构建后的生产命令：
-
-```bash
-node dist-server/db-cli.js --target mysql --truncate
-```
-
-```bash
-node dist-server/db-cli.js --target postgres --truncate
-```
-
-可用参数：
-
-- `--source-sqlite /path/to/filemanager.db`
-- `--target mysql|postgres`
-- `--truncate`
-
-迁移的数据表：
-
-- `users`
-- `user_settings`
-- `storage_pools`
-- `api_keys`
-- `shares`
-- `trash`
-- `favourites`
-- `guest_shares`
-- `ip_blacklist`
-- `ip_whitelist`
-- `ip_list_config`
-- `verification_codes`
-- `offline_download_tasks`
-
-说明：
-
-- 主键会尽量保留
-- 目标数据库结构会在导入前自动创建
-- 上传文件本身不存放在数据库中
-- 切换时请保持 `uploads/` 和外部存储配置不变
-
-## 常用脚本
-
-- `yarn dev`
-- `yarn dev:client`
-- `yarn dev:server`
-- `yarn build`
-- `yarn build:server`
-- `yarn build:client`
-- `yarn build:check`
-- `yarn migrate:db`
-- `yarn migrate:db:prod`
-- `yarn start`
-
-## 项目结构
-
-```text
-server/               Express 后端
-src/                  Vue 前端
-plugins/              主题与功能插件
-public/               公共文档与静态资源
-public/i18n/          语言文件
-scripts/              构建与迁移脚本
-dist/                 前端构建产物
-dist-server/          后端构建产物
-data/                 SQLite 数据目录
-uploads/              本地存储根目录
-```
-
-## 相关文档
-
-- [API 文档](./public/API.md)
-- [插件文档](./public/Plugins.md)
-- [主题文档](./public/Themes.md)
-
-## 备注
-
-- 本地存储会按用户隔离到 `storage_root/<username>/`
-- `._*`、`.DS_Store`、`.trash` 等系统垃圾文件会从常规文件列表中过滤
-- 主题和插件的开关会修改清单文件，通常需要重启服务后才能完整生效

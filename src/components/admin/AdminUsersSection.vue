@@ -37,25 +37,25 @@ const { t } = useI18n()
     <div class="mb-4 flex justify-end">
       <button class="btn-primary flex items-center gap-1.5 text-sm" @click="$emit('create')">
         <Icon name="plus" class="h-4 w-4" />
-        {{ t('admin.createUser', '创建用户') }}
+        {{ t('admin.createUser', 'Create User') }}
       </button>
     </div>
 
     <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
       <div class="card">
-        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.totalUsers', '用户总数') }}</p>
+        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.totalUsers', 'Total Users') }}</p>
         <p class="text-2xl font-bold text-light-text dark:text-dark-text">{{ stats.total }}</p>
       </div>
       <div class="card">
-        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.adminUsers', '管理员') }}</p>
+        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.adminUsers', 'Admins') }}</p>
         <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ stats.admins }}</p>
       </div>
       <div class="card">
-        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.bannedUsers', '已封禁') }}</p>
+        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.bannedUsers', 'Banned') }}</p>
         <p class="text-2xl font-bold text-red-500">{{ stats.banned }}</p>
       </div>
       <div class="card">
-        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.guestEnabledUsers', '已开启访客') }}</p>
+        <p class="text-sm text-gray-500 dark:text-dark-text-secondary">{{ t('admin.guestEnabledUsers', 'Guest Enabled') }}</p>
         <p class="text-2xl font-bold text-green-500">{{ stats.guests }}</p>
       </div>
     </div>
@@ -65,7 +65,7 @@ const { t } = useI18n()
       <input
         v-model="search"
         type="text"
-        :placeholder="t('admin.userSearchPlaceholder', '搜索用户名、邮箱、角色或 IP')"
+        :placeholder="t('admin.userSearchPlaceholder', 'Search username, email, role, or IP')"
         class="input-field text-sm"
       />
     </div>
@@ -79,7 +79,7 @@ const { t } = useI18n()
       </div>
 
       <div v-else-if="users.length === 0" class="py-12 text-center text-gray-400">
-        {{ search ? t('admin.noMatchedUsers', '没有匹配的用户') : t('admin.noUsers', '暂无用户') }}
+        {{ search ? t('admin.noMatchedUsers', 'No matching users') : t('admin.noUsers', 'No users yet') }}
       </div>
 
       <div v-else>
@@ -87,15 +87,15 @@ const { t } = useI18n()
           class="flex items-center gap-3 border-b px-4 py-2 text-xs font-medium"
           style="color: var(--text-secondary-color); border-color: var(--border-color)"
         >
-          <div class="w-40">{{ t('common.username', '用户名') }}</div>
-          <div class="hidden w-36 sm:block">{{ t('common.email', '邮箱') }}</div>
-          <div class="w-16 text-center">{{ t('common.role', '角色') }}</div>
-          <div class="w-14 text-center">{{ t('common.status', '状态') }}</div>
-          <div class="hidden min-w-[140px] flex-1 md:block">{{ t('admin.storageUsage', '存储用量') }}</div>
-          <div class="hidden w-24 lg:block">{{ t('admin.loginIp', '登录 IP') }}</div>
-          <div class="hidden w-32 xl:block">{{ t('admin.registerTime', '注册时间') }}</div>
-          <div class="hidden w-32 2xl:block">{{ t('admin.lastLoginTime', '最近登录') }}</div>
-          <div class="w-28 text-right">{{ t('common.actions', '操作') }}</div>
+          <div class="w-40">{{ t('common.username', 'Username') }}</div>
+          <div class="hidden w-36 sm:block">{{ t('common.email', 'Email') }}</div>
+          <div class="w-16 text-center">{{ t('common.role', 'Role') }}</div>
+          <div class="w-14 text-center">{{ t('common.status', 'Status') }}</div>
+          <div class="hidden min-w-[140px] flex-1 md:block">{{ t('admin.storageUsage', 'Storage Usage') }}</div>
+          <div class="hidden w-24 lg:block">{{ t('admin.loginIp', 'Login IP') }}</div>
+          <div class="hidden w-32 xl:block">{{ t('admin.registerTime', 'Created At') }}</div>
+          <div class="hidden w-32 2xl:block">{{ t('admin.lastLoginTime', 'Last Login') }}</div>
+          <div class="w-28 text-right">{{ t('common.actions', 'Actions') }}</div>
         </div>
 
         <div
@@ -126,7 +126,7 @@ const { t } = useI18n()
                 ? 'background: var(--accent-soft-color); color: var(--accent-color)'
                 : 'background: var(--hover-color); color: var(--text-secondary-color)'"
             >
-              {{ user.role === 'admin' ? t('settings.roleAdmin', '管理员') : t('settings.roleUser', '普通用户') }}
+              {{ user.role === 'admin' ? t('settings.roleAdmin', 'Admin') : t('settings.roleUser', 'User') }}
             </span>
           </div>
 
@@ -135,21 +135,21 @@ const { t } = useI18n()
               v-if="user.banned"
               class="rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600 dark:bg-red-900/30 dark:text-red-400"
             >
-              {{ t('admin.banUser', '封禁用户') }}
+              {{ t('admin.banUser', 'Ban User') }}
             </span>
             <template v-else>
               <span
                 v-if="!user.verified"
                 class="rounded bg-yellow-100 px-1.5 py-0.5 text-xs text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
               >
-                {{ t('admin.verifyUser', '手动验证') }}
+                {{ t('admin.verifyUser', 'Verify User') }}
               </span>
               <span v-else class="h-2 w-2 rounded-full bg-green-500"></span>
             </template>
           </div>
 
           <div class="hidden min-w-[140px] flex-1 md:block">
-            <button class="group w-full text-left" :title="t('admin.editQuota', '调整存储配额')" @click="$emit('quota', user)">
+            <button class="group w-full text-left" :title="t('admin.editQuota', 'Adjust Storage Quota')" @click="$emit('quota', user)">
               <div class="flex items-center gap-1.5">
                 <div class="h-1.5 min-w-[40px] flex-1 rounded-full" style="background: var(--hover-color)">
                   <div
@@ -175,35 +175,35 @@ const { t } = useI18n()
             <button
               v-if="!user.verified"
               class="rounded p-1.5 transition-colors hover:bg-green-50 dark:hover:bg-green-900/20"
-              :title="t('admin.verifyUser', '手动验证')"
+              :title="t('admin.verifyUser', 'Verify User')"
               @click="$emit('verify', user)"
             >
               <Icon name="badge-check" class="h-4 w-4 text-green-500" />
             </button>
             <button
               class="rounded p-1.5 transition-colors hover:bg-cyan-50 dark:hover:bg-cyan-900/20"
-              :title="`${t('common.quota', '配额')}: ${formatBytes(user.storage_quota)}`"
+              :title="`${t('common.quota', 'Quota')}: ${formatBytes(user.storage_quota)}`"
               @click="$emit('quota', user)"
             >
               <Icon name="database" class="h-4 w-4 text-cyan-500" />
             </button>
             <button
               class="rounded p-1.5 transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/20"
-              :title="t('admin.userDetails', '用户详情')"
+              :title="t('admin.userDetails', 'User Details')"
               @click="$emit('detail', user)"
             >
               <Icon name="eye" class="h-4 w-4 text-blue-500" />
             </button>
             <button
               class="rounded p-1.5 transition-colors hover:bg-purple-50 dark:hover:bg-purple-900/20"
-              :title="user.role === 'admin' ? t('admin.demoteToUser', '降级为普通用户') : t('admin.promoteToAdmin', '升级为管理员')"
+              :title="user.role === 'admin' ? t('admin.demoteToUser', 'Demote to User') : t('admin.promoteToAdmin', 'Promote to Admin')"
               @click="$emit('role', user)"
             >
               <Icon :name="user.role === 'admin' ? 'arrow-down' : 'arrow-up'" class="h-4 w-4 text-purple-500" />
             </button>
             <button
               class="rounded p-1.5 transition-colors hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
-              :title="t('admin.resetPassword', '重置密码')"
+              :title="t('admin.resetPassword', 'Reset Password')"
               @click="$emit('resetPassword', user)"
             >
               <Icon name="key" class="h-4 w-4 text-yellow-500" />
@@ -211,7 +211,7 @@ const { t } = useI18n()
             <button
               class="rounded p-1.5 transition-colors"
               :class="user.banned ? 'hover:bg-green-50 dark:hover:bg-green-900/20' : 'hover:bg-orange-50 dark:hover:bg-orange-900/20'"
-              :title="user.banned ? t('admin.unbanUser', '解封用户') : t('admin.banUser', '封禁用户')"
+              :title="user.banned ? t('admin.unbanUser', 'Unban User') : t('admin.banUser', 'Ban User')"
               @click="$emit('ban', user)"
             >
               <Icon v-if="user.banned" name="check" class="h-4 w-4 text-green-500" />
@@ -219,7 +219,7 @@ const { t } = useI18n()
             </button>
             <button
               class="rounded p-1.5 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-              :title="t('admin.deleteUser', '删除用户')"
+              :title="t('admin.deleteUser', 'Delete User')"
               @click="$emit('delete', user)"
             >
               <Icon name="trash" class="h-4 w-4 text-red-500" />

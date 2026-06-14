@@ -29,12 +29,12 @@ const copyType = ref<'link' | 'sign'>('link')
 const origin = window.location.origin
 
 const expirationOptions = [
-  { value: '', label: t('share.neverExpire', '永不过期') },
-  { value: 1, label: '1 ' + t('share.hour', '小时') },
-  { value: 24, label: '1 ' + t('share.day', '天') },
-  { value: 72, label: '3 ' + t('share.day', '天') },
-  { value: 168, label: '7 ' + t('share.day', '天') },
-  { value: 720, label: '30 ' + t('share.day', '天') }
+  { value: '', label: t('share.neverExpire', 'Never Expires') },
+  { value: 1, label: '1 ' + t('share.hour', 'hour') },
+  { value: 24, label: '1 ' + t('share.day', 'day') },
+  { value: 72, label: '3 ' + t('share.day', 'day') },
+  { value: 168, label: '7 ' + t('share.day', 'day') },
+  { value: 720, label: '30 ' + t('share.day', 'day') }
 ]
 
 async function createShare() {
@@ -98,51 +98,51 @@ function close() {
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="close" />
       <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
         <template v-if="shareResult">
-          <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('share.createdTitle', '分享链接已创建') }}</h3>
+          <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('share.createdTitle', 'Share Link Created') }}</h3>
           <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
-            {{ t('share.fileLabel', '文件：{name}').replace('{name}', fileName) }}
+            {{ t('share.fileLabel', 'File: {name}').replace('{name}', fileName) }}
           </p>
 
           <div class="mb-3 rounded-lg p-3" style="background-color: var(--hover-color)">
-            <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.signedLink', '分享链接（需签名鉴权）') }}</p>
+            <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.signedLink', 'Share link (signed access required)') }}</p>
             <p class="break-all font-mono text-sm" style="color: var(--text-color)">{{ origin }}{{ shareResult.signUrl }}</p>
           </div>
 
           <div class="mb-3 rounded-lg p-3" style="background-color: var(--hover-color)">
-            <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.signKey', '签名密钥（signKey）') }}</p>
+            <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.signKey', 'Signature key (signKey)') }}</p>
             <p class="font-mono text-sm" style="color: var(--text-color)">{{ shareResult.signKey }}</p>
             <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">
-              {{ t('share.signKeyHint', '用于生成临时授权签名，公式：MD5(username + signKey).slice(4,12) + timestamp') }}
+              {{ t('share.signKeyHint', 'Used to generate temporary signed access. Formula: MD5(username + signKey).slice(4,12) + timestamp') }}
             </p>
           </div>
 
           <div v-if="usePassword && password" class="mb-3 rounded-lg p-3" style="background-color: var(--hover-color)">
-            <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.accessPassword', '访问密码') }}</p>
+            <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.accessPassword', 'Access Password') }}</p>
             <p class="font-mono text-sm" style="color: var(--text-color)">{{ password }}</p>
           </div>
 
           <div class="flex justify-end gap-3">
             <button class="btn-secondary flex items-center gap-1 text-sm" @click="copyLink('link')">
               <Icon v-if="copied && copyType === 'link'" name="circle-check" class="h-4 w-4" />
-              <span>{{ copied && copyType === 'link' ? t('share.copied', '已复制') : t('share.copyLink', '复制链接') }}</span>
+              <span>{{ copied && copyType === 'link' ? t('share.copied', 'Copied') : t('share.copyLink', 'Copy Link') }}</span>
             </button>
             <button class="btn-primary flex items-center gap-1 text-sm" @click="copyLink('sign')">
               <Icon v-if="copied && copyType === 'sign'" name="circle-check" class="h-4 w-4" />
-              <span>{{ copied && copyType === 'sign' ? t('share.copied', '已复制') : t('share.copySignedLink', '复制签名链接') }}</span>
+              <span>{{ copied && copyType === 'sign' ? t('share.copied', 'Copied') : t('share.copySignedLink', 'Copy Signed Link') }}</span>
             </button>
           </div>
         </template>
 
         <template v-else>
-          <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('share.createTitle', '创建分享链接') }}</h3>
+          <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('share.createTitle', 'Create Share Link') }}</h3>
           <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
-            {{ t('share.fileLabel', '文件：{name}').replace('{name}', fileName) }}
+            {{ t('share.fileLabel', 'File: {name}').replace('{name}', fileName) }}
           </p>
 
           <div class="space-y-4">
             <div>
               <label class="flex cursor-pointer items-center justify-between">
-                <span class="text-sm" style="color: var(--text-color)">{{ t('share.passwordProtection', '密码保护') }}</span>
+                <span class="text-sm" style="color: var(--text-color)">{{ t('share.passwordProtection', 'Password Protection') }}</span>
                 <div class="relative inline-flex items-center">
                   <input v-model="usePassword" type="checkbox" class="peer sr-only" />
                   <div class="h-5 w-9 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-500 peer-checked:after:translate-x-full dark:bg-dark-border"></div>
@@ -153,12 +153,12 @@ function close() {
                 v-model="password"
                 type="text"
                 class="input-field mt-2"
-                :placeholder="t('share.passwordPlaceholder', '设置访问密码')"
+                :placeholder="t('share.passwordPlaceholder', 'Set access password')"
               />
             </div>
 
             <div>
-              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('share.expiration', '过期时间') }}</label>
+              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('share.expiration', 'Expiration') }}</label>
               <select v-model="expiresIn" class="input-field">
                 <option v-for="option in expirationOptions" :key="option.label" :value="option.value">
                   {{ option.label }}
@@ -167,22 +167,22 @@ function close() {
             </div>
 
             <div>
-              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('share.maxDownloads', '最大下载次数') }}</label>
+              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('share.maxDownloads', 'Max Downloads') }}</label>
               <input
                 v-model="maxDownloads"
                 type="number"
                 min="1"
                 class="input-field [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                :placeholder="t('share.maxDownloadsPlaceholder', '留空表示不限制')"
+                :placeholder="t('share.maxDownloadsPlaceholder', 'Leave empty for unlimited')"
               />
             </div>
           </div>
 
           <div class="mt-6 flex justify-end gap-3">
-            <button class="btn-secondary text-sm" @click="close">{{ t('common.cancel', '取消') }}</button>
+            <button class="btn-secondary text-sm" @click="close">{{ t('common.cancel', 'Cancel') }}</button>
             <button class="btn-primary text-sm" :disabled="loading" @click="createShare">
-              <span v-if="loading">{{ t('share.creating', '创建中...') }}</span>
-              <span v-else>{{ t('share.createAction', '创建分享') }}</span>
+              <span v-if="loading">{{ t('share.creating', 'Creating...') }}</span>
+              <span v-else>{{ t('share.createAction', 'Create Share') }}</span>
             </button>
           </div>
         </template>

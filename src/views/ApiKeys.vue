@@ -27,9 +27,9 @@ const createdKey = ref<string | null>(null)
 const copiedId = ref<number | null>(null)
 
 const permissionOptions = [
-  { value: 'read', label: t('permissions.read', '读取'), desc: t('apiKeys.readDesc', '查看文件列表、预览和下载文件') },
-  { value: 'write', label: t('permissions.write', '写入'), desc: t('apiKeys.writeDesc', '上传文件、创建目录和编辑内容') },
-  { value: 'delete', label: t('permissions.delete', '删除'), desc: t('apiKeys.deleteDesc', '删除文件或目录') }
+  { value: 'read', label: t('permissions.read', 'Read'), desc: t('apiKeys.readDesc', 'View file lists, preview files, and download files') },
+  { value: 'write', label: t('permissions.write', 'Write'), desc: t('apiKeys.writeDesc', 'Upload files, create directories, and edit content') },
+  { value: 'delete', label: t('permissions.delete', 'Delete'), desc: t('apiKeys.deleteDesc', 'Delete files or directories') }
 ]
 
 async function fetchKeys() {
@@ -115,12 +115,12 @@ function formatDate(dateStr: string): string {
     <div class="mb-4 flex justify-end">
       <button class="btn-primary flex items-center gap-1 text-sm" @click="showCreate = true">
         <Icon name="plus" class="h-4 w-4" />
-        {{ t('apiKeys.create', '创建 Key') }}
+        {{ t('apiKeys.create', 'Create Key') }}
       </button>
     </div>
 
     <p class="mb-4 text-sm text-gray-500 dark:text-dark-text-secondary">
-      {{ t('apiKeys.description', 'API Key 用于程序化访问文件管理 API。请求头中添加：') }}
+      {{ t('apiKeys.description', 'API keys are used for programmatic access to the file management API. Add this request header:') }}
       <code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-surface">X-API-Key: your-key</code>
     </p>
 
@@ -133,7 +133,7 @@ function formatDate(dateStr: string): string {
 
     <div v-else-if="keys.length === 0" class="card flex flex-col items-center justify-center py-16 text-gray-400 dark:text-dark-text-secondary">
       <Icon name="key" class="mb-3 h-16 w-16" />
-      <p>{{ t('apiKeys.emptyTitle', '暂无 API Key') }}</p>
+      <p>{{ t('apiKeys.emptyTitle', 'No API keys yet') }}</p>
     </div>
 
     <div v-else class="space-y-3">
@@ -160,7 +160,7 @@ function formatDate(dateStr: string): string {
         <div class="flex items-center gap-1">
           <button
             class="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-            :title="t('apiKeys.copy', '复制')"
+            :title="t('apiKeys.copy', 'Copy')"
             @click="copyKey(key.key, key.id)"
           >
             <Icon v-if="copiedId === key.id" name="check" class="h-4 w-4 text-green-500" />
@@ -168,7 +168,7 @@ function formatDate(dateStr: string): string {
           </button>
           <button
             class="rounded-lg p-2 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-            :title="t('common.delete', '删除')"
+            :title="t('common.delete', 'Delete')"
             @click="confirmDelete(key)"
           >
             <Icon name="trash" class="h-4 w-4 text-red-500" />
@@ -183,29 +183,29 @@ function formatDate(dateStr: string): string {
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="closeCreate" />
       <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto p-6">
         <template v-if="createdKey">
-          <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('apiKeys.createdTitle', 'API Key 已创建') }}</h3>
+          <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('apiKeys.createdTitle', 'API Key Created') }}</h3>
           <p class="mb-4 text-sm text-gray-500 dark:text-dark-text-secondary">
-            {{ t('apiKeys.createdHint', '请妥善保存此 Key。关闭后将无法再次查看完整内容。') }}
+            {{ t('apiKeys.createdHint', 'Save this key securely. After closing, the full value cannot be viewed again.') }}
           </p>
           <div class="break-all rounded-lg bg-gray-50 p-3 font-mono text-sm text-light-text dark:bg-dark-surface dark:text-dark-text">
             {{ createdKey }}
           </div>
           <div class="mt-4 flex justify-end">
             <button class="btn-primary text-sm" @click="copyKey(createdKey, -1); closeCreate()">
-              {{ copiedId === -1 ? t('share.copied', '已复制') : t('apiKeys.copyAndClose', '复制并关闭') }}
+              {{ copiedId === -1 ? t('share.copied', 'Copied') : t('apiKeys.copyAndClose', 'Copy and Close') }}
             </button>
           </div>
         </template>
 
         <template v-else>
-          <h3 class="mb-4 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('apiKeys.createTitle', '创建 API Key') }}</h3>
+          <h3 class="mb-4 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('apiKeys.createTitle', 'Create API Key') }}</h3>
           <div class="space-y-4">
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('apiKeys.name', '名称') }}</label>
-              <input v-model="newKeyName" type="text" class="input-field" :placeholder="t('apiKeys.namePlaceholder', '例如：我的应用')" />
+              <label class="mb-1.5 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('apiKeys.name', 'Name') }}</label>
+              <input v-model="newKeyName" type="text" class="input-field" :placeholder="t('apiKeys.namePlaceholder', 'Example: My App')" />
             </div>
             <div>
-              <label class="mb-2 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('apiKeys.permissions', '权限') }}</label>
+              <label class="mb-2 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('apiKeys.permissions', 'Permissions') }}</label>
               <div class="space-y-2">
                 <label
                   v-for="option in permissionOptions"
@@ -230,9 +230,9 @@ function formatDate(dateStr: string): string {
             </div>
           </div>
           <div class="mt-6 flex justify-end gap-3">
-            <button class="btn-secondary text-sm" @click="closeCreate">{{ t('common.cancel', '取消') }}</button>
+            <button class="btn-secondary text-sm" @click="closeCreate">{{ t('common.cancel', 'Cancel') }}</button>
             <button class="btn-primary text-sm" :disabled="!newKeyName.trim() || creating" @click="createKey">
-              {{ creating ? t('apiKeys.creating', '创建中...') : t('common.create', '创建') }}
+              {{ creating ? t('apiKeys.creating', 'Creating...') : t('common.create', 'Create') }}
             </button>
           </div>
         </template>
@@ -242,9 +242,9 @@ function formatDate(dateStr: string): string {
 
   <ConfirmDialog
     :show="showDeleteConfirm"
-    :title="t('apiKeys.deleteTitle', '删除 API Key')"
-    :message="t('apiKeys.deleteMessage', '确定要删除「{name}」吗？使用此 Key 的应用将无法继续访问。').replace('{name}', keyToDelete?.name || '')"
-    :confirm-text="t('common.delete', '删除')"
+    :title="t('apiKeys.deleteTitle', 'Delete API Key')"
+    :message="t('apiKeys.deleteMessage', 'Delete {name}? Applications using this key will no longer be able to access the service.').replace('{name}', keyToDelete?.name || '')"
+    :confirm-text="t('common.delete', 'Delete')"
     :danger="true"
     @confirm="handleDelete"
     @cancel="showDeleteConfirm = false"

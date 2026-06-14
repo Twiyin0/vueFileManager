@@ -1,6 +1,5 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api'
-import type { AppLanguage } from '@/stores/i18n'
 import { useI18nStore } from '@/stores/i18n'
 
 export interface AdminUser {
@@ -130,11 +129,9 @@ export function useAdminPage() {
 
   const uploadLimit = ref(100)
   const maxConcurrentUploads = ref(3)
-  const language = ref<AppLanguage>('zh-CN')
   const showUploadLimitDialog = ref(false)
   const newUploadLimit = ref('100')
   const newMaxConcurrentUploads = ref('3')
-  const newLanguage = ref<AppLanguage>('zh-CN')
 
   const databaseSaving = ref(false)
   const databaseTesting = ref(false)
@@ -191,10 +188,9 @@ export function useAdminPage() {
 
   async function fetchSystemSettings() {
     try {
-      const res = await api.get<{ upload_limit: number; max_concurrent_uploads: number; language: AppLanguage }>('/admin/upload-limit')
+      const res = await api.get<{ upload_limit: number; max_concurrent_uploads: number }>('/admin/upload-limit')
       uploadLimit.value = res.upload_limit
       maxConcurrentUploads.value = Number(res.max_concurrent_uploads || 3)
-      language.value = res.language || 'zh-CN'
     } catch {}
   }
 
@@ -264,8 +260,11 @@ export function useAdminPage() {
   }
 
   async function handleResetPwd() {
-    resetPwdError.value = ''
     if (!resetPwdUser.value) return
+    if (resetPwdForm.value.password.length < 6) {
+      resetPwdError.value = t('admin.newPasswordPlaceholder', '新密码，至少 6 位')
+      return
+    }
     try {
       await api.put(`/admin/users/${resetPwdUser.value.id}/password`, resetPwdForm.value)
       showResetPwdDialog.value = false
@@ -280,13 +279,15 @@ export function useAdminPage() {
       show: true,
       userId: user.id,
       username: user.username,
-      quotaMB: Math.round(user.storage_quota / 1024 / 1024)
+      quotaMB: Math.round((user.storage_quota || 0) / 1024 / 1024)
     }
   }
 
   async function saveQuota() {
     try {
-      await api.put(`/admin/users/${quotaDialog.value.userId}/quota`, { quota: quotaDialog.value.quotaMB * 1024 * 1024 })
+      await api.put(`/admin/users/${quotaDialog.value.userId}/quota`, {
+        quotaMB: quotaDialog.value.quotaMB
+      })
       quotaDialog.value.show = false
       await fetchUsers()
     } catch (err: any) {
@@ -295,49 +296,37 @@ export function useAdminPage() {
   }
 
   function toggleRole(user: AdminUser) {
-    const newRole = user.role === 'admin' ? 'user' : 'admin'
-    const isPromoting = newRole === 'admin'
+    const isPromote = user.role !== 'admin'
     confirmAction.value = {
       show: true,
-      title: t(isPromoting ? 'admin.confirmRoleTitleAdmin' : 'admin.confirmRoleTitleUser', isPromoting ? '升级为管理员' : '降级为普通用户'),
+      title: t(isPromote ? 'admin.confirmRoleTitleAdmin' : 'admin.confirmRoleTitleUser', isPromote ? '升级为管理员' : '降级为普通用户'),
       message: interpolate(
-        t(
-          isPromoting ? 'admin.confirmRoleMessageAdmin' : 'admin.confirmRoleMessageUser',
-          isPromoting ? '确认将“{username}”升级为管理员吗？' : '确认将“{username}”降级为普通用户吗？'
-        ),
+        t(isPromote ? 'admin.confirmRoleMessageAdmin' : 'admin.confirmRoleMessageUser', isPromote ? '确认将“{username}”升级为管理员吗？' : '确认将“{username}”降级为普通用户吗？'),
         { username: user.username }
       ),
-      confirmText: t(isPromoting ? 'admin.promoteToAdmin' : 'admin.demoteToUser', isPromoting ? '升级为管理员' : '降级为普通用户'),
-      danger: !isPromoting,
+      confirmText: t('common.confirm', '确认'),
+      danger: false,
       onConfirm: async () => {
-        try {
-          await api.put(`/admin/users/${user.id}/role`, { role: newRole })
-          await fetchUsers()
-        } catch (err: any) {
-          alert(err.message)
-        }
+        await api.put(`/admin/users/${user.id}/role`, { role: isPromote ? 'admin' : 'user' })
+        await fetchUsers()
       }
     }
   }
 
   function toggleBan(user: AdminUser) {
-    const isBanning = !user.banned
+    const isBan = !user.banned
     confirmAction.value = {
       show: true,
-      title: t(isBanning ? 'admin.confirmBanTitle' : 'admin.confirmUnbanTitle', isBanning ? '封禁用户' : '解封用户'),
+      title: t(isBan ? 'admin.confirmBanTitle' : 'admin.confirmUnbanTitle', isBan ? '封禁用户' : '解封用户'),
       message: interpolate(
-        t(isBanning ? 'admin.confirmBanMessage' : 'admin.confirmUnbanMessage', isBanning ? '确认封禁“{username}”吗？该用户将无法继续登录。' : '确认解封“{username}”吗？'),
+        t(isBan ? 'admin.confirmBanMessage' : 'admin.confirmUnbanMessage', isBan ? '确认封禁“{username}”吗？该用户将无法继续登录。' : '确认解封“{username}”吗？'),
         { username: user.username }
       ),
-      confirmText: t(isBanning ? 'admin.banUser' : 'admin.unbanUser', isBanning ? '封禁用户' : '解封用户'),
-      danger: isBanning,
+      confirmText: t('common.confirm', '确认'),
+      danger: isBan,
       onConfirm: async () => {
-        try {
-          await api.put(`/admin/users/${user.id}/ban`)
-          await fetchUsers()
-        } catch (err: any) {
-          alert(err.message)
-        }
+        await api.put(`/admin/users/${user.id}/ban`, { banned: isBan })
+        await fetchUsers()
       }
     }
   }
@@ -345,20 +334,13 @@ export function useAdminPage() {
   function confirmDelete(user: AdminUser) {
     confirmAction.value = {
       show: true,
-      title: t('admin.deleteUser', '删除用户'),
-      message: interpolate(
-        t('admin.confirmDeleteUserMessage', '确认删除用户“{username}”吗？该用户相关数据将被永久删除。'),
-        { username: user.username }
-      ),
+      title: t('common.delete', '删除'),
+      message: interpolate(t('admin.confirmDeleteUserMessage', '确认删除用户“{username}”吗？该用户相关数据将被永久删除。'), { username: user.username }),
       confirmText: t('common.delete', '删除'),
       danger: true,
       onConfirm: async () => {
-        try {
-          await api.delete(`/admin/users/${user.id}`)
-          await fetchUsers()
-        } catch (err: any) {
-          alert(err.message)
-        }
+        await api.delete(`/admin/users/${user.id}`)
+        await fetchUsers()
       }
     }
   }
@@ -385,7 +367,6 @@ export function useAdminPage() {
   function openUploadLimitDialog() {
     newUploadLimit.value = String(uploadLimit.value)
     newMaxConcurrentUploads.value = String(maxConcurrentUploads.value)
-    newLanguage.value = language.value
     showUploadLimitDialog.value = true
   }
 
@@ -404,18 +385,16 @@ export function useAdminPage() {
     }
 
     try {
-      await api.put('/admin/upload-limit', {
+      const res = await api.put<{ message: string }>('/admin/upload-limit', {
         upload_limit: limit,
-        max_concurrent_uploads: concurrency,
-        language: newLanguage.value
+        max_concurrent_uploads: concurrency
       })
       uploadLimit.value = limit
       maxConcurrentUploads.value = concurrency
-      language.value = newLanguage.value
-      await i18n.loadLanguage(newLanguage.value)
       showUploadLimitDialog.value = false
+      setDatabaseMessage(res.message || t('admin.settingsSaved', '系统设置已保存'), 'success')
     } catch (err: any) {
-      alert(err.message)
+      setDatabaseMessage(err.message, 'error')
     }
   }
 
@@ -495,28 +474,28 @@ export function useAdminPage() {
       confirmText: t('common.delete', '删除'),
       danger: true,
       onConfirm: async () => {
-        try {
-          await api.delete(`/admin/ip-blacklist/${entry.id}`)
-          await fetchIpBlacklist()
-        } catch (err: any) {
-          alert(err.message)
-        }
+        await api.delete(`/admin/ip-blacklist/${entry.id}`)
+        await fetchIpBlacklist()
       }
     }
   }
 
-  onMounted(() => {
-    void fetchUsers()
-    void fetchSystemSettings()
-    void fetchDatabaseConfig()
-    void fetchIpBlacklist()
-    void fetchIpListMode()
+  onMounted(async () => {
+    await Promise.all([
+      fetchUsers(),
+      fetchSystemSettings(),
+      fetchDatabaseConfig(),
+      fetchIpBlacklist(),
+      fetchIpListMode()
+    ])
   })
 
   return {
     users,
     loading,
     search,
+    filteredUsers,
+    stats,
     showCreateDialog,
     createForm,
     createError,
@@ -532,11 +511,9 @@ export function useAdminPage() {
     quotaDialog,
     uploadLimit,
     maxConcurrentUploads,
-    language,
     showUploadLimitDialog,
     newUploadLimit,
     newMaxConcurrentUploads,
-    newLanguage,
     databaseSaving,
     databaseTesting,
     databaseMessage,
@@ -548,9 +525,6 @@ export function useAdminPage() {
     showAddIpDialog,
     ipForm,
     ipError,
-    filteredUsers,
-    stats,
-    fetchUsers,
     openCreateDialog,
     handleCreate,
     viewDetail,

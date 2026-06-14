@@ -148,7 +148,7 @@ onUnmounted(() => {
             <router-link
               to="/settings"
               class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-opacity hover:opacity-80"
-              :title="t('app.settings', '设置')"
+              :title="t('app.settings', 'Settings')"
               style="color: var(--text-color)"
             >
               <Icon name="gear" class="h-5 w-5" />
@@ -156,12 +156,12 @@ onUnmounted(() => {
             <div class="flex items-center gap-2">
               <span class="text-sm" style="color: var(--text-secondary-color)">{{ authStore.user?.username }}</span>
               <button class="text-sm text-red-500 hover:text-red-600" @click="authStore.logout()">
-                {{ t('app.logout', '退出') }}
+                {{ t('app.logout', 'Logout') }}
               </button>
             </div>
           </template>
           <template v-else>
-            <router-link to="/login" class="btn-primary text-sm">{{ t('app.login', '登录') }}</router-link>
+            <router-link to="/login" class="btn-primary text-sm">{{ t('app.login', 'Login') }}</router-link>
           </template>
         </template>
 
@@ -213,14 +213,14 @@ onUnmounted(() => {
                     @click="showMoreMenu = false"
                   >
                     <Icon name="gear" class="h-4 w-4" style="color: var(--text-secondary-color)" />
-                    {{ t('app.settings', '设置') }}
+                    {{ t('app.settings', 'Settings') }}
                   </router-link>
                   <button
                     class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
                     @click="authStore.logout(); showMoreMenu = false"
                   >
                     <Icon name="arrow-right-from-bracket" class="h-4 w-4" />
-                    {{ t('app.logout', '退出') }} ({{ authStore.user?.username }})
+                    {{ t('app.logout', 'Logout') }} ({{ authStore.user?.username }})
                   </button>
                 </template>
                 <template v-else>
@@ -231,7 +231,7 @@ onUnmounted(() => {
                     @click="showMoreMenu = false"
                   >
                     <Icon name="arrow-right-to-bracket" class="h-4 w-4" />
-                    {{ t('app.login', '登录') }}
+                    {{ t('app.login', 'Login') }}
                   </router-link>
                 </template>
               </div>
@@ -260,12 +260,12 @@ onUnmounted(() => {
         <slot />
         <footer class="flex-shrink-0 px-4 py-1.5 text-center" style="color: var(--text-secondary-color)">
           <p class="text-xs opacity-60" style="line-height: 1.4">
-            © {{ new Date().getFullYear() }}
+            (c) {{ new Date().getFullYear() }}
             <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100" style="color: var(--accent-color)">VueFileManager</a>
             by <a href="https://github.com/Twiyin0" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100" style="color: var(--accent-color)">Twiyin0</a>
-            · MIT License
+            {{ t('common.separator', ' | ') }}MIT License
             <template v-if="siteConfig.icp_beian || siteConfig.police_beian">
-              <span class="mx-1">·</span>
+              <span class="mx-1">{{ t('common.separator', ' | ') }}</span>
               <a v-if="siteConfig.icp_beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100">{{ siteConfig.icp_beian }}</a>
               <span v-if="siteConfig.icp_beian && siteConfig.police_beian" class="mx-1">|</span>
               <a v-if="siteConfig.police_beian" href="https://www.beian.gov.cn/" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100">{{ siteConfig.police_beian }}</a>
@@ -276,7 +276,7 @@ onUnmounted(() => {
     </div>
 
     <Transition name="back-to-top">
-      <button v-if="showBackToTop" class="back-to-top-btn" :title="t('common.backToTop', '回到顶部')" @click="scrollToTop">
+      <button v-if="showBackToTop" class="back-to-top-btn" :title="t('common.backToTop', 'Back to top')" @click="scrollToTop">
         <Icon name="arrow-up" class="h-5 w-5" />
       </button>
     </Transition>

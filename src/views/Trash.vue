@@ -16,7 +16,8 @@ interface TrashItem {
   deleted_by?: string
 }
 
-const { t } = useI18n()
+const { t, format, language } = useI18n()
+
 const loading = ref(false)
 const items = ref<TrashItem[]>([])
 const message = ref('')
@@ -56,7 +57,7 @@ async function loadTrash() {
     const res = await api.get<{ items: TrashItem[] }>('/trash')
     items.value = res.items
   } catch (err: any) {
-    showMsg(err.message || t('trash.loadFailed', '加载回收站失败'), 'error')
+    showMsg(err.message || t('trash.loadFailed', 'Failed to load trash'), 'error')
   } finally {
     loading.value = false
   }
@@ -75,50 +76,50 @@ function showMsg(text: string, type: 'success' | 'error') {
 async function restoreItem(item: TrashItem) {
   try {
     await api.post(`/trash/${item.id}/restore`)
-    showMsg(t('trash.restored', '已恢复'), 'success')
+    showMsg(t('trash.restored', 'Restored'), 'success')
     await loadTrash()
   } catch (err: any) {
-    showMsg(err.message || t('trash.restoreFailed', '恢复失败'), 'error')
+    showMsg(err.message || t('trash.restoreFailed', 'Restore failed'), 'error')
   }
 }
 
 async function deleteItem(item: TrashItem) {
-  if (!window.confirm(t('trash.deleteConfirm', '确定永久删除“{name}”吗？此操作不可恢复。').replace('{name}', item.file_name))) {
+  if (!window.confirm(format('trash.deleteConfirm', 'Permanently delete \\"{name}\\"? This action cannot be undone.', { name: item.file_name }))) {
     return
   }
 
   try {
     await api.delete(`/trash/${item.id}`)
-    showMsg(t('trash.deleted', '已永久删除'), 'success')
+    showMsg(t('trash.deleted', 'Permanently deleted'), 'success')
     await loadTrash()
   } catch (err: any) {
-    showMsg(err.message || t('trash.deleteFailed', '删除失败'), 'error')
+    showMsg(err.message || t('trash.deleteFailed', 'Delete failed'), 'error')
   }
 }
 
 async function emptyTrash() {
-  if (!window.confirm(t('trash.emptyConfirm', '确定清空回收站吗？此操作不可恢复。'))) {
+  if (!window.confirm(t('trash.emptyConfirm', 'Empty the trash? This action cannot be undone.'))) {
     return
   }
 
   try {
     await api.delete('/trash')
-    showMsg(t('trash.emptied', '回收站已清空'), 'success')
+    showMsg(t('trash.emptied', 'Trash emptied'), 'success')
     await loadTrash()
   } catch (err: any) {
-    showMsg(err.message || t('trash.emptyFailed', '清空失败'), 'error')
+    showMsg(err.message || t('trash.emptyFailed', 'Failed to empty trash'), 'error')
   }
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleString('zh-CN')
+  return new Date(date).toLocaleString(language.value)
 }
 </script>
 
 <template>
   <div class="px-4 pt-4">
     <div v-if="items.length > 0" class="mb-4 flex justify-end">
-      <button class="btn-danger text-sm" @click="emptyTrash">{{ t('trash.emptyAction', '清空回收站') }}</button>
+      <button class="btn-danger text-sm" @click="emptyTrash">{{ t('trash.emptyAction', 'Empty Trash') }}</button>
     </div>
 
     <div
@@ -153,26 +154,27 @@ function formatDate(date: string) {
               </span>
             </p>
             <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
-              {{ t('trash.originalPath', '原路径：{path}').replace('{path}', item.original_path) }}
+              {{ format('trash.originalPath', 'Original path: {path}', { path: item.original_path }) }}
             </p>
             <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
-              {{ t('trash.metaLine', '存储池：{pool} · 删除时间：{time}')
-                .replace('{pool}', String(item.pool_name || item.storage_pool_id))
-                .replace('{time}', formatDate(item.deleted_at)) }}
+              {{ format('trash.metaLine', 'Pool: {pool} | Deleted at: {time}', {
+                pool: String(item.pool_name || item.storage_pool_id),
+                time: formatDate(item.deleted_at)
+              }) }}
             </p>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button class="btn-secondary px-3 py-1.5 text-sm" @click="restoreItem(item)">{{ t('trash.restore', '恢复') }}</button>
-          <button class="btn-danger px-3 py-1.5 text-sm" @click="deleteItem(item)">{{ t('trash.deletePermanent', '永久删除') }}</button>
+          <button class="btn-secondary px-3 py-1.5 text-sm" @click="restoreItem(item)">{{ t('trash.restore', 'Restore') }}</button>
+          <button class="btn-danger px-3 py-1.5 text-sm" @click="deleteItem(item)">{{ t('trash.deletePermanent', 'Delete Permanently') }}</button>
         </div>
       </div>
     </div>
 
     <div v-else class="py-20 text-center">
       <Icon name="trash" class="mx-auto mb-4 h-16 w-16 text-gray-300 dark:text-gray-600" />
-      <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('trash.emptyTitle', '回收站为空') }}</h3>
-      <p class="text-gray-500 dark:text-dark-text-secondary">{{ t('trash.emptyDescription', '删除的文件和文件夹会显示在这里。') }}</p>
+      <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('trash.emptyTitle', 'Trash is Empty') }}</h3>
+      <p class="text-gray-500 dark:text-dark-text-secondary">{{ t('trash.emptyDescription', 'Deleted files and folders will appear here.') }}</p>
     </div>
   </div>
 </template>

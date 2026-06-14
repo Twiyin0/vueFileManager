@@ -69,7 +69,7 @@ function isActive(path: string) {
       <button
         class="w-full rounded-md p-2 transition-colors"
         style="color: var(--text-secondary-color)"
-        :title="collapsed ? t('common.expand', '展开') : t('common.collapse', '收起')"
+        :title="collapsed ? t('common.expand', 'Expand') : t('common.collapse', 'Collapse')"
         @click="emit('toggle')"
       >
         <div class="flex items-center justify-center">
@@ -107,10 +107,10 @@ function isActive(path: string) {
         to="/guest"
         class="sidebar-item relative flex items-center text-sm transition-all duration-150"
         :class="collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-1.5'"
-        :title="collapsed ? t('app.guestMode', '访客模式') : undefined"
+        :title="collapsed ? t('app.guestMode', 'Guest Mode') : undefined"
       >
         <Icon name="globe" class="h-5 w-5 flex-shrink-0" />
-        <span v-if="!collapsed" class="truncate">{{ t('app.guestMode', '访客模式') }}</span>
+        <span v-if="!collapsed" class="truncate">{{ t('app.guestMode', 'Guest Mode') }}</span>
       </router-link>
     </nav>
 

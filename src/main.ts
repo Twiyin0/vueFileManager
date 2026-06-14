@@ -2,8 +2,13 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import { useAuthStore } from '@/stores/auth'
 import { useI18nStore, type AppLanguage } from '@/stores/i18n'
 import './styles/main.css'
+
+function normalizeLanguage(language: unknown): AppLanguage {
+  return language === 'en-US' ? 'en-US' : 'zh-CN'
+}
 
 async function bootstrap() {
   const app = createApp(App)
@@ -13,11 +18,14 @@ async function bootstrap() {
   app.use(router)
 
   const i18nStore = useI18nStore()
+  const authStore = useAuthStore()
 
   try {
-    const response = await fetch('/api/site-config', { cache: 'no-cache' })
-    const siteConfig = response.ok ? await response.json() : { language: 'zh-CN' }
-    await i18nStore.initialize((siteConfig.language || 'zh-CN') as AppLanguage)
+    if (localStorage.getItem('token')) {
+      await authStore.fetchUser()
+    }
+    const userLanguage = authStore.user?.settings?.language
+    await i18nStore.initialize(normalizeLanguage(userLanguage || 'zh-CN'))
   } catch {
     await i18nStore.initialize('zh-CN')
   }

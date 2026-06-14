@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '@/api'
-import { useRouter } from 'vue-router'
+
+export interface UserSettings {
+  guestEnabled: boolean
+  guestPath: string
+  theme: string
+  language?: 'zh-CN' | 'en-US'
+  uploadConcurrency: number
+  serverDefaultUploadConcurrency?: number
+}
 
 export interface User {
   id: number
@@ -9,19 +17,9 @@ export interface User {
   role: 'admin' | 'user'
   registerIp?: string
   lastLoginIp?: string
+  lastLoginAt?: string
   createdAt?: string
-  settings?: {
-    storageType: string
-    localPath: string
-    guestEnabled: boolean
-    guestPath: string
-    theme: string
-    uploadConcurrency: number
-    serverDefaultUploadConcurrency?: number
-    upyunOperator: string
-    upyunBucket: string
-    upyunEndpoint: string
-  }
+  settings?: UserSettings
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -38,8 +36,11 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.post<{ token: string; user: User }>('/auth/login', { username, password })
       token.value = res.token
       localStorage.setItem('token', res.token)
-      user.value = res.user
-      return res
+      const nextUser = await fetchUser()
+      return {
+        token: res.token,
+        user: nextUser || res.user
+      }
     } finally {
       loading.value = false
     }
@@ -51,8 +52,11 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.post<{ token: string; user: User }>('/auth/register', { username, password })
       token.value = res.token
       localStorage.setItem('token', res.token)
-      user.value = res.user
-      return res
+      const nextUser = await fetchUser()
+      return {
+        token: res.token,
+        user: nextUser || res.user
+      }
     } finally {
       loading.value = false
     }
@@ -62,12 +66,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await api.get<{ user: User }>('/auth/me')
       user.value = res.user
-      // 仅在用户未设置本地主题时，应用服务端主题
       if (!localStorage.getItem('theme') && res.user.settings?.theme) {
         applyTheme(res.user.settings.theme)
       }
+      return res.user
     } catch {
       logout()
+      return null
     }
   }
 
@@ -83,19 +88,23 @@ export const useAuthStore = defineStore('auth', () => {
       root.classList.add('dark')
     } else if (theme === 'light') {
       root.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      root.classList.add('dark')
     } else {
-      // 跟随系统
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        root.classList.add('dark')
-      } else {
-        root.classList.remove('dark')
-      }
+      root.classList.remove('dark')
     }
   }
 
   return {
-    user, token, loading,
-    isLoggedIn, isAdmin,
-    login, register, fetchUser, logout, applyTheme
+    user,
+    token,
+    loading,
+    isLoggedIn,
+    isAdmin,
+    login,
+    register,
+    fetchUser,
+    logout,
+    applyTheme
   }
 })

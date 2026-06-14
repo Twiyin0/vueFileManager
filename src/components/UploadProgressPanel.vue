@@ -30,7 +30,7 @@ const { t } = useI18n()
     >
       <div class="flex items-center justify-between gap-3 border-b px-4 py-3" style="border-color: var(--border-color); background-color: var(--surface-color)">
         <h4 class="text-sm font-semibold" style="color: var(--text-color)">
-          {{ t('upload.progressTitle', '上传进度') }}
+          {{ t('upload.progressTitle', 'Upload Progress') }}
           <span v-if="uploadStatusLabel" class="ml-2 text-xs" :class="uploadStatus === 'cancelled' ? 'text-red-500' : 'text-amber-500'">
             {{ uploadStatusLabel }}
           </span>
@@ -42,7 +42,7 @@ const { t } = useI18n()
             class="btn-secondary px-3 py-1 text-xs"
             @click="emit('cancel')"
           >
-            {{ t('upload.cancel', '取消上传') }}
+            {{ t('upload.cancel', 'Cancel Upload') }}
           </button>
           <button
             class="rounded p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
@@ -63,7 +63,7 @@ const { t } = useI18n()
 
       <div v-if="collapsed" class="flex items-center justify-between gap-3 px-4 py-3 text-xs" style="color: var(--text-secondary-color)">
         <span>
-          {{ t('upload.summaryCollapsed', '共 {total} 个，完成 {completed}，失败 {failed}，进行中 {active}')
+          {{ t('upload.summaryCollapsed', 'Total {total}, completed {completed}, failed {failed}, active {active}')
             .replace('{total}', String(uploadSummary.total))
             .replace('{completed}', String(uploadSummary.completed))
             .replace('{failed}', String(uploadSummary.failed))
@@ -74,20 +74,20 @@ const { t } = useI18n()
           class="btn-secondary px-2 py-1 text-xs"
           @click="emit('cancel')"
         >
-          {{ t('upload.cancel', '取消上传') }}
+          {{ t('upload.cancel', 'Cancel Upload') }}
         </button>
       </div>
 
       <div v-else class="max-h-[40vh] overflow-y-auto p-4">
         <div class="mb-3 flex items-center justify-between gap-3 text-xs" style="color: var(--text-secondary-color)">
           <span>
-            {{ t('upload.summaryExpanded', '共 {total} 个，完成 {completed}，失败 {failed}，取消 {cancelled}')
+            {{ t('upload.summaryExpanded', 'Total {total}, completed {completed}, failed {failed}, cancelled {cancelled}')
               .replace('{total}', String(uploadSummary.total))
               .replace('{completed}', String(uploadSummary.completed))
               .replace('{failed}', String(uploadSummary.failed))
               .replace('{cancelled}', String(uploadSummary.cancelled)) }}
           </span>
-          <span>{{ t('upload.concurrentCount', '并发中 {count}').replace('{count}', String(uploadActiveCount)) }}</span>
+          <span>{{ t('upload.concurrentCount', 'Active {count}').replace('{count}', String(uploadActiveCount)) }}</span>
         </div>
 
         <div v-for="(item, index) in uploadProgress" :key="index" class="mb-3 last:mb-0">
@@ -95,10 +95,10 @@ const { t } = useI18n()
             <span class="max-w-[220px] truncate" style="color: var(--text-color)">{{ item.file }}</span>
             <span class="ml-2 flex-shrink-0" style="color: var(--text-secondary-color)">
               {{
-                item.status === 'completed' ? t('upload.statusCompleted', '已完成')
-                  : item.status === 'processing' ? t('upload.statusProcessing', '处理中')
-                  : item.status === 'cancelled' ? t('upload.statusCancelled', '已取消')
-                  : item.status === 'error' ? t('upload.statusFailed', '失败')
+                item.status === 'completed' ? t('upload.statusCompleted', 'Completed')
+                  : item.status === 'processing' ? t('upload.statusProcessing', 'Processing')
+                  : item.status === 'cancelled' ? t('upload.statusCancelled', 'Cancelled')
+                  : item.status === 'error' ? t('upload.statusFailed', 'Failed')
                   : `${item.percent}%`
               }}
             </span>

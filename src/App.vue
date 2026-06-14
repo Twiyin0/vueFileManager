@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Layout from '@/components/Layout.vue'
 
-const authStore = useAuthStore()
 const route = useRoute()
 
 const needsLayout = computed(() => !route.meta.noLayout)
@@ -19,14 +17,8 @@ const keepAliveRouteNames = [
   'Settings',
   'ApiKeys',
   'Themes',
-  'Admin',
+  'Admin'
 ]
-
-onMounted(async () => {
-  if (localStorage.getItem('token')) {
-    await authStore.fetchUser()
-  }
-})
 </script>
 
 <template>

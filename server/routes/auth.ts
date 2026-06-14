@@ -9,6 +9,14 @@ import { sendVerificationCode, verifyCode } from '../services/mail'
 const JWT_SECRET = config.server.jwt_secret
 const router = Router()
 
+function normalizeLanguage(language: unknown) {
+  return language === 'en-US' ? 'en-US' : 'zh-CN'
+}
+
+function getDefaultLanguage() {
+  return normalizeLanguage(config.default_language)
+}
+
 router.post('/send-code', async (req: Request, res: Response) => {
   try {
     if (!config.smtp.enabled) {
@@ -81,7 +89,7 @@ router.post('/register', async (req: Request, res: Response) => {
     ).run(username, hashedPassword, email || null, verified, ip, ip)
 
     const userId = result.lastInsertRowid as number
-    await db.prepare('INSERT INTO user_settings (user_id) VALUES (?)').run(userId)
+    await db.prepare('INSERT INTO user_settings (user_id, language) VALUES (?, ?)').run(userId, getDefaultLanguage())
     await syncStoragePoolsFromConfig(userId)
 
     const token = generateToken(userId)
@@ -159,7 +167,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
 
     const user = await db.prepare(`
       SELECT u.id, u.username, u.role, u.register_ip, u.last_login_ip, u.created_at,
-             s.guest_enabled, s.guest_path, s.theme, s.upload_concurrency
+             s.guest_enabled, s.guest_path, s.theme, s.language, s.upload_concurrency
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
       WHERE u.id = ?
@@ -181,6 +189,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
           guestEnabled: !!user.guest_enabled,
           guestPath: user.guest_path,
           theme: user.theme,
+          language: normalizeLanguage(user.language || getDefaultLanguage()),
           uploadConcurrency: Number(user.upload_concurrency || 0),
           serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3)
         }

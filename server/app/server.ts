@@ -1,5 +1,5 @@
 import express from 'express'
-import config from '../config'
+import config, { configWriteMarkerPath } from '../config'
 import { bootstrapApp } from './bootstrap'
 import { createPublicPlatformRouter } from './features'
 import { registerAppMiddleware } from './middleware'
@@ -14,8 +14,13 @@ export function createServerApp() {
   const app = express()
   const rootDir = appRoot
   const serverEntryPath = resolveFromRoot('server', 'index.ts')
+  const watchEnabled = process.env.NODE_ENV !== 'production'
 
-  watchConfigFile(rootDir, serverEntryPath)
+  watchConfigFile(rootDir, serverEntryPath, {
+    enabled: watchEnabled,
+    internalWriteMarkerPath: configWriteMarkerPath
+  })
+
   registerAppMiddleware(app, { rootDir })
 
   for (const routeModule of protectedRouteModules) {

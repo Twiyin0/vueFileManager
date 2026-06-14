@@ -27,10 +27,10 @@ const { t } = useI18n()
         <p class="mb-6 text-sm" style="color: var(--text-secondary-color)">{{ message }}</p>
         <div class="flex justify-end gap-3">
           <button class="btn-secondary text-sm" @click="emit('cancel')">
-            {{ cancelText || t('common.cancel', '取消') }}
+            {{ cancelText || t('common.cancel', 'Cancel') }}
           </button>
           <button :class="danger ? 'btn-danger text-sm' : 'btn-primary text-sm'" @click="emit('confirm')">
-            {{ confirmText || t('common.confirm', '确认') }}
+            {{ confirmText || t('common.confirm', 'Confirm') }}
           </button>
         </div>
       </div>

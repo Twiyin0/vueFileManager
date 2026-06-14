@@ -3,6 +3,7 @@ import type { ComponentPublicInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import { useOfflineTasks } from '@/composables/useOfflineTasks'
+import { useI18n } from '@/composables/useI18n'
 import { useFilesStore, type FileItem } from '@/stores/files'
 import { useAuthStore } from '@/stores/auth'
 import APlayer from 'aplayer'
@@ -14,6 +15,7 @@ export function useHomeView() {
   const router = useRouter()
   const filesStore = useFilesStore()
   const authStore = useAuthStore()
+  const { t, format } = useI18n()
 
   const showUpload = ref(false)
   const showCreateFolder = ref(false)
@@ -729,23 +731,37 @@ export function useHomeView() {
 
   async function handleBatchDownload() {
     if (selectedFiles.value.size === 0) return
+
     try {
       const allFiles = showSearch.value ? searchResults.value : filesStore.files
       const selectedItems = Array.from(selectedFiles.value)
         .map((path) => allFiles.find((item) => item.path === path))
         .filter((item): item is FileItem => !!item)
       const filesOnly = selectedItems.filter((item) => item.type === 'file')
-      const hasFolders = selectedItems.some((item) => item.type === 'folder')
+      const folderCount = selectedItems.length - filesOnly.length
 
-      if (!hasFolders && filesOnly.length > 0) {
-        await filesStore.downloadFiles(
-          filesOnly.map((file) => ({ path: file.path, poolId: file.poolId || currentPoolId.value })),
-          Math.max(1, currentUploadConcurrency.value)
-        )
-        showToast(`已开始下载 ${filesOnly.length} 个文件`, 'success')
+      if (filesOnly.length === 0) {
+        showToast(t('file.batchDirectDownloadNoFiles', '所选内容中没有可直接下载的文件'), 'info')
         return
       }
 
+      await filesStore.downloadFiles(
+        filesOnly.map((file) => ({ path: file.path, poolId: file.poolId || currentPoolId.value })),
+        Math.max(1, currentUploadConcurrency.value)
+      )
+
+      const message = folderCount > 0
+        ? format('file.batchDirectDownloadStartedWithFolders', '已开始下载 {count} 个文件，文件夹请使用打包下载', { count: filesOnly.length })
+        : format('file.batchDirectDownloadStarted', '已开始下载 {count} 个文件', { count: filesOnly.length })
+      showToast(message, 'success')
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
+
+  async function handleBatchZipDownload() {
+    if (selectedFiles.value.size === 0) return
+    try {
       const response = await fetch('/api/files/download-zip', {
         method: 'POST',
         headers: {
@@ -764,7 +780,7 @@ export function useHomeView() {
       link.download = 'download.zip'
       link.click()
       URL.revokeObjectURL(url)
-      showToast(hasFolders ? '已打包下载所选内容' : '已打包下载所选文件', 'success')
+      showToast(t('file.batchZipDownloadStarted', '已开始打包下载所选内容'), 'success')
     } catch (err: any) {
       alert(err.message)
     }
@@ -1022,6 +1038,9 @@ export function useHomeView() {
       case 'batch-download':
         handleBatchDownload()
         break
+      case 'batch-zip-download':
+        handleBatchZipDownload()
+        break
       case 'batch-copy': {
         const allFiles = showSearch.value ? searchResults.value : filesStore.files
         handleCopy(Array.from(selectedFiles.value).map((path) => {
@@ -1160,6 +1179,7 @@ export function useHomeView() {
     clearSelection,
     handleBatchDelete,
     handleBatchDownload,
+    handleBatchZipDownload,
     toggleFavourite,
     showToast,
     handleCopy,

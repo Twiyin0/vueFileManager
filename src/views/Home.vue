@@ -40,7 +40,7 @@ const { t } = useI18n()
     >
       <div class="rounded-xl border bg-white p-8 text-center dark:bg-dark-card">
         <Icon name="upload" class="mb-3 h-16 w-16" style="color: var(--accent-color)" />
-        <p class="text-lg font-semibold" style="color: var(--text-color)">{{ t('upload.dropOverlay', '拖放文件到此处上传') }}</p>
+        <p class="text-lg font-semibold" style="color: var(--text-color)">{{ t('upload.dropOverlay', 'Drop files here to upload') }}</p>
       </div>
     </div>
 
@@ -55,7 +55,7 @@ const { t } = useI18n()
                 @click.stop="state.showPoolDropdown = !state.showPoolDropdown"
               >
                 <Icon name="server" class="h-4 w-4" />
-                <span>{{ state.currentPoolId ? state.currentPoolName : t('file.allPools', '全部存储池') }}</span>
+                <span>{{ state.currentPoolId ? state.currentPoolName : t('file.allPools', 'All Storage Pools') }}</span>
                 <Icon name="chevron-down" class="h-3 w-3" />
               </button>
 
@@ -70,7 +70,7 @@ const { t } = useI18n()
                   @click="state.goBackToPools(); state.showPoolDropdown = false"
                 >
                   <Icon name="server" class="h-4 w-4" />
-                  {{ t('file.allPools', '全部存储池') }}
+                  {{ t('file.allPools', 'All Storage Pools') }}
                 </button>
                 <div
                   v-for="pool in state.pools"
@@ -100,71 +100,79 @@ const { t } = useI18n()
           </div>
 
           <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <button class="btn-secondary flex items-center gap-1 text-sm" :title="t('search.shortcutHint', 'Ctrl+K 搜索')" @click="state.triggerSpotlight">
+            <button class="btn-secondary flex items-center gap-1 text-sm" :title="t('search.shortcutHint', 'Ctrl+K Search')" @click="state.triggerSpotlight">
               <Icon name="search" class="h-4 w-4" />
-              <span class="hidden sm:inline">{{ t('common.search', '搜索') }}</span>
+              <span class="hidden sm:inline">{{ t('common.search', 'Search') }}</span>
             </button>
 
-            <button class="btn-secondary flex items-center gap-1 text-sm" :title="t('common.refresh', '刷新')" @click="state.filesStore.fetchFiles(state.currentPath, state.currentPoolId)">
+            <button class="btn-secondary flex items-center gap-1 text-sm" :title="t('common.refresh', 'Refresh')" @click="state.filesStore.fetchFiles(state.currentPath, state.currentPoolId)">
               <Icon name="refresh-cw" class="h-4 w-4" />
             </button>
 
             <button v-if="state.currentPath || state.currentPoolId" class="btn-secondary flex items-center gap-1 text-sm" @click="state.goUp">
               <Icon name="arrow-up" class="h-4 w-4" />
-              <span class="hidden sm:inline">{{ t('file.goUp', '上级') }}</span>
+              <span class="hidden sm:inline">{{ t('file.goUp', 'Up') }}</span>
             </button>
 
             <div class="view-mode-toggle flex items-center overflow-hidden rounded-lg border" style="border-color: var(--border-color)">
-              <button class="p-1.5 transition-colors" :class="state.viewMode === 'list' ? 'view-mode-active' : ''" :title="t('file.listView', '列表模式')" @click="state.viewMode = 'list'">
+              <button class="p-1.5 transition-colors" :class="state.viewMode === 'list' ? 'view-mode-active' : ''" :title="t('file.listView', 'List View')" @click="state.viewMode = 'list'">
                 <Icon name="list" class="h-4 w-4" />
               </button>
-              <button class="p-1.5 transition-colors" :class="state.viewMode === 'grid' ? 'view-mode-active' : ''" :title="t('file.gridView', '网格模式')" @click="state.viewMode = 'grid'">
+              <button class="p-1.5 transition-colors" :class="state.viewMode === 'grid' ? 'view-mode-active' : ''" :title="t('file.gridView', 'Grid View')" @click="state.viewMode = 'grid'">
                 <Icon name="grid" class="h-4 w-4" />
               </button>
             </div>
 
             <button class="btn-secondary flex items-center gap-1 text-sm" @click="state.showCreateFolder = true">
               <Icon name="folder-plus" class="h-4 w-4" />
-              <span class="hidden sm:inline">{{ t('file.newFolderShort', '新建') }}</span>
+              <span class="hidden sm:inline">{{ t('file.newFolderShort', 'New') }}</span>
             </button>
 
             <button
               v-if="state.canUseRemoteUpload"
               class="btn-secondary flex items-center gap-1 text-sm"
-              :title="t('file.remoteUploadTitle', '远程 URL 上传')"
+              :title="t('file.remoteUploadTitle', 'Remote URL Upload')"
               @click="state.showRemoteUpload = true"
             >
               <Icon name="network-wired" class="h-4 w-4" />
-              <span class="hidden sm:inline">{{ t('file.remoteUpload', '远程上传') }}</span>
+              <span class="hidden sm:inline">{{ t('file.remoteUpload', 'Remote Upload') }}</span>
             </button>
 
             <button class="btn-primary flex items-center gap-1 text-sm" @click="state.showUpload = true">
               <Icon name="upload" class="h-4 w-4" />
-              <span class="hidden sm:inline">{{ t('upload.shortTitle', '上传') }}</span>
+              <span class="hidden sm:inline">{{ t('upload.shortTitle', 'Upload') }}</span>
             </button>
           </div>
         </div>
 
         <div
           v-if="state.isSelectMode"
-          class="mb-3 flex items-center justify-between rounded-lg p-2 text-sm"
+          class="mb-3 flex flex-col gap-2 rounded-lg p-2 text-sm sm:flex-row sm:items-center sm:justify-between"
           style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)"
         >
           <div class="flex min-w-0 items-center gap-2 sm:gap-3">
             <button class="flex-shrink-0 text-sm hover:underline" style="color: var(--accent-color)" @click="state.selectAll">
               {{
                 state.selectedFiles.size === (state.showSearch ? state.searchResults : state.filesStore.files).length
-                  ? t('file.unselectAll', '取消全选')
-                  : t('file.selectAll', '全选')
+                  ? t('file.unselectAll', 'Unselect All')
+                  : t('file.selectAll', 'Select All')
               }}
             </button>
             <span class="truncate" style="color: var(--text-secondary-color)">
-              {{ t('file.selectedItems', '已选择 {count} 项').replace('{count}', String(state.selectedFiles.size)) }}
+              {{ t('file.selectedItems', '{count} items selected').replace('{count}', String(state.selectedFiles.size)) }}
             </span>
           </div>
-          <button class="ml-2 flex-shrink-0 text-sm hover:underline" style="color: var(--text-secondary-color)" @click="state.clearSelection">
-            {{ t('common.cancel', '取消') }}
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button class="btn-secondary px-3 py-1 text-xs" @click="state.handleBatchDownload">
+              {{ t('file.batchDirectDownload', 'Batch Download') }}
+            </button>
+            <button class="btn-secondary px-3 py-1 text-xs" @click="state.handleBatchZipDownload">
+              {{ t('file.batchZipDownload', 'Download as ZIP') }}
+            </button>
+            <button class="ml-1 flex-shrink-0 text-sm hover:underline" style="color: var(--text-secondary-color)" @click="state.clearSelection">
+              {{ t('common.cancel', 'Cancel') }}
+            </button>
+          </div>
         </div>
 
         <div
@@ -174,11 +182,11 @@ const { t } = useI18n()
         >
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span class="truncate" style="color: var(--text-secondary-color)">
-              {{ (state.clipboardMode === 'copy' ? t('file.copy', '复制') : t('file.move', '移动')) + ' ' + state.clipboardFiles.length + ' ' + t('file.items', '项') }}
+              {{ (state.clipboardMode === 'copy' ? t('file.copy', 'Copy') : t('file.move', 'Move')) + ' ' + state.clipboardFiles.length + ' ' + t('file.items', 'items') }}
             </span>
             <div class="flex flex-shrink-0 items-center gap-2">
-              <button class="btn-primary px-3 py-1 text-xs" @click="state.handlePaste">{{ t('file.paste', '粘贴') }}</button>
-              <button class="btn-secondary px-3 py-1 text-xs" @click="state.clipboardFiles = []">{{ t('file.clear', '清空') }}</button>
+              <button class="btn-primary px-3 py-1 text-xs" @click="state.handlePaste">{{ t('file.paste', 'Paste') }}</button>
+              <button class="btn-secondary px-3 py-1 text-xs" @click="state.clipboardFiles = []">{{ t('file.clear', 'Clear') }}</button>
             </div>
           </div>
         </div>
@@ -186,10 +194,10 @@ const { t } = useI18n()
         <div v-if="state.showSearch" class="mb-4">
           <div class="mb-2 flex items-center justify-between">
             <h3 class="text-sm font-medium" style="color: var(--text-color)">
-              {{ t('search.resultsCount', '搜索结果：{count} 项').replace('{count}', String(state.searchResults.length)) }}
+              {{ t('search.resultsCount', 'Search results: {count} items').replace('{count}', String(state.searchResults.length)) }}
             </h3>
             <button class="text-xs hover:underline" style="color: var(--accent-color)" @click="state.showSearch = false; state.searchQuery = ''">
-              {{ t('file.clear', '清空') }}
+              {{ t('file.clear', 'Clear') }}
             </button>
           </div>
         </div>
@@ -201,7 +209,7 @@ const { t } = useI18n()
         />
 
         <div v-if="state.offlineTasks.length > 0 && state.offlineTasksHidden" class="mb-4 flex justify-end">
-          <button class="btn-secondary px-3 py-1 text-xs" @click="state.showOfflineTasksPanel()">{{ t('offline.showPanel', '显示离线任务') }}</button>
+          <button class="btn-secondary px-3 py-1 text-xs" @click="state.showOfflineTasksPanel()">{{ t('offline.showPanel', 'Show Offline Tasks') }}</button>
         </div>
 
         <OfflineTasksPanel
@@ -275,10 +283,10 @@ const { t } = useI18n()
     <div v-if="state.showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRemoteUpload = false" />
       <div class="card relative max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.remoteUploadTitle', '远程 URL 上传') }}</h3>
+        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.remoteUploadTitle', 'Remote URL Upload') }}</h3>
         <input v-model="state.remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
         <div class="mb-4">
-          <label class="mb-1.5 block text-sm" style="color: var(--text-secondary-color)">{{ t('file.remoteUploadMode', '上传方式') }}</label>
+          <label class="mb-1.5 block text-sm" style="color: var(--text-secondary-color)">{{ t('file.remoteUploadMode', 'Upload Mode') }}</label>
           <div class="grid grid-cols-2 gap-2">
             <button
               class="rounded-lg border px-3 py-2 text-sm transition-colors"
@@ -287,7 +295,7 @@ const { t } = useI18n()
                 : 'border-color: var(--border-color); color: var(--text-color)'"
               @click="state.remoteUploadMode = 'instant'"
             >
-              {{ t('file.remoteUploadInstant', '立即上传') }}
+              {{ t('file.remoteUploadInstant', 'Upload Now') }}
             </button>
             <button
               class="rounded-lg border px-3 py-2 text-sm transition-colors"
@@ -296,21 +304,21 @@ const { t } = useI18n()
                 : 'border-color: var(--border-color); color: var(--text-color)'"
               @click="state.remoteUploadMode = 'offline'"
             >
-              {{ t('file.remoteUploadOffline', '离线下载') }}
+              {{ t('file.remoteUploadOffline', 'Offline Download') }}
             </button>
           </div>
           <p class="mt-2 text-xs" style="color: var(--text-secondary-color)">
             {{
               state.remoteUploadMode === 'offline'
-                ? t('file.remoteUploadOfflineHint', '服务器会在后台下载并写入当前目录。')
-                : t('file.remoteUploadInstantHint', '当前会直接请求远程资源并立即写入存储池。')
+                ? t('file.remoteUploadOfflineHint', 'The server will download in the background and write into the current directory.')
+                : t('file.remoteUploadInstantHint', 'The server will request the remote resource and write it to storage immediately.')
             }}
           </p>
         </div>
         <div class="flex justify-end gap-3">
-          <button class="btn-secondary text-sm" @click="state.showRemoteUpload = false">{{ t('common.cancel', '取消') }}</button>
+          <button class="btn-secondary text-sm" @click="state.showRemoteUpload = false">{{ t('common.cancel', 'Cancel') }}</button>
           <button class="btn-primary text-sm" :disabled="state.remoteUploading" @click="state.handleRemoteUpload">
-            {{ state.remoteUploading ? t('upload.uploading', '上传中...') : t('upload.start', '开始上传') }}
+            {{ state.remoteUploading ? t('upload.uploading', 'Uploading...') : t('upload.start', 'Start Upload') }}
           </button>
         </div>
       </div>
@@ -321,11 +329,11 @@ const { t } = useI18n()
     <div v-if="state.showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showCreateFolder = false" />
       <div class="card relative max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.newFolder', '新建文件夹') }}</h3>
-        <input v-model="state.newFolderName" type="text" class="input-field mb-4" :placeholder="t('file.newFolderPlaceholder', '文件夹名称')" @keyup.enter="state.handleCreateFolder" />
+        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.newFolder', 'New Folder') }}</h3>
+        <input v-model="state.newFolderName" type="text" class="input-field mb-4" :placeholder="t('file.newFolderPlaceholder', 'Folder name')" @keyup.enter="state.handleCreateFolder" />
         <div class="flex justify-end gap-3">
-          <button class="btn-secondary text-sm" @click="state.showCreateFolder = false">{{ t('common.cancel', '取消') }}</button>
-          <button class="btn-primary text-sm" @click="state.handleCreateFolder">{{ t('common.create', '创建') }}</button>
+          <button class="btn-secondary text-sm" @click="state.showCreateFolder = false">{{ t('common.cancel', 'Cancel') }}</button>
+          <button class="btn-primary text-sm" @click="state.handleCreateFolder">{{ t('common.create', 'Create') }}</button>
         </div>
       </div>
     </div>
@@ -335,11 +343,11 @@ const { t } = useI18n()
     <div v-if="state.showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRename = false" />
       <div class="card relative max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.rename', '重命名') }}</h3>
-        <input v-model="state.newFileName" type="text" class="input-field mb-4" :placeholder="t('file.renamePlaceholder', '新名称')" @keyup.enter="state.handleRename" />
+        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.rename', 'Rename') }}</h3>
+        <input v-model="state.newFileName" type="text" class="input-field mb-4" :placeholder="t('file.renamePlaceholder', 'New name')" @keyup.enter="state.handleRename" />
         <div class="flex justify-end gap-3">
-          <button class="btn-secondary text-sm" @click="state.showRename = false">{{ t('common.cancel', '取消') }}</button>
-          <button class="btn-primary text-sm" @click="state.handleRename">{{ t('common.confirm', '确认') }}</button>
+          <button class="btn-secondary text-sm" @click="state.showRename = false">{{ t('common.cancel', 'Cancel') }}</button>
+          <button class="btn-primary text-sm" @click="state.handleRename">{{ t('common.confirm', 'Confirm') }}</button>
         </div>
       </div>
     </div>
@@ -347,9 +355,9 @@ const { t } = useI18n()
 
   <ConfirmDialog
     :show="state.showDeleteConfirm"
-    :title="t('file.confirmDeleteTitle', '确认删除')"
-    :message="t('file.confirmDeleteMessage', '确定要删除「{name}」吗？').replace('{name}', state.fileToDelete?.name || '')"
-    :confirm-text="t('common.delete', '删除')"
+    :title="t('file.confirmDeleteTitle', 'Confirm Delete')"
+    :message="t('file.confirmDeleteMessage', 'Delete {name}?').replace('{name}', state.fileToDelete?.name || '')"
+    :confirm-text="t('common.delete', 'Delete')"
     :danger="true"
     @confirm="state.handleDelete"
     @cancel="state.showDeleteConfirm = false"
@@ -416,19 +424,19 @@ const { t } = useI18n()
         v-if="state.aplayerCollapsed"
         class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full shadow-sm transition-all active:scale-95"
         style="background-color: var(--accent-color); color: white"
-        :title="t('player.expand', '展开播放器')"
+        :title="t('player.expand', 'Expand Player')"
         @click="state.toggleAplayerCollapse"
       >
         <Icon name="music" class="h-4 w-4" />
       </div>
       <div v-show="!state.aplayerCollapsed" class="aplayer-wrap overflow-hidden rounded-lg border" style="background-color: var(--card-color); border-color: var(--border-color)">
         <div class="flex items-center justify-between border-b px-2 py-1" style="background-color: var(--surface-color); border-bottom-color: var(--border-color)">
-          <span class="text-xs" style="color: var(--text-secondary-color)">{{ t('player.title', '播放器') }}</span>
+          <span class="text-xs" style="color: var(--text-secondary-color)">{{ t('player.title', 'Player') }}</span>
           <div class="flex items-center gap-0.5">
-            <button class="rounded p-1 hover:opacity-80" :title="t('player.collapse', '收起')" style="color: var(--text-secondary-color)" @click="state.toggleAplayerCollapse">
+            <button class="rounded p-1 hover:opacity-80" :title="t('player.collapse', 'Collapse')" style="color: var(--text-secondary-color)" @click="state.toggleAplayerCollapse">
               <Icon name="chevron-down" class="h-3.5 w-3.5" />
             </button>
-            <button class="rounded p-1 hover:opacity-80" :title="t('common.close', '关闭')" style="color: var(--text-secondary-color)" @click="state.destroyAplayer">
+            <button class="rounded p-1 hover:opacity-80" :title="t('common.close', 'Close')" style="color: var(--text-secondary-color)" @click="state.destroyAplayer">
               <Icon name="xmark" class="h-3.5 w-3.5" />
             </button>
           </div>

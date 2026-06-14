@@ -207,17 +207,17 @@ onMounted(() => {
 
       <div v-else-if="error" class="mx-auto max-w-md p-4 text-center sm:p-8">
         <Icon name="exclamation" class="mx-auto mb-3 h-12 w-12 text-red-400 sm:mb-4 sm:h-16 sm:w-16" />
-        <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.errorTitle', '访问失败') }}</h2>
+        <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.errorTitle', 'Access Failed') }}</h2>
         <p class="text-sm" style="color: var(--text-secondary-color)">{{ error }}</p>
       </div>
 
       <div v-else-if="needPassword" class="mx-auto max-w-md p-4 sm:p-8">
         <div class="mb-4 text-center sm:mb-6">
           <Icon name="lock" class="mx-auto mb-3 h-12 w-12 sm:mb-4 sm:h-16 sm:w-16" style="color: var(--accent-color)" />
-          <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.passwordRequiredTitle', '需要密码') }}</h2>
-          <p class="text-sm" style="color: var(--text-secondary-color)">{{ t('sharePage.passwordRequiredDescription', '此分享链接需要密码才能访问') }}</p>
+          <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.passwordRequiredTitle', 'Password Required') }}</h2>
+          <p class="text-sm" style="color: var(--text-secondary-color)">{{ t('sharePage.passwordRequiredDescription', 'This share link requires a password to access.') }}</p>
           <p v-if="shareInfo?.owner" class="mt-1 text-xs" style="color: var(--text-secondary-color)">
-            {{ t('sharePage.owner', '分享者：{owner}').replace('{owner}', shareInfo.owner) }}
+            {{ t('sharePage.owner', 'Shared by: {owner}').replace('{owner}', shareInfo.owner) }}
           </p>
         </div>
 
@@ -226,11 +226,11 @@ onMounted(() => {
             v-model="password"
             type="password"
             class="input-field"
-            :placeholder="t('sharePage.passwordPlaceholder', '请输入访问密码')"
+            :placeholder="t('sharePage.passwordPlaceholder', 'Enter access password')"
             autofocus
           />
           <button type="submit" class="btn-primary w-full" :disabled="loading || !password">
-            {{ loading ? t('sharePage.verifying', '验证中...') : t('sharePage.verify', '验证') }}
+            {{ loading ? t('sharePage.verifying', 'Verifying...') : t('sharePage.verify', 'Verify') }}
           </button>
         </form>
       </div>
@@ -258,7 +258,7 @@ onMounted(() => {
             </template>
 
             <span v-if="shareInfo.owner" class="ml-2 hidden flex-shrink-0 text-xs sm:inline" style="color: var(--text-secondary-color)">
-              {{ t('sharePage.owner', '分享者：{owner}').replace('{owner}', shareInfo.owner) }}
+              {{ t('sharePage.owner', 'Shared by: {owner}').replace('{owner}', shareInfo.owner) }}
             </span>
           </div>
 
@@ -271,7 +271,7 @@ onMounted(() => {
 
           <div v-else-if="folderFiles.length === 0" class="py-12 text-center" style="color: var(--text-secondary-color)">
             <Icon name="folder" class="mx-auto mb-3 h-16 w-16" />
-            <p>{{ t('sharePage.emptyFolder', '空文件夹') }}</p>
+            <p>{{ t('sharePage.emptyFolder', 'Empty folder') }}</p>
           </div>
 
           <div v-else class="card overflow-hidden" style="padding: 0">
@@ -299,7 +299,7 @@ onMounted(() => {
               <button
                 v-if="file.type !== 'folder'"
                 class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded p-2 transition-colors hover:bg-gray-200 dark:hover:bg-dark-hover sm:p-1"
-                :title="t('file.download', '下载')"
+                :title="t('file.download', 'Download')"
                 @click.stop="handleDownloadFile(file)"
               >
                 <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
@@ -314,7 +314,7 @@ onMounted(() => {
           <Icon name="file-alt" class="mx-auto mb-3 h-12 w-12 sm:mb-4 sm:h-16 sm:w-16" style="color: var(--accent-color)" />
           <h2 class="mb-2 truncate px-4 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ shareInfo.fileName }}</h2>
           <p v-if="shareInfo.owner" class="text-sm" style="color: var(--text-secondary-color)">
-            {{ t('sharePage.owner', '分享者：{owner}').replace('{owner}', shareInfo.owner) }}
+            {{ t('sharePage.owner', 'Shared by: {owner}').replace('{owner}', shareInfo.owner) }}
           </p>
         </div>
 
@@ -323,7 +323,7 @@ onMounted(() => {
           class="mb-4 rounded-lg p-3 text-sm"
           style="background: rgba(245,158,11,0.1); color: #d97706"
         >
-          {{ t('sharePage.signatureRequired', '此分享链接需要签名参数才能下载，请使用带签名的完整链接访问。') }}
+          {{ t('sharePage.signatureRequired', 'This share link requires signature parameters for download. Please open it with the complete signed URL.') }}
         </div>
 
         <div class="flex flex-col gap-3">
@@ -333,7 +333,7 @@ onMounted(() => {
             @click="handleDownloadSingle"
           >
             <Icon name="download" class="h-5 w-5" />
-            {{ t('sharePage.downloadFile', '下载文件') }}
+            {{ t('sharePage.downloadFile', 'Download File') }}
           </button>
 
           <button
@@ -342,7 +342,7 @@ onMounted(() => {
             @click="previewSingleFile"
           >
             <Icon name="eye" class="h-5 w-5" />
-            {{ t('sharePage.previewFile', '预览文件') }}
+            {{ t('sharePage.previewFile', 'Preview File') }}
           </button>
         </div>
       </div>

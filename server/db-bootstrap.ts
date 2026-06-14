@@ -1,5 +1,14 @@
 import config from './config'
+import type { AppLanguage } from './config'
 import type { DatabaseAdapter } from './db-adapter'
+
+function normalizeLanguage(language: unknown): AppLanguage {
+  return language === 'en-US' ? 'en-US' : 'zh-CN'
+}
+
+function getDefaultLanguage(): AppLanguage {
+  return normalizeLanguage(config.default_language)
+}
 
 export async function createBaseTables(database: DatabaseAdapter) {
   if (database.dialect === 'sqlite') {
@@ -22,6 +31,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
         guest_enabled INTEGER DEFAULT 0,
         guest_path TEXT DEFAULT '',
         theme TEXT DEFAULT 'system',
+        language TEXT DEFAULT 'zh-CN',
         upload_concurrency INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -136,6 +146,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
         guest_enabled TINYINT(1) DEFAULT 0,
         guest_path TEXT,
         theme VARCHAR(32) DEFAULT 'system',
+        language VARCHAR(16) DEFAULT 'zh-CN',
         upload_concurrency INT DEFAULT 0,
         CONSTRAINT fk_user_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -249,6 +260,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
       guest_enabled INTEGER DEFAULT 0,
       guest_path TEXT DEFAULT '',
       theme TEXT DEFAULT 'system',
+      language TEXT DEFAULT 'zh-CN',
       upload_concurrency INTEGER DEFAULT 0
     );
 
@@ -302,7 +314,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
       file_type TEXT NOT NULL,
       storage_pool_id BIGINT NOT NULL REFERENCES storage_pools(id) ON DELETE CASCADE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id, file_path, storage_pool_id)
+      UNIQUE (user_id, file_path, storage_pool_id)
     );
 
     CREATE TABLE IF NOT EXISTS guest_shares (
@@ -323,7 +335,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
       file_name TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       progress INTEGER NOT NULL DEFAULT 0,
-      total_bytes BIGINT NULL,
+      total_bytes BIGINT,
       downloaded_bytes BIGINT NOT NULL DEFAULT 0,
       error_message TEXT DEFAULT '',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -334,9 +346,8 @@ export async function createBaseTables(database: DatabaseAdapter) {
 
 async function addColumnIfMissing(db: DatabaseAdapter, tableName: string, columnName: string, definition: string) {
   const exists = await db.columnExists(tableName, columnName)
-  if (!exists) {
-    await db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`)
-  }
+  if (exists) return
+  await db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`)
 }
 
 async function migrateBannedField(db: DatabaseAdapter) {
@@ -352,10 +363,22 @@ async function migrateShareSignKey(db: DatabaseAdapter) {
 }
 
 async function migrateSharePoolId(db: DatabaseAdapter) {
-  const exists = await db.columnExists('shares', 'storage_pool_id')
-  if (exists) return
+  await addColumnIfMissing(db, 'shares', 'storage_pool_id', db.dialect === 'mysql' || db.dialect === 'postgres' ? 'BIGINT NULL' : 'INTEGER NULL')
 
-  await db.exec(`ALTER TABLE shares ADD COLUMN storage_pool_id ${db.dialect === 'mysql' || db.dialect === 'postgres' ? 'BIGINT' : 'INTEGER'}`)
+  const pools = await db.prepare(`
+    SELECT sp.user_id, sp.id
+    FROM storage_pools sp
+    WHERE sp.is_default = 1
+  `).all<{ user_id: number; id: number }>()
+
+  for (const pool of pools) {
+    await db.prepare(`
+      UPDATE shares
+      SET storage_pool_id = ?
+      WHERE user_id = ? AND storage_pool_id IS NULL
+    `).run(pool.id, pool.user_id)
+  }
+
   await db.exec(`
     UPDATE shares
     SET storage_pool_id = (
@@ -516,11 +539,27 @@ async function migrateUserVerified(db: DatabaseAdapter) {
 }
 
 async function migrateStorageQuota(db: DatabaseAdapter) {
-  await addColumnIfMissing(db, 'users', 'storage_quota', db.dialect === 'mysql' || db.dialect === 'postgres' ? 'BIGINT DEFAULT 10737418240' : 'INTEGER DEFAULT 10737418240')
+  await addColumnIfMissing(
+    db,
+    'users',
+    'storage_quota',
+    db.dialect === 'mysql' || db.dialect === 'postgres' ? 'BIGINT DEFAULT 10737418240' : 'INTEGER DEFAULT 10737418240'
+  )
 }
 
 async function migrateUploadConcurrency(db: DatabaseAdapter) {
   await addColumnIfMissing(db, 'user_settings', 'upload_concurrency', db.dialect === 'mysql' ? 'INT DEFAULT 0' : 'INTEGER DEFAULT 0')
+}
+
+async function migrateUserLanguage(db: DatabaseAdapter) {
+  await addColumnIfMissing(db, 'user_settings', 'language', db.dialect === 'mysql' ? "VARCHAR(16) DEFAULT 'zh-CN'" : "TEXT DEFAULT 'zh-CN'")
+
+  const defaultLanguage = getDefaultLanguage()
+  await db.prepare(`
+    UPDATE user_settings
+    SET language = ?
+    WHERE language IS NULL OR language = ''
+  `).run(defaultLanguage)
 }
 
 async function migrateCleanLocalPath(db: DatabaseAdapter) {
@@ -546,7 +585,7 @@ async function ensureAdminUser(db: DatabaseAdapter) {
   ).run(config.admin.username, config.admin.password, 'admin')
   const userId = result.lastInsertRowid as number
 
-  await db.prepare('INSERT INTO user_settings (user_id) VALUES (?)').run(userId)
+  await db.prepare('INSERT INTO user_settings (user_id, language) VALUES (?, ?)').run(userId, getDefaultLanguage())
 
   const pools = config.storage_pools || [{ name: '本地存储', type: 'local', default: true, config: {} }]
   for (const pool of pools) {
@@ -593,6 +632,7 @@ export async function initializeDatabase(db: DatabaseAdapter, options: Initializ
   await migrateUserVerified(db)
   await migrateStorageQuota(db)
   await migrateUploadConcurrency(db)
+  await migrateUserLanguage(db)
   await migrateCleanLocalPath(db)
   if (options.ensureAdmin !== false) {
     await ensureAdminUser(db)

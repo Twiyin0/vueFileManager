@@ -74,7 +74,7 @@ onUnmounted(() => {
           @click="handleAction('open')"
         >
           <Icon name="folder" class="h-4 w-4 text-blue-500" />
-          {{ t('file.open', '打开') }}
+          {{ t('file.open', 'Open') }}
         </button>
 
         <button
@@ -83,7 +83,7 @@ onUnmounted(() => {
           @click="handleAction('preview')"
         >
           <Icon name="eye" class="h-4 w-4" />
-          {{ t('file.preview', '预览') }}
+          {{ t('file.preview', 'Preview') }}
         </button>
 
         <button
@@ -92,7 +92,7 @@ onUnmounted(() => {
           @click="handleAction('download')"
         >
           <Icon name="download" class="h-4 w-4" />
-          {{ t('file.download', '下载') }}
+          {{ t('file.download', 'Download') }}
         </button>
 
         <template v-if="!readOnly">
@@ -104,7 +104,7 @@ onUnmounted(() => {
             @click="handleAction('rename')"
           >
             <Icon name="pen" class="h-4 w-4" />
-            {{ t('file.rename', '重命名') }}
+            {{ t('file.rename', 'Rename') }}
           </button>
 
           <button
@@ -113,7 +113,7 @@ onUnmounted(() => {
             @click="handleAction('move')"
           >
             <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
-            {{ t('file.moveTo', '移动到') }}
+            {{ t('file.moveTo', 'Move to') }}
           </button>
 
           <button
@@ -122,7 +122,7 @@ onUnmounted(() => {
             @click="handleAction('copy')"
           >
             <Icon name="clipboard" class="h-4 w-4" />
-            {{ t('file.copy', '复制') }}
+            {{ t('file.copy', 'Copy') }}
           </button>
 
           <button
@@ -131,7 +131,7 @@ onUnmounted(() => {
             @click="handleAction('share')"
           >
             <Icon name="link-alt" class="h-4 w-4" />
-            {{ t('file.share', '分享') }}
+            {{ t('file.share', 'Share') }}
           </button>
 
           <button
@@ -140,7 +140,7 @@ onUnmounted(() => {
             @click="handleAction('favourite')"
           >
             <Icon name="star-sharp" class="h-4 w-4 text-yellow-500" />
-            {{ t('file.favourite', '收藏') }}
+            {{ t('file.favourite', 'Favourite') }}
           </button>
 
           <button
@@ -149,7 +149,7 @@ onUnmounted(() => {
             @click="handleAction('guest-share')"
           >
             <Icon name="globe" class="h-4 w-4" />
-            {{ t('file.shareToGuest', '分享至访客') }}
+            {{ t('file.shareToGuest', 'Share to Guest') }}
           </button>
         </template>
 
@@ -160,7 +160,7 @@ onUnmounted(() => {
           @click="handleAction('info')"
         >
           <Icon name="circle-information" class="h-4 w-4" />
-          {{ t('file.details', '详情') }}
+          {{ t('file.details', 'Details') }}
         </button>
 
         <button
@@ -169,13 +169,13 @@ onUnmounted(() => {
           @click="handleAction('delete')"
         >
           <Icon name="trash" class="h-4 w-4" />
-          {{ t('common.delete', '删除') }}
+          {{ t('common.delete', 'Delete') }}
         </button>
 
         <template v-if="selectedItems && selectedItems.length > 0">
           <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
           <div class="px-4 py-1.5 text-xs" style="color: var(--text-secondary-color)">
-            {{ t('file.batchActions', '批量操作') }} ({{ selectedItems.length }})
+            {{ t('file.batchActions', 'Batch Actions') }} ({{ selectedItems.length }})
           </div>
 
           <button
@@ -183,7 +183,7 @@ onUnmounted(() => {
             @click="handleAction('batch-copy')"
           >
             <Icon name="clipboard" class="h-4 w-4" />
-            {{ t('file.batchCopy', '批量复制') }}
+            {{ t('file.batchCopy', 'Batch Copy') }}
           </button>
 
           <button
@@ -191,7 +191,7 @@ onUnmounted(() => {
             @click="handleAction('batch-move')"
           >
             <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
-            {{ t('file.batchMove', '批量移动') }}
+            {{ t('file.batchMove', 'Batch Move') }}
           </button>
 
           <button
@@ -199,7 +199,15 @@ onUnmounted(() => {
             @click="handleAction('batch-download')"
           >
             <Icon name="download" class="h-4 w-4" />
-            {{ t('file.batchDownload', '打包下载') }}
+            {{ t('file.batchDirectDownload', 'Batch Download') }}
+          </button>
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('batch-zip-download')"
+          >
+            <Icon name="box-archive" class="h-4 w-4" />
+            {{ t('file.batchZipDownload', 'Download as ZIP') }}
           </button>
 
           <button
@@ -207,7 +215,7 @@ onUnmounted(() => {
             @click="handleAction('batch-delete')"
           >
             <Icon name="trash" class="h-4 w-4" />
-            {{ t('file.batchDelete', '批量删除') }}
+            {{ t('file.batchDelete', 'Batch Delete') }}
           </button>
 
           <button
@@ -215,7 +223,7 @@ onUnmounted(() => {
             @click="handleAction('clear-selection')"
           >
             <Icon name="xmark" class="h-4 w-4" />
-            {{ t('file.clearSelection', '取消选择') }}
+            {{ t('file.clearSelection', 'Clear Selection') }}
           </button>
         </template>
 
@@ -225,13 +233,13 @@ onUnmounted(() => {
           @click="handleAction('refresh')"
         >
           <Icon name="refresh-cw" class="h-4 w-4" />
-          {{ t('common.refresh', '刷新') }}
+          {{ t('common.refresh', 'Refresh') }}
         </button>
       </template>
 
       <template v-else-if="selectedItems && selectedItems.length > 0">
         <div class="px-4 py-2 text-xs text-gray-500 dark:text-dark-text-secondary">
-          {{ t('file.selectedItems', '已选择 {count} 项').replace('{count}', String(selectedItems.length)) }}
+          {{ t('file.selectedItems', '{count} items selected').replace('{count}', String(selectedItems.length)) }}
         </div>
 
         <button
@@ -239,7 +247,15 @@ onUnmounted(() => {
           @click="handleAction('batch-download')"
         >
           <Icon name="download" class="h-4 w-4" />
-          {{ t('file.batchDownload', '打包下载') }}
+          {{ t('file.batchDirectDownload', 'Batch Download') }}
+        </button>
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('batch-zip-download')"
+        >
+          <Icon name="box-archive" class="h-4 w-4" />
+          {{ t('file.batchZipDownload', 'Download as ZIP') }}
         </button>
 
         <button
@@ -247,7 +263,7 @@ onUnmounted(() => {
           @click="handleAction('batch-copy')"
         >
           <Icon name="clipboard" class="h-4 w-4" />
-          {{ t('file.batchCopy', '批量复制') }}
+          {{ t('file.batchCopy', 'Batch Copy') }}
         </button>
 
         <button
@@ -255,7 +271,7 @@ onUnmounted(() => {
           @click="handleAction('batch-move')"
         >
           <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
-          {{ t('file.batchMove', '批量移动') }}
+          {{ t('file.batchMove', 'Batch Move') }}
         </button>
 
         <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
@@ -265,7 +281,7 @@ onUnmounted(() => {
           @click="handleAction('batch-delete')"
         >
           <Icon name="trash" class="h-4 w-4" />
-          {{ t('file.batchDelete', '批量删除') }}
+          {{ t('file.batchDelete', 'Batch Delete') }}
         </button>
       </template>
 
@@ -275,7 +291,7 @@ onUnmounted(() => {
           @click="handleAction('refresh')"
         >
           <Icon name="refresh-cw" class="h-4 w-4" />
-          {{ t('common.refresh', '刷新') }}
+          {{ t('common.refresh', 'Refresh') }}
         </button>
       </template>
 
@@ -285,7 +301,7 @@ onUnmounted(() => {
           @click="handleAction('new-folder')"
         >
           <Icon name="folder" class="h-4 w-4 text-blue-500" />
-          {{ t('file.newFolder', '新建文件夹') }}
+          {{ t('file.newFolder', 'New Folder') }}
         </button>
 
         <button
@@ -293,7 +309,7 @@ onUnmounted(() => {
           @click="handleAction('upload')"
         >
           <Icon name="upload" class="h-4 w-4" />
-          {{ t('file.uploadFile', '上传文件') }}
+          {{ t('file.uploadFile', 'Upload File') }}
         </button>
 
         <button
@@ -302,7 +318,7 @@ onUnmounted(() => {
           @click="handleAction('remote-upload')"
         >
           <Icon name="network-wired" class="h-4 w-4" />
-          {{ t('file.remoteUpload', '远程上传') }}
+          {{ t('file.remoteUpload', 'Remote Upload') }}
         </button>
 
         <button
@@ -311,7 +327,7 @@ onUnmounted(() => {
           @click="handleAction('paste')"
         >
           <Icon name="clipboard" class="h-4 w-4" />
-          {{ t('file.pasteCount', '粘贴 ({count})').replace('{count}', String(clipboardCount)) }}
+          {{ t('file.pasteCount', 'Paste ({count})').replace('{count}', String(clipboardCount)) }}
         </button>
 
         <button
@@ -319,7 +335,7 @@ onUnmounted(() => {
           @click="handleAction('refresh')"
         >
           <Icon name="refresh-cw" class="h-4 w-4" />
-          {{ t('common.refresh', '刷新') }}
+          {{ t('common.refresh', 'Refresh') }}
         </button>
       </template>
     </div>

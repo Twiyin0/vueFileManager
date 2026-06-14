@@ -8,7 +8,6 @@ export function createPublicPlatformRouter() {
 
   router.get('/site-config', (_req, res) => {
     res.json({
-      language: config.language,
       icp_beian: config.site?.icp_beian || '',
       police_beian: config.site?.police_beian || '',
       smtp_enabled: config.smtp?.enabled || false,

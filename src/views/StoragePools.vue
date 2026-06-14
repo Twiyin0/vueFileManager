@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
 
 type StorageType = 'local' | 'upyun' | 'ftp' | 'sftp' | 's3'
@@ -15,6 +16,8 @@ interface StoragePool {
   resolvedPath: string
   createdAt: string
 }
+
+const { t, format } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -63,8 +66,16 @@ const form = ref({
 
 const canBulkDelete = computed(() => {
   if (selectedPoolIds.value.size === 0) return false
-  return pools.value.some(pool => selectedPoolIds.value.has(pool.id) && !pool.isDefault)
+  return pools.value.some((pool) => selectedPoolIds.value.has(pool.id) && !pool.isDefault)
 })
+
+const storageTypeOptions = computed(() => [
+  { value: 'local' as StorageType, label: getStorageLabel('local') },
+  { value: 'upyun' as StorageType, label: getStorageLabel('upyun') },
+  { value: 'ftp' as StorageType, label: getStorageLabel('ftp') },
+  { value: 'sftp' as StorageType, label: getStorageLabel('sftp') },
+  { value: 's3' as StorageType, label: getStorageLabel('s3') },
+])
 
 function formatBytes(bytes: number) {
   if (!bytes) return '0 B'
@@ -76,7 +87,7 @@ function formatBytes(bytes: number) {
 function showMsg(text: string, type: 'success' | 'error') {
   message.value = text
   messageType.value = type
-  setTimeout(() => {
+  window.setTimeout(() => {
     if (message.value === text) message.value = ''
   }, 3000)
 }
@@ -149,15 +160,13 @@ function clearSelection() {
 }
 
 function selectDeletablePools() {
-  const deletable = pools.value.filter(pool => !pool.isDefault).map(pool => pool.id)
-  selectedPoolIds.value = new Set(
-    selectedPoolIds.value.size === deletable.length ? [] : deletable
-  )
+  const deletable = pools.value.filter((pool) => !pool.isDefault).map((pool) => pool.id)
+  selectedPoolIds.value = new Set(selectedPoolIds.value.size === deletable.length ? [] : deletable)
 }
 
 async function savePool() {
   if (!form.value.name.trim()) {
-    showMsg('请输入存储池名称', 'error')
+    showMsg(t('storagePoolsPage.validationNameRequired', 'Please enter a storage pool name'), 'error')
     return
   }
 
@@ -165,10 +174,10 @@ async function savePool() {
   try {
     if (editingPool.value) {
       await api.put(`/storage-pools/${editingPool.value.id}`, form.value)
-      showMsg('存储池已更新', 'success')
+      showMsg(t('storagePoolsPage.updated', 'Storage pool updated'), 'success')
     } else {
       await api.post('/storage-pools', form.value)
-      showMsg('存储池已创建', 'success')
+      showMsg(t('storagePoolsPage.created', 'Storage pool created'), 'success')
     }
     closeDialog()
     await loadPools()
@@ -181,14 +190,15 @@ async function savePool() {
 
 async function deletePool(pool: StoragePool) {
   if (pool.isDefault) {
-    showMsg('不能删除默认存储池', 'error')
+    showMsg(t('storagePoolsPage.defaultCannotDelete', 'The default storage pool cannot be deleted'), 'error')
     return
   }
-  if (!confirm(`确定删除存储池“${pool.name}”吗？`)) return
+
+  if (!window.confirm(format('storagePoolsPage.deleteConfirm', 'Delete storage pool \\"{name}\\"?', { name: pool.name }))) return
 
   try {
     await api.delete(`/storage-pools/${pool.id}`)
-    showMsg('存储池已删除', 'success')
+    showMsg(t('storagePoolsPage.deleted', 'Storage pool deleted'), 'success')
     await loadPools()
   } catch (err: any) {
     showMsg(err.message, 'error')
@@ -198,16 +208,25 @@ async function deletePool(pool: StoragePool) {
 async function deleteSelectedPools() {
   const ids = Array.from(selectedPoolIds.value)
   if (ids.length === 0) return
-  const deletableIds = pools.value.filter(pool => ids.includes(pool.id) && !pool.isDefault).map(pool => pool.id)
+
+  const deletableIds = pools.value
+    .filter((pool) => ids.includes(pool.id) && !pool.isDefault)
+    .map((pool) => pool.id)
+
   if (deletableIds.length === 0) {
-    showMsg('所选存储池均不可删除', 'error')
+    showMsg(t('storagePoolsPage.noDeletableSelected', 'None of the selected storage pools can be deleted'), 'error')
     return
   }
-  if (!confirm(`确定批量删除 ${deletableIds.length} 个存储池吗？`)) return
+
+  if (!window.confirm(format('storagePoolsPage.bulkDeleteConfirm', 'Delete {count} storage pools?', { count: deletableIds.length }))) return
 
   try {
     const res = await api.post<{ message: string; errors?: string[] }>('/storage-pools/batch-delete', { ids: deletableIds })
-    showMsg(res.errors?.length ? `${res.message}，部分失败：${res.errors[0]}` : res.message, res.errors?.length === deletableIds.length ? 'error' : 'success')
+    const firstError = res.errors?.[0]
+    const text = firstError
+      ? format('storagePoolsPage.batchPartialFailure', '{message}. Partial failure: {error}', { message: res.message, error: firstError })
+      : res.message
+    showMsg(text, res.errors?.length === deletableIds.length ? 'error' : 'success')
     clearSelection()
     await loadPools()
   } catch (err: any) {
@@ -218,7 +237,7 @@ async function deleteSelectedPools() {
 async function setDefault(pool: StoragePool) {
   try {
     await api.post(`/storage-pools/${pool.id}/set-default`)
-    showMsg('默认存储池已更新', 'success')
+    showMsg(t('storagePoolsPage.defaultUpdated', 'Default storage pool updated'), 'success')
     await loadPools()
   } catch (err: any) {
     showMsg(err.message, 'error')
@@ -244,8 +263,8 @@ function getStorageIconName(type: StorageType) {
 }
 
 function getStorageLabel(type: StorageType) {
-  if (type === 'local') return '本地存储'
-  if (type === 'upyun') return '又拍云'
+  if (type === 'local') return t('admin.localStorage', 'Local Storage')
+  if (type === 'upyun') return t('storagePoolsPage.upyun', 'UpYun')
   if (type === 'ftp') return 'FTP'
   if (type === 'sftp') return 'SFTP'
   return 'S3 / OSS'
@@ -260,52 +279,71 @@ useKeepAliveRefresh(async () => {
 <template>
   <div class="px-4 pt-4">
     <div class="card mb-4">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm font-medium" style="color: var(--text-color)">本地存储用量</span>
-        <span class="text-sm" style="color: var(--text-secondary-color)">{{ storageInfo.usedFormatted }} / {{ storageInfo.quotaFormatted }}</span>
+      <div class="mb-2 flex items-center justify-between">
+        <span class="text-sm font-medium" style="color: var(--text-color)">
+          {{ t('storagePoolsPage.usageTitle', 'Local Storage Usage') }}
+        </span>
+        <span class="text-sm" style="color: var(--text-secondary-color)">
+          {{ storageInfo.usedFormatted }} / {{ storageInfo.quotaFormatted }}
+        </span>
       </div>
-      <div class="w-full h-2 rounded-full" style="background: var(--hover-color)">
+      <div class="h-2 w-full rounded-full" style="background: var(--hover-color)">
         <div
           class="h-2 rounded-full transition-all"
           :class="storageInfo.quota > 0 && storageInfo.used / storageInfo.quota > 0.9 ? 'bg-red-500' : storageInfo.used / storageInfo.quota > 0.7 ? 'bg-yellow-500' : 'bg-green-500'"
           :style="{ width: (storageInfo.quota > 0 ? Math.min(Math.round(storageInfo.used / storageInfo.quota * 100), 100) : 0) + '%' }"
         />
       </div>
-      <p class="text-xs mt-1" style="color: var(--text-secondary-color)">剩余 {{ formatBytes(storageInfo.remaining) }}</p>
+      <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">
+        {{ format('storagePoolsPage.remaining', 'Remaining {size}', { size: formatBytes(storageInfo.remaining) }) }}
+      </p>
     </div>
 
-    <div class="flex flex-wrap justify-end gap-2 mb-4">
-      <button v-if="pools.length > 1" @click="selectDeletablePools" class="btn-secondary flex items-center gap-2">
-        <Icon name="square-check" class="w-4 h-4" />
-        {{ selectedPoolIds.size > 0 ? '取消批量选择' : '批量选择' }}
+    <div class="mb-4 flex flex-wrap justify-end gap-2">
+      <button v-if="pools.length > 1" class="btn-secondary flex items-center gap-2" @click="selectDeletablePools">
+        <Icon name="square-check" class="h-4 w-4" />
+        {{ selectedPoolIds.size > 0 ? t('storagePoolsPage.clearBulkSelect', 'Clear Selection') : t('storagePoolsPage.toggleBulkSelect', 'Select Multiple') }}
       </button>
-      <button v-if="selectedPoolIds.size > 0" @click="deleteSelectedPools" :disabled="!canBulkDelete" class="btn-danger flex items-center gap-2 disabled:opacity-50">
-        <Icon name="trash" class="w-4 h-4" />
-        批量删除
+      <button
+        v-if="selectedPoolIds.size > 0"
+        class="btn-danger flex items-center gap-2 disabled:opacity-50"
+        :disabled="!canBulkDelete"
+        @click="deleteSelectedPools"
+      >
+        <Icon name="trash" class="h-4 w-4" />
+        {{ t('storagePoolsPage.bulkDelete', 'Delete Selected') }}
       </button>
-      <button @click="openAddDialog" class="btn-primary flex items-center gap-2">
-        <Icon name="plus" class="w-5 h-5" />
-        添加存储池
+      <button class="btn-primary flex items-center gap-2" @click="openAddDialog">
+        <Icon name="plus" class="h-5 w-5" />
+        {{ t('storagePoolsPage.add', 'Add Storage Pool') }}
       </button>
     </div>
 
-    <div v-if="selectedPoolIds.size > 0" class="mb-4 p-3 rounded-lg text-sm flex items-center justify-between" style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)">
-      <span style="color: var(--text-color)">已选 {{ selectedPoolIds.size }} 个存储池，默认存储池不会被删除</span>
-      <button @click="clearSelection" class="text-sm hover:underline" style="color: var(--accent-color)">清空</button>
+    <div
+      v-if="selectedPoolIds.size > 0"
+      class="mb-4 flex items-center justify-between rounded-lg p-3 text-sm"
+      style="background-color: var(--accent-soft-color); border: 1px solid var(--accent-color)"
+    >
+      <span style="color: var(--text-color)">
+        {{ format('storagePoolsPage.selectedSummary', '{count} storage pools selected. The default pool will not be deleted.', { count: selectedPoolIds.size }) }}
+      </span>
+      <button class="text-sm hover:underline" style="color: var(--accent-color)" @click="clearSelection">
+        {{ t('file.clear', 'Clear') }}
+      </button>
     </div>
 
     <div
       v-if="message"
-      class="mb-4 p-3 rounded-lg text-sm"
+      class="mb-4 rounded-lg p-3 text-sm"
       :class="messageType === 'success'
-        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400'
-        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'"
+        ? 'border border-green-200 bg-green-50 text-green-600 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400'
+        : 'border border-red-200 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400'"
     >
       {{ message }}
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-20">
-      <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+      <svg class="h-8 w-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -320,12 +358,14 @@ useKeepAliveRefresh(async () => {
       >
         <div class="flex items-center gap-4">
           <input v-if="!pool.isDefault" type="checkbox" :checked="selectedPoolIds.has(pool.id)" @change="toggleSelectPool(pool.id)" />
-          <Icon :name="getStorageIconName(pool.storageType)" class="w-8 h-8 text-blue-500" />
+          <Icon :name="getStorageIconName(pool.storageType)" class="h-8 w-8 text-blue-500" />
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="font-semibold dark:text-dark-text text-light-text">{{ pool.name }}</h3>
-              <span class="px-1.5 py-0.5 text-xs font-mono bg-gray-100 dark:bg-dark-hover text-gray-500 dark:text-dark-text-secondary rounded">#{{ pool.id }}</span>
-              <span v-if="pool.isDefault" class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">默认</span>
+              <h3 class="font-semibold text-light-text dark:text-dark-text">{{ pool.name }}</h3>
+              <span class="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-500 dark:bg-dark-hover dark:text-dark-text-secondary">#{{ pool.id }}</span>
+              <span v-if="pool.isDefault" class="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                {{ t('common.default', 'Default') }}
+              </span>
             </div>
             <p class="text-sm" style="color: var(--text-secondary-color)">
               {{ getStorageLabel(pool.storageType) }}
@@ -339,104 +379,106 @@ useKeepAliveRefresh(async () => {
         </div>
 
         <div class="flex items-center gap-2">
-          <button @click="testConnection(pool)" :disabled="testing === pool.id" class="btn-secondary text-sm px-3 py-1.5">
-            <span v-if="testing === pool.id">测试中...</span>
-            <span v-else>测试连接</span>
+          <button class="btn-secondary px-3 py-1.5 text-sm" :disabled="testing === pool.id" @click="testConnection(pool)">
+            <span v-if="testing === pool.id">{{ t('storagePoolsPage.testing', 'Testing...') }}</span>
+            <span v-else>{{ t('storagePoolsPage.testConnection', 'Test Connection') }}</span>
           </button>
-          <button v-if="!pool.isDefault" @click="setDefault(pool)" class="btn-secondary text-sm px-3 py-1.5">设为默认</button>
-          <button @click="openEditDialog(pool)" class="btn-secondary text-sm px-3 py-1.5">编辑</button>
-          <button v-if="!pool.isDefault" @click="deletePool(pool)" class="btn-danger text-sm px-3 py-1.5">删除</button>
+          <button v-if="!pool.isDefault" class="btn-secondary px-3 py-1.5 text-sm" @click="setDefault(pool)">
+            {{ t('storagePoolsPage.setDefault', 'Set as Default') }}
+          </button>
+          <button class="btn-secondary px-3 py-1.5 text-sm" @click="openEditDialog(pool)">
+            {{ t('common.edit', 'Edit') }}
+          </button>
+          <button v-if="!pool.isDefault" class="btn-danger px-3 py-1.5 text-sm" @click="deletePool(pool)">
+            {{ t('common.delete', 'Delete') }}
+          </button>
         </div>
       </div>
     </div>
 
-    <div v-else class="text-center py-20">
-      <Icon name="container-storage" class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-      <h3 class="text-lg font-semibold dark:text-dark-text text-light-text mb-2">还没有存储池</h3>
-      <p class="text-gray-500 dark:text-dark-text-secondary mb-4">添加存储池来管理你的文件存储</p>
-      <button @click="openAddDialog" class="btn-primary">添加第一个存储池</button>
+    <div v-else class="py-20 text-center">
+      <Icon name="container-storage" class="mx-auto mb-4 h-16 w-16 text-gray-300 dark:text-gray-600" />
+      <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('storagePoolsPage.noPoolsTitle', 'No storage pools yet') }}</h3>
+      <p class="mb-4 text-gray-500 dark:text-dark-text-secondary">{{ t('storagePoolsPage.noPoolsDescription', 'Add a storage pool to manage file storage.') }}</p>
+      <button class="btn-primary" @click="openAddDialog">{{ t('storagePoolsPage.addFirst', 'Add Your First Storage Pool') }}</button>
     </div>
 
-    <div v-if="showDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="card w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto shadow-sm">
+    <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div class="card mx-4 max-h-[90vh] w-full max-w-md overflow-y-auto shadow-sm">
         <div class="p-6">
-          <h2 class="text-xl font-bold mb-4 dark:text-dark-text text-light-text">
-            {{ editingPool ? '编辑存储池' : '添加存储池' }}
+          <h2 class="mb-4 text-xl font-bold text-light-text dark:text-dark-text">
+            {{ editingPool ? t('storagePoolsPage.editTitle', 'Edit Storage Pool') : t('storagePoolsPage.addTitle', 'Add Storage Pool') }}
           </h2>
 
-          <form @submit.prevent="savePool" class="space-y-4">
+          <form class="space-y-4" @submit.prevent="savePool">
             <div>
-              <label class="block text-sm font-medium mb-1.5 dark:text-dark-text text-light-text">存储池名称</label>
-              <input v-model="form.name" type="text" class="input-field" placeholder="例如：主存储、备份存储" required />
+              <label class="mb-1.5 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('storagePoolsPage.name', 'Storage Pool Name') }}</label>
+              <input v-model="form.name" type="text" class="input-field" :placeholder="t('storagePoolsPage.namePlaceholder', 'Example: Primary Storage, Backup Storage')" required />
             </div>
 
             <div>
-              <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">存储类型</label>
+              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('storagePoolsPage.type', 'Storage Type') }}</label>
               <select v-model="form.storageType" class="input-field" :disabled="!!editingPool">
-                <option value="local">本地存储</option>
-                <option value="upyun">又拍云</option>
-                <option value="ftp">FTP</option>
-                <option value="sftp">SFTP</option>
-                <option value="s3">S3 / OSS</option>
+                <option v-for="option in storageTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
 
             <div v-if="form.storageType === 'local'" class="space-y-3">
-              <div class="p-3 rounded-lg text-sm" style="background: var(--hover-color); color: var(--text-secondary-color)">
-                本地存储会自动按用户名隔离目录，无需单独填写磁盘路径。
+              <div class="rounded-lg p-3 text-sm" style="background: var(--hover-color); color: var(--text-secondary-color)">
+                {{ t('storagePoolsPage.localHint', 'Local storage automatically isolates directories by username. No extra disk path is required.') }}
               </div>
               <div>
-                <label class="block text-sm font-medium mb-1.5" style="color: var(--text-color)">根路径映射</label>
+                <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('storagePoolsPage.rootPath', 'Root Path Mapping') }}</label>
                 <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="/" />
               </div>
             </div>
 
             <div v-if="form.storageType === 'upyun'" class="space-y-3">
-              <input v-model="form.config.upyunOperator" type="text" class="input-field" placeholder="操作员" />
-              <input v-model="form.config.upyunPassword" type="password" class="input-field" placeholder="密码，编辑时留空表示不修改" />
-              <input v-model="form.config.upyunBucket" type="text" class="input-field" placeholder="Bucket" />
+              <input v-model="form.config.upyunOperator" type="text" class="input-field" :placeholder="t('storagePoolsPage.operatorPlaceholder', 'Operator')" />
+              <input v-model="form.config.upyunPassword" type="password" class="input-field" :placeholder="t('storagePoolsPage.passwordPlaceholderEdit', 'Password (leave blank to keep unchanged)')" />
+              <input v-model="form.config.upyunBucket" type="text" class="input-field" :placeholder="t('storagePoolsPage.bucketPlaceholder', 'Bucket')" />
               <input v-model="form.config.upyunEndpoint" type="text" class="input-field" placeholder="v0.api.upyun.com" />
-              <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="映射根路径 /" />
+              <input v-model="form.config.rootPath" type="text" class="input-field" :placeholder="t('storagePoolsPage.rootPathPlaceholder', 'Mapped root path /')" />
             </div>
 
             <div v-if="form.storageType === 'ftp'" class="space-y-3">
-              <input v-model="form.config.ftpHost" type="text" class="input-field" placeholder="主机地址" />
-              <input v-model.number="form.config.ftpPort" type="number" class="input-field" placeholder="端口 21" />
-              <input v-model="form.config.ftpUser" type="text" class="input-field" placeholder="用户名" />
-              <input v-model="form.config.ftpPassword" type="password" class="input-field" placeholder="密码，编辑时留空表示不修改" />
-              <input v-model="form.config.ftpRemotePath" type="text" class="input-field" placeholder="远程根目录 /" />
-              <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="映射根路径 /" />
+              <input v-model="form.config.ftpHost" type="text" class="input-field" :placeholder="t('storagePoolsPage.hostPlaceholder', 'Host')" />
+              <input v-model.number="form.config.ftpPort" type="number" class="input-field" :placeholder="t('storagePoolsPage.ftpPortPlaceholder', 'Port 21')" />
+              <input v-model="form.config.ftpUser" type="text" class="input-field" :placeholder="t('storagePoolsPage.usernamePlaceholder', 'Username')" />
+              <input v-model="form.config.ftpPassword" type="password" class="input-field" :placeholder="t('storagePoolsPage.passwordPlaceholderEdit', 'Password (leave blank to keep unchanged)')" />
+              <input v-model="form.config.ftpRemotePath" type="text" class="input-field" :placeholder="t('storagePoolsPage.remoteRootPlaceholder', 'Remote root path /')" />
+              <input v-model="form.config.rootPath" type="text" class="input-field" :placeholder="t('storagePoolsPage.rootPathPlaceholder', 'Mapped root path /')" />
             </div>
 
             <div v-if="form.storageType === 'sftp'" class="space-y-3">
-              <input v-model="form.config.sftpHost" type="text" class="input-field" placeholder="主机地址" />
-              <input v-model.number="form.config.sftpPort" type="number" class="input-field" placeholder="端口 22" />
-              <input v-model="form.config.sftpUser" type="text" class="input-field" placeholder="用户名" />
-              <input v-model="form.config.sftpPassword" type="password" class="input-field" placeholder="密码，编辑时留空表示不修改" />
-              <textarea v-model="form.config.sftpPrivateKey" class="input-field min-h-28" placeholder="私钥内容，可替代密码"></textarea>
-              <input v-model="form.config.sftpRootPath" type="text" class="input-field" placeholder="远程根目录 /" />
-              <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="映射根路径 /" />
+              <input v-model="form.config.sftpHost" type="text" class="input-field" :placeholder="t('storagePoolsPage.hostPlaceholder', 'Host')" />
+              <input v-model.number="form.config.sftpPort" type="number" class="input-field" :placeholder="t('storagePoolsPage.sftpPortPlaceholder', 'Port 22')" />
+              <input v-model="form.config.sftpUser" type="text" class="input-field" :placeholder="t('storagePoolsPage.usernamePlaceholder', 'Username')" />
+              <input v-model="form.config.sftpPassword" type="password" class="input-field" :placeholder="t('storagePoolsPage.passwordPlaceholderEdit', 'Password (leave blank to keep unchanged)')" />
+              <textarea v-model="form.config.sftpPrivateKey" class="input-field min-h-28" :placeholder="t('storagePoolsPage.privateKeyPlaceholder', 'Private key content, can replace password')" />
+              <input v-model="form.config.sftpRootPath" type="text" class="input-field" :placeholder="t('storagePoolsPage.remoteRootPlaceholder', 'Remote root path /')" />
+              <input v-model="form.config.rootPath" type="text" class="input-field" :placeholder="t('storagePoolsPage.rootPathPlaceholder', 'Mapped root path /')" />
             </div>
 
             <div v-if="form.storageType === 's3'" class="space-y-3">
-              <input v-model="form.config.s3Endpoint" type="text" class="input-field" placeholder="Endpoint" />
-              <input v-model="form.config.s3Region" type="text" class="input-field" placeholder="Region" />
-              <input v-model="form.config.s3AccessKeyId" type="text" class="input-field" placeholder="Access Key ID" />
-              <input v-model="form.config.s3SecretAccessKey" type="password" class="input-field" placeholder="Secret Access Key，编辑时留空表示不修改" />
-              <input v-model="form.config.s3Bucket" type="text" class="input-field" placeholder="Bucket" />
-              <input v-model="form.config.s3Prefix" type="text" class="input-field" placeholder="Prefix" />
+              <input v-model="form.config.s3Endpoint" type="text" class="input-field" :placeholder="t('storagePoolsPage.endpointPlaceholder', 'Endpoint')" />
+              <input v-model="form.config.s3Region" type="text" class="input-field" :placeholder="t('storagePoolsPage.regionPlaceholder', 'Region')" />
+              <input v-model="form.config.s3AccessKeyId" type="text" class="input-field" :placeholder="t('storagePoolsPage.accessKeyIdPlaceholder', 'Access Key ID')" />
+              <input v-model="form.config.s3SecretAccessKey" type="password" class="input-field" :placeholder="t('storagePoolsPage.secretAccessKeyPlaceholder', 'Secret Access Key (leave blank to keep unchanged)')" />
+              <input v-model="form.config.s3Bucket" type="text" class="input-field" :placeholder="t('storagePoolsPage.bucketPlaceholder', 'Bucket')" />
+              <input v-model="form.config.s3Prefix" type="text" class="input-field" :placeholder="t('storagePoolsPage.prefixPlaceholder', 'Prefix')" />
               <label class="flex items-center gap-2 text-sm" style="color: var(--text-color)">
                 <input v-model="form.config.s3ForcePathStyle" type="checkbox" />
-                强制 Path Style
+                {{ t('storagePoolsPage.forcePathStyle', 'Force Path Style') }}
               </label>
-              <input v-model="form.config.rootPath" type="text" class="input-field" placeholder="映射根路径 /" />
+              <input v-model="form.config.rootPath" type="text" class="input-field" :placeholder="t('storagePoolsPage.rootPathPlaceholder', 'Mapped root path /')" />
             </div>
 
             <div class="flex justify-end gap-3 pt-4">
-              <button type="button" @click="closeDialog" class="btn-secondary">取消</button>
+              <button type="button" class="btn-secondary" @click="closeDialog">{{ t('common.cancel', 'Cancel') }}</button>
               <button type="submit" class="btn-primary" :disabled="saving">
-                <span v-if="saving">保存中...</span>
-                <span v-else>{{ editingPool ? '更新' : '创建' }}</span>
+                <span v-if="saving">{{ t('storagePoolsPage.saveInProgress', 'Saving...') }}</span>
+                <span v-else>{{ editingPool ? t('storagePoolsPage.updateAction', 'Update') : t('storagePoolsPage.createAction', 'Create') }}</span>
               </button>
             </div>
           </form>

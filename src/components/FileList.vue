@@ -144,7 +144,7 @@ function getPreviewUrl(file: FileItem): string {
       style="color: var(--text-secondary-color)"
     >
       <Icon name="folder" class="mb-3 h-16 w-16" />
-      <p>{{ t('file.empty', '暂无文件') }}</p>
+      <p>{{ t('file.empty', 'No files yet') }}</p>
     </div>
 
     <div v-else-if="viewMode === 'grid'" class="p-3">
@@ -195,10 +195,10 @@ function getPreviewUrl(file: FileItem): string {
         class="grid grid-cols-12 gap-2 border-b px-4 py-2 text-xs font-medium"
         style="color: var(--text-secondary-color); border-color: var(--border-color)"
       >
-        <div class="col-span-8 sm:col-span-5">{{ t('file.name', '名称') }}</div>
-        <div class="col-span-2 hidden text-right sm:block">{{ t('file.size', '大小') }}</div>
-        <div class="col-span-3 hidden text-right md:block">{{ t('file.modified', '修改时间') }}</div>
-        <div v-if="showActions" class="col-span-4 text-right sm:col-span-2">{{ t('common.actions', '操作') }}</div>
+        <div class="col-span-8 sm:col-span-5">{{ t('file.name', 'Name') }}</div>
+        <div class="col-span-2 hidden text-right sm:block">{{ t('file.size', 'Size') }}</div>
+        <div class="col-span-3 hidden text-right md:block">{{ t('file.modified', 'Modified') }}</div>
+        <div v-if="showActions" class="col-span-4 text-right sm:col-span-2">{{ t('common.actions', 'Actions') }}</div>
       </div>
 
       <div
@@ -240,7 +240,7 @@ function getPreviewUrl(file: FileItem): string {
         <div v-if="showActions" class="col-span-4 flex items-center justify-end gap-0.5 sm:col-span-2 sm:gap-1" @click.stop>
           <button
             class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-            :title="t('common.details', '详情')"
+            :title="t('common.details', 'Details')"
             @click="emit('detail', file)"
           >
             <Icon name="circle-information" class="h-4 w-4" style="color: var(--text-secondary-color)" />
@@ -249,7 +249,7 @@ function getPreviewUrl(file: FileItem): string {
           <button
             v-if="file.type === 'file'"
             class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-            :title="t('file.download', '下载')"
+            :title="t('file.download', 'Download')"
             @click="emit('download', file)"
           >
             <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
@@ -257,7 +257,7 @@ function getPreviewUrl(file: FileItem): string {
 
           <button
             class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-            :title="t('common.delete', '删除')"
+            :title="t('common.delete', 'Delete')"
             @click="emit('delete', file)"
           >
             <Icon name="trash" class="h-4 w-4 text-red-500" />

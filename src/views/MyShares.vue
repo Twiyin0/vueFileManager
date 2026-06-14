@@ -106,8 +106,8 @@ function isMaxedOut(share: Share): boolean {
 
     <div v-else-if="shares.length === 0" class="card flex flex-col items-center justify-center py-16 text-gray-400 dark:text-dark-text-secondary">
       <Icon name="link" class="mb-3 h-16 w-16" />
-      <p>{{ t('myShares.emptyTitle', '暂无分享链接') }}</p>
-      <p class="mt-1 text-sm">{{ t('myShares.emptyDescription', '在文件列表中右键点击文件即可创建分享') }}</p>
+      <p>{{ t('myShares.emptyTitle', 'No share links yet') }}</p>
+      <p class="mt-1 text-sm">{{ t('myShares.emptyDescription', 'Right-click a file in the file list to create a share') }}</p>
     </div>
 
     <div v-else class="space-y-3">
@@ -122,19 +122,19 @@ function isMaxedOut(share: Share): boolean {
                 v-if="isExpired(share)"
                 class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
               >
-                {{ t('myShares.expired', '已过期') }}
+                {{ t('myShares.expired', 'Expired') }}
               </span>
               <span
                 v-else-if="isMaxedOut(share)"
                 class="rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
               >
-                {{ t('myShares.maxedOut', '已达上限') }}
+                {{ t('myShares.maxedOut', 'Limit Reached') }}
               </span>
               <span
                 v-else
                 class="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
               >
-                {{ t('myShares.active', '有效') }}
+                {{ t('myShares.active', 'Active') }}
               </span>
             </div>
 
@@ -143,21 +143,21 @@ function isMaxedOut(share: Share): boolean {
 
             <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-dark-text-secondary">
               <span>
-                {{ t('myShares.downloadCount', '下载次数：{count}').replace('{count}', `${share.download_count}${share.max_downloads ? `/${share.max_downloads}` : ''}`) }}
+                {{ t('myShares.downloadCount', 'Downloads: {count}').replace('{count}', `${share.download_count}${share.max_downloads ? `/${share.max_downloads}` : ''}`) }}
               </span>
               <span v-if="share.password" class="flex items-center gap-0.5">
                 <Icon name="lock" class="h-3 w-3" />
-                {{ t('myShares.hasPassword', '有密码') }}
+                {{ t('myShares.hasPassword', 'Password Protected') }}
               </span>
-              <span v-if="share.expires_at">{{ t('myShares.expireAt', '过期：{time}').replace('{time}', formatDate(share.expires_at)) }}</span>
-              <span>{{ t('myShares.createdAt', '创建：{time}').replace('{time}', formatDate(share.created_at)) }}</span>
+              <span v-if="share.expires_at">{{ t('myShares.expireAt', 'Expires: {time}').replace('{time}', formatDate(share.expires_at)) }}</span>
+              <span>{{ t('myShares.createdAt', 'Created: {time}').replace('{time}', formatDate(share.created_at)) }}</span>
             </div>
           </div>
 
           <div class="flex items-center gap-1">
             <button
               class="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-              :title="t('share.copySignedLink', '复制签名链接')"
+              :title="t('share.copySignedLink', 'Copy Signed Link')"
               @click="copyLink(share.share_code, share.id, 'sign', share.signUrl)"
             >
               <Icon v-if="copiedId === share.id && copyType === 'sign'" name="check" class="h-4 w-4 text-green-500" />
@@ -165,7 +165,7 @@ function isMaxedOut(share: Share): boolean {
             </button>
             <button
               class="rounded-lg p-2 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-              :title="t('myShares.deleteTitle', '删除分享')"
+              :title="t('myShares.deleteTitle', 'Delete Share')"
               @click="confirmDelete(share)"
             >
               <Icon name="trash" class="h-4 w-4 text-red-500" />
@@ -178,9 +178,9 @@ function isMaxedOut(share: Share): boolean {
 
   <ConfirmDialog
     :show="showDeleteConfirm"
-    :title="t('myShares.deleteTitle', '删除分享')"
-    :message="t('myShares.deleteMessage', '确定要删除「{name}」的分享链接吗？').replace('{name}', shareToDelete?.file_path.split('/').pop() || '')"
-    :confirm-text="t('common.delete', '删除')"
+    :title="t('myShares.deleteTitle', 'Delete Share')"
+    :message="t('myShares.deleteMessage', 'Delete the share link for {name}?').replace('{name}', shareToDelete?.file_path.split('/').pop() || '')"
+    :confirm-text="t('common.delete', 'Delete')"
     :danger="true"
     @confirm="handleDelete"
     @cancel="showDeleteConfirm = false"

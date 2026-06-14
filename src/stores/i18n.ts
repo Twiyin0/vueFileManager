@@ -20,6 +20,10 @@ function getValueByPath(dictionary: Dictionary, path: string): string | undefine
   return typeof current === 'string' ? current : undefined
 }
 
+function normalizeLanguage(language: unknown): AppLanguage {
+  return language === 'en-US' ? 'en-US' : 'zh-CN'
+}
+
 export const useI18nStore = defineStore('i18n', () => {
   const language = ref<AppLanguage>('zh-CN')
   const dictionary = ref<Dictionary>({})
@@ -28,20 +32,21 @@ export const useI18nStore = defineStore('i18n', () => {
   const htmlLang = computed(() => language.value)
 
   async function loadLanguage(nextLanguage: AppLanguage) {
-    const response = await fetch(`/i18n/${nextLanguage}.yml`, { cache: 'no-cache' })
+    const normalizedLanguage = normalizeLanguage(nextLanguage)
+    const response = await fetch(`/i18n/${normalizedLanguage}.yml`, { cache: 'no-cache' })
     if (!response.ok) {
-      throw new Error(`Failed to load locale file: ${nextLanguage}`)
+      throw new Error(`Failed to load locale file: ${normalizedLanguage}`)
     }
 
     const content = await response.text()
     dictionary.value = (YAML.parse(content) as Dictionary) || {}
-    language.value = nextLanguage
+    language.value = normalizedLanguage
     loaded.value = true
-    document.documentElement.lang = nextLanguage
+    document.documentElement.lang = normalizedLanguage
   }
 
   async function initialize(defaultLanguage: AppLanguage) {
-    await loadLanguage(defaultLanguage)
+    await loadLanguage(normalizeLanguage(defaultLanguage))
   }
 
   function t(key: string, fallback?: string) {

@@ -52,6 +52,10 @@ common:
   no: No
   default: Default
   backToTop: Back to top
+  expand: Expand
+  collapse: Collapse
+  separator: " | "
+  colon: ": "
 language:
   zh-CN: Simplified Chinese
   en-US: English
@@ -101,15 +105,21 @@ file:
   batchCopy: Batch Copy
   batchMove: Batch Move
   batchDownload: Download as Archive
+  batchDirectDownload: Batch Download
+  batchZipDownload: Download as ZIP
   batchDelete: Batch Delete
+  batchDirectDownloadNoFiles: No directly downloadable files in the current selection
+  batchDirectDownloadStarted: Started downloading {count} files
+  batchDirectDownloadStartedWithFolders: Started downloading {count} files. Use ZIP download for folders
+  batchZipDownloadStarted: Started packaging the selected items for download
   clearSelection: Clear Selection
   clear: Clear
   paste: Paste
-  pasteCount: "Paste ({count})"
+  pasteCount: Paste ({count})
   items: items
   details: Details
   confirmDeleteTitle: Confirm Delete
-  confirmDeleteMessage: 'Delete "{name}"?'
+  confirmDeleteMessage: Delete "{name}"?
   empty: No files yet
   name: Name
   size: Size
@@ -133,9 +143,9 @@ upload:
   hideWindow: Hide Window
   uploading: Uploading...
   progressTitle: Upload Progress
-  summaryCollapsed: "Total {total}, completed {completed}, failed {failed}, active {active}"
-  summaryExpanded: "Total {total}, completed {completed}, failed {failed}, cancelled {cancelled}"
-  concurrentCount: "Active {count}"
+  summaryCollapsed: Total {total}, completed {completed}, failed {failed}, active {active}
+  summaryExpanded: Total {total}, completed {completed}, failed {failed}, cancelled {cancelled}
+  concurrentCount: Active {count}
   statusCompleted: Completed
   statusProcessing: Processing
   statusCancelled: Cancelled
@@ -204,7 +214,7 @@ sharePage:
 guestShare:
   createTitle: Share to Guest Mode
   editTitle: Edit Guest Share
-  createDescription: "Share folder {name} to guest mode."
+  createDescription: Share folder {name} to guest mode.
   editDescription: Update guest share permissions and display name.
   displayName: Display Name
   displayNamePlaceholder: Folder name shown to guests
@@ -231,12 +241,12 @@ myShares:
   expireAt: "Expires: {time}"
   createdAt: "Created: {time}"
   deleteTitle: Delete Share
-  deleteMessage: 'Delete the share link for "{name}"?'
+  deleteMessage: Delete the share link for "{name}"?
 trash:
   loadFailed: Failed to load trash
   restored: Restored
   restoreFailed: Restore failed
-  deleteConfirm: 'Permanently delete "{name}"? This action cannot be undone.'
+  deleteConfirm: Permanently delete "{name}"? This action cannot be undone.
   deleted: Permanently deleted
   deleteFailed: Delete failed
   emptyConfirm: Empty the trash? This action cannot be undone.
@@ -253,48 +263,30 @@ webdav:
   copied: Copied
   copy: Copy
   title: WebDAV Access
-  description: This page centralizes WebDAV URLs, auth modes, and per-pool endpoints for desktop clients and automation.
+  description: This page centralizes WebDAV URLs, authentication methods, and per-pool endpoints for desktop clients and automation.
   manageApiKey: Manage API Keys
   recommendedTitle: Recommended Access Methods
   desktopClient: Desktop Clients
   desktopClientDesc: Use /dav or /dav/pool/storagePoolId and sign in with your site username and password.
   devHint: In development, connect to the backend on port 3000 directly instead of the frontend on port 5173.
   browserTest: Browser Quick Test
-  browserTestDesc: Use a tokenized URL to quickly verify reachability in the browser.
+  browserTestDesc: Use a tokenized URL to quickly verify endpoint reachability in the browser.
   automation: Automation Scripts
-  automationDesc: Scripts can still use Bearer Token, X-API-Key, or the apiKey query parameter.
+  automationDesc: Scripts can continue using Bearer Token, X-API-Key, or the apiKey query parameter.
   loginInfo: Login Information
-  passwordHint: Use your site login password. The plain password is not shown on this page.
+  passwordHint: Use your site login password. This page does not reveal the plaintext password.
   baseEndpoint: Base Endpoint
   poolEndpoints: Storage Pool Endpoints
   poolEndpointsDesc: Generate a dedicated WebDAV URL for each pool so clients do not need to switch context manually.
   loadingPools: Loading storage pools...
   noPools: No storage pools available
-  noPoolsHint: Create or verify a default storage pool first from the Storage Pools page.
+  noPoolsHint: Create or verify a default storage pool from the storage pools page first.
   clientUrl: Client URL
   browserUrl: Browser Test URL
   tipsTitle: Integration Tips
-  tip1: Windows Explorer, macOS Finder, Cyberduck, RaiDrive, and similar clients should prefer the client URL with username/password.
-  tip2: For quick endpoint checks, use the browser test URL, which already includes the current login token.
+  tip1: Windows Explorer, macOS Finder, Cyberduck, RaiDrive, and similar clients should prefer the client URL with username and password.
+  tip2: For quick endpoint checks, prefer the browser test URL, which already includes the current login token.
   tip3: Desktop clients should prefer /dav/pool/ID. Without a pool ID, the default storage pool is used.
-apiKeys:
-  create: Create Key
-  description: "API Keys are used for programmatic access to the file management API. Add this request header:"
-  emptyTitle: No API Keys Yet
-  copy: Copy
-  createdTitle: API Key Created
-  createdHint: Save this key securely. After closing, the full value cannot be viewed again.
-  copyAndClose: Copy and Close
-  createTitle: Create API Key
-  name: Name
-  namePlaceholder: "Example: My App"
-  permissions: Permissions
-  creating: Creating...
-  deleteTitle: Delete API Key
-  deleteMessage: 'Delete "{name}"? Applications using this key will no longer be able to access the service.'
-  readDesc: View file list, preview, and download files
-  writeDesc: Upload files, create directories, and edit content
-  deleteDesc: Delete files or directories
 admin:
   uploadLimit: Upload Limits
   editUploadLimit: Edit System Settings
@@ -302,18 +294,52 @@ admin:
   uploadLimitHint: Enter an integer between 1 and 10240
   maxConcurrentUploads: Max concurrent uploads
   maxConcurrentUploadsHint: Enter an integer between 1 and 16
-  language: Default language
-  languageHint: The current page updates immediately after save; other users need a refresh
   database: Database Configuration
-  databaseType: Database Type
-  sqlitePath: SQLite File Path
-  testConnection: Test Connection
-  saveConfig: Save Configuration
   testing: Testing...
-  saving: Saving...
+  testConnection: Test Connection
+  saveConfig: Save Config
   runtimeStatus: Runtime Status
   unavailable: Status unavailable
+  databaseType: Database Type
+  sqlitePath: SQLite File Path
   ssl: Enable SSL
+  addIpEntry: Add IP Entry
+  ipPattern: IP or CIDR
+  ipPatternPlaceholder: For example 192.168.1.1 or 192.168.1.0/24
+  reason: Reason
+  reasonOptional: Reason (optional)
+  reasonPlaceholder: For example malicious scanning
+  ipList: IP List
+  blacklist: Blacklist
+  whitelist: Whitelist
+  blacklistMode: Blacklist Mode
+  whitelistMode: Whitelist Mode
+  switchToBlacklist: Switch to Blacklist
+  switchToWhitelist: Switch to Whitelist
+  noIpEntries: No IP entries
+  createdBy: Created By
+  createdAt: Created At
+  whitelistProtected: 127.0.0.1 cannot be removed in whitelist mode
+  confirmRoleTitleAdmin: Promote to Admin
+  confirmRoleTitleUser: Demote to User
+  confirmRoleMessageAdmin: Promote "{username}" to admin?
+  confirmRoleMessageUser: Demote "{username}" to a regular user?
+  confirmBanTitle: Ban User
+  confirmUnbanTitle: Unban User
+  confirmBanMessage: Ban "{username}"? The user will no longer be able to sign in.
+  confirmUnbanMessage: Unban "{username}"?
+  confirmDeleteUserMessage: Delete user "{username}"? Related user data will be removed permanently.
+  confirmDeleteIpMessage: Delete IP entry "{pattern}"?
+  verifyUserMessage: Verify "{username}" manually?
+  switchWhitelistWarning: After switching to whitelist mode, only listed IPs can access the site. Continue?'
+  switchBlacklistWarning: After switching to blacklist mode, only listed IPs will be blocked. Continue?'
+  userCreated: User created successfully
+  passwordReset: Password has been reset
+  settingsSaved: Upload settings saved. The service will not restart automatically.
+  databaseSaved: Database configuration saved. Runtime connections switch only after a manual restart.
+  uploadLimitValidation: Enter an upload limit between 1 and 10240
+  concurrencyValidation: Enter a concurrency value between 1 and 16
+  saving: Saving...
   users: User Management
   createUser: Create User
   totalUsers: Total Users
@@ -345,50 +371,17 @@ admin:
   noStoragePools: No storage pools
   localStorage: Local Storage
   remoteStorage: Remote Storage
-  setNewPasswordFor: "Set a new password for {username}"
+  setNewPasswordFor: Set a new password for {username}
   newPasswordPlaceholder: New password, at least 6 characters
   editQuota: Adjust Storage Quota
   quotaMb: Quota (MB)
   currentQuota: Current Quota
-  addIpEntry: Add IP Entry
-  ipPattern: IP or CIDR
-  ipPatternPlaceholder: For example 192.168.1.1 or 192.168.1.0/24
-  reason: Reason
-  reasonOptional: Reason (optional)
-  reasonPlaceholder: For example malicious scanning
-  ipList: IP List
-  blacklist: Blacklist
-  whitelist: Whitelist
-  blacklistMode: Blacklist Mode
-  whitelistMode: Whitelist Mode
-  switchToBlacklist: Switch to Blacklist
-  switchToWhitelist: Switch to Whitelist
-  noIpEntries: No IP entries
-  createdBy: Created By
-  createdAt: Created At
-  whitelistProtected: 127.0.0.1 cannot be removed in whitelist mode
-  confirmRoleTitleAdmin: Promote to Admin
-  confirmRoleTitleUser: Demote to User
-  confirmRoleMessageAdmin: 'Promote "{username}" to admin?'
-  confirmRoleMessageUser: 'Demote "{username}" to a regular user?'
-  confirmBanTitle: Ban User
-  confirmUnbanTitle: Unban User
-  confirmBanMessage: 'Ban "{username}"? The user will no longer be able to sign in.'
-  confirmUnbanMessage: 'Unban "{username}"?'
-  confirmDeleteUserMessage: 'Delete user "{username}"? Related user data will be removed permanently.'
-  confirmDeleteIpMessage: 'Delete IP entry "{pattern}"?'
-  verifyUserMessage: 'Verify "{username}" manually?'
-  switchWhitelistWarning: After switching to whitelist mode, only listed IPs can access the site. Continue?
-  switchBlacklistWarning: After switching to blacklist mode, only listed IPs will be blocked. Continue?
-  userCreated: User created successfully
-  passwordReset: Password has been reset
-  settingsSaved: System settings saved
-  databaseSaved: Database configuration saved. Restart the service to switch runtime connections
-  uploadLimitValidation: Enter an upload limit between 1 and 10240
-  concurrencyValidation: Enter a concurrency value between 1 and 16
 settings:
   title: User Settings
   theme: Theme Settings
+  languageTitle: Interface Language
+  language: Interface Language
+  languageHint: Language is saved to the current account and will be reused on future sign-ins.
   upload: Upload Settings
   uploadConcurrency: Max concurrent uploads
   uploadConcurrencyHint: Set to 0 to follow the server default
@@ -397,8 +390,8 @@ settings:
   guestMode: Guest Mode
   enableGuestMode: Enable Guest Mode
   guestLink: Guest Link
-  guestShares: Shared Folders
-  noGuestShares: No shared folders yet. Create guest shares from the file list.
+  guestShares: Guest Folders
+  noGuestShares: No guest folders yet. Create guest shares from the file list.
   editPermissions: Edit Permissions
   cancelShare: Cancel Share
   userInfo: User Information
@@ -408,6 +401,8 @@ settings:
   save: Save Settings
   saved: Settings saved
   storageDescription: Manage local, UpYun, and other backends from the storage pools page.
+  guestSharesWithCount: Guest Folders ({count})
+  cancelShareMessage: Cancel guest share "{name}"?
 permissions:
   read: Read
   write: Write
@@ -438,3 +433,150 @@ preview:
   pptLegacyUnsupported: Online preview for PPT is not supported. Please download the file instead.
   unsupported: Preview is not available for this file type
   downloadFile: Download File
+register:
+  title: Create Account
+  subtitle: Register your VueFileManager account
+  usernamePlaceholder: 3-20 characters
+  optional: Optional
+  emailPlaceholder: your@email.com
+  emailRequired: Please enter your email
+  sendCode: Send Code
+  sendingCode: Sending...
+  countdown: "{count}s"
+  code: Verification Code
+  codePlaceholder: 6-digit code
+  passwordPlaceholder: At least 6 characters
+  confirmPassword: Confirm Password
+  confirmPasswordPlaceholder: Enter your password again
+  passwordMismatch: Passwords do not match
+  submitting: Creating account...
+  submit: Register
+  hasAccount: Already have an account?
+login:
+  subtitle: Sign in to your account
+  usernamePlaceholder: Enter your username
+  passwordPlaceholder: Enter your password
+  loggingIn: Signing in...
+  noAccount: Don't have an account yet?
+  guestEntry: Browse as guest
+guest:
+  mode: Guest Mode
+  userMode: User Mode
+  browsePublicFiles: Browse publicly shared files
+  noPublicFiles: No public files yet
+  noPublicFilesHint: Users can enable guest mode and share folders from settings.
+  sharedFoldersCount: "{count} shared folders"
+  processingOnServer: Processing on server
+  ownerFileArtist: "{owner}'s files"
+  audioLoadFailed: "Audio load failed: {message}"
+  audioReadFailed: Unable to read the audio file
+  audioRefreshFailed: Unable to refresh the playlist
+  downloadFailed: Download failed
+  deleteFailed: Delete failed
+  renameFailed: Rename failed
+  uploadFailed: Upload failed
+  uploadCancelled: Upload cancelled
+  dragUploadOverlay: Drop files here to upload
+  noSharedFolders: No shared folders yet
+  folderFallback: Folder
+  searchPlaceholder: Search...
+  searchResults: "Search results: {count}"
+pluginsPage:
+  disabledTitle: Plugin system disabled
+  disabledHint: "Set plugins.enabled: true in config.yml"
+  centerTitle: Plugin Center
+  centerDescription: Manage theme and feature plugins in one place. Restart the service after changing enable states.
+  docs: Development Docs
+  themesTitle: Theme Plugins
+  noThemesTitle: No theme plugins yet
+  noThemesDescription: Create a theme directory inside plugins/ with manifest.json and style.css.
+  disabledBadge: Disabled
+  author: "Author: {author}"
+  featuresTitle: Feature Plugins
+  noFeaturesTitle: No feature plugins yet
+  noFeaturesDescription: Feature plugins can declare entry files, static assets, and capabilities. This version focuses on unified registration and toggles for future expansion.
+  pluginDocs: Plugin Docs
+  entryPrefix: "entry: {entry}"
+directoryReadme:
+  title: Directory README
+  collapsedHint: README collapsed
+  loading: Loading README...
+  loadFailed: Failed to load README
+markdownDoc:
+  tocTitle: Table of Contents
+fileDetail:
+  title: File Details
+  type: Type
+  folderType: Folder
+  size: Size
+  modified: Modified
+  path: Path
+  addFavourite: Add to Favourites
+folderTree:
+  allPools: All Storage Pools
+  backToPools: Back to Storage Pools
+  loading: Loading...
+apiKeys:
+  create: Create Key
+  description: "API keys are used for programmatic access to the file management API. Add this request header:"
+  emptyTitle: No API keys yet
+  copy: Copy
+  createdTitle: API Key Created
+  createdHint: Save this key securely. After closing, the full value cannot be viewed again.
+  copyAndClose: Copy and Close
+  createTitle: Create API Key
+  name: Name
+  namePlaceholder: "Example: My App"
+  permissions: Permissions
+  creating: Creating...
+  deleteTitle: Delete API Key
+  deleteMessage: Delete "{name}"? Applications using this key will no longer be able to access the service.
+  readDesc: View file lists, preview files, and download files
+  writeDesc: Upload files, create directories, and edit content
+  deleteDesc: Delete files or directories
+storagePoolsPage:
+  usageTitle: Local Storage Usage
+  remaining: Remaining {size}
+  toggleBulkSelect: Select Multiple
+  clearBulkSelect: Clear Selection
+  bulkDelete: Delete Selected
+  add: Add Storage Pool
+  selectedSummary: "{count} storage pools selected. The default pool will not be deleted."
+  validationNameRequired: Please enter a storage pool name
+  updated: Storage pool updated
+  created: Storage pool created
+  defaultCannotDelete: The default storage pool cannot be deleted
+  deleteConfirm: Delete storage pool "{name}"?
+  deleted: Storage pool deleted
+  noDeletableSelected: None of the selected storage pools can be deleted
+  bulkDeleteConfirm: Delete {count} storage pools?
+  batchPartialFailure: "{message}. Partial failure: {error}"
+  defaultUpdated: Default storage pool updated
+  testing: Testing...
+  testConnection: Test Connection
+  setDefault: Set as Default
+  noPoolsTitle: No storage pools yet
+  noPoolsDescription: Add a storage pool to manage file storage.
+  addFirst: Add Your First Storage Pool
+  editTitle: Edit Storage Pool
+  addTitle: Add Storage Pool
+  name: Storage Pool Name
+  namePlaceholder: "Example: Primary Storage, Backup Storage"
+  type: Storage Type
+  localHint: Local storage automatically isolates directories by username. No extra disk path is required.
+  rootPath: Root Path Mapping
+  operatorPlaceholder: Operator
+  passwordPlaceholderEdit: Password (leave blank to keep unchanged)
+  rootPathPlaceholder: Mapped root path /
+  hostPlaceholder: Host
+  ftpPortPlaceholder: Port 21
+  usernamePlaceholder: Username
+  remoteRootPlaceholder: Remote root path /
+  sftpPortPlaceholder: Port 22
+  privateKeyPlaceholder: Private key content, can replace password
+  secretAccessKeyPlaceholder: Secret Access Key (leave blank to keep unchanged)
+  forcePathStyle: Force Path Style
+  saveInProgress: Saving...
+  updateAction: Update
+  createAction: Create
+  upyun: UpYun

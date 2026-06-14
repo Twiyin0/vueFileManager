@@ -97,7 +97,7 @@ async function handleDownload(item: FavouriteItem) {
     if (token) params.set('token', token)
 
     const response = await fetch(`/api/files/download?${params.toString()}`)
-    if (!response.ok) throw new Error(t('file.download', '下载') + t('upload.statusFailed', '失败'))
+    if (!response.ok) throw new Error(t('file.download', 'Download') + t('upload.statusFailed', 'Failed'))
 
     const blob = await response.blob()
     const objectUrl = URL.createObjectURL(blob)
@@ -135,7 +135,7 @@ async function handleDownload(item: FavouriteItem) {
           <div class="min-w-0">
             <p class="truncate text-sm" style="color: var(--text-color)">{{ item.file_name }}</p>
             <p class="truncate text-xs" style="color: var(--text-secondary-color)">
-              {{ item.pool_name || item.storage_pool_id }} · {{ item.file_path }}
+              {{ item.pool_name || item.storage_pool_id }}{{ t('common.separator', ' | ') }}{{ item.file_path }}
             </p>
           </div>
         </div>
@@ -143,14 +143,14 @@ async function handleDownload(item: FavouriteItem) {
           <button
             v-if="item.file_type !== 'folder'"
             class="rounded p-1.5 transition-colors hover:bg-gray-200 dark:hover:bg-dark-hover"
-            :title="t('file.download', '下载')"
+            :title="t('file.download', 'Download')"
             @click.stop="handleDownload(item)"
           >
             <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
           </button>
           <button
             class="rounded p-1.5 transition-colors hover:bg-yellow-100 dark:hover:bg-yellow-900/20"
-            :title="t('favourites.remove', '取消收藏')"
+            :title="t('favourites.remove', 'Remove Favourite')"
             @click.stop="removeFav(item)"
           >
             <Icon name="star-sharp" class="h-4 w-4 text-yellow-500" />
@@ -161,8 +161,8 @@ async function handleDownload(item: FavouriteItem) {
 
     <div v-else class="py-20 text-center">
       <Icon name="star-sharp" class="mx-auto mb-4 h-16 w-16" style="color: var(--text-secondary-color)" />
-      <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('favourites.emptyTitle', '还没有收藏') }}</h3>
-      <p style="color: var(--text-secondary-color)">{{ t('favourites.emptyDescription', '在文件列表中点击星标即可添加收藏。') }}</p>
+      <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('favourites.emptyTitle', 'No favourites yet') }}</h3>
+      <p style="color: var(--text-secondary-color)">{{ t('favourites.emptyDescription', 'Click the star icon in the file list to add favourites.') }}</p>
     </div>
   </div>
 

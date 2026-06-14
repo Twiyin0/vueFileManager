@@ -30,16 +30,16 @@ const emit = defineEmits<{
 }>()
 
 const shouldRender = computed(() => props.showWhenEmpty || props.tasks.length > 0)
-const panelTitle = computed(() => props.title || t('offline.panelTitle', '离线下载任务'))
-const panelDescription = computed(() => props.description || t('offline.panelDescription', '远程 URL 下载会在服务器端排队执行'))
+const panelTitle = computed(() => props.title || t('offline.panelTitle', 'Offline Download Tasks'))
+const panelDescription = computed(() => props.description || t('offline.panelDescription', 'Remote URL downloads are queued and executed on the server side.'))
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
-    pending: t('offline.statusPending', '排队中'),
-    running: t('offline.statusRunning', '执行中'),
-    completed: t('offline.statusCompleted', '已完成'),
-    failed: t('offline.statusFailed', '失败'),
-    cancelled: t('offline.statusCancelled', '已取消')
+    pending: t('offline.statusPending', 'Queued'),
+    running: t('offline.statusRunning', 'Running'),
+    completed: t('offline.statusCompleted', 'Completed'),
+    failed: t('offline.statusFailed', 'Failed'),
+    cancelled: t('offline.statusCancelled', 'Cancelled')
   }
   return map[status] || status
 }
@@ -67,7 +67,7 @@ function formatBytes(bytes?: number | null) {
           class="btn-secondary px-3 py-1 text-xs"
           @click="emit('clearFinished')"
         >
-          {{ t('offline.clearFinished', '清空已结束') }}
+          {{ t('offline.clearFinished', 'Clear Finished') }}
         </button>
 
         <button
@@ -76,7 +76,7 @@ function formatBytes(bytes?: number | null) {
           @click="emit('refresh')"
         >
           <Icon name="refresh-cw" class="h-3.5 w-3.5" />
-          {{ loading ? t('common.loading', '加载中...') : t('common.refresh', '刷新') }}
+          {{ loading ? t('common.loading', 'Loading...') : t('common.refresh', 'Refresh') }}
         </button>
 
         <button
@@ -84,7 +84,7 @@ function formatBytes(bytes?: number | null) {
           class="btn-secondary px-3 py-1 text-xs"
           @click="emit('hide')"
         >
-          {{ t('common.close', '关闭') }}
+          {{ t('common.close', 'Close') }}
         </button>
       </div>
     </div>
@@ -95,9 +95,9 @@ function formatBytes(bytes?: number | null) {
       style="border-color: var(--border-color)"
     >
       <Icon name="download" class="mx-auto mb-3 h-10 w-10" style="color: var(--text-secondary-color)" />
-      <p class="text-sm font-medium" style="color: var(--text-color)">{{ t('offline.emptyTitle', '暂无离线任务') }}</p>
+      <p class="text-sm font-medium" style="color: var(--text-color)">{{ t('offline.emptyTitle', 'No offline tasks yet') }}</p>
       <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">
-        {{ t('offline.emptyDescription', '在文件管理页选择“远程上传”，切到离线模式后即可创建任务。') }}
+        {{ t('offline.emptyDescription', 'Create one from File Manager by selecting Remote Upload and switching to offline mode.') }}
       </p>
     </div>
 
@@ -144,7 +144,7 @@ function formatBytes(bytes?: number | null) {
             <div class="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs" style="color: var(--text-secondary-color)">
               <span>{{ task.progress || 0 }}%</span>
               <span>
-                {{ formatBytes(task.downloaded_bytes) }} / {{ task.total_bytes ? formatBytes(task.total_bytes) : t('offline.unknownSize', '未知大小') }}
+                {{ formatBytes(task.downloaded_bytes) }} / {{ task.total_bytes ? formatBytes(task.total_bytes) : t('offline.unknownSize', 'Unknown size') }}
               </span>
               <span v-if="task.error_message" class="text-red-500">{{ task.error_message }}</span>
             </div>
@@ -156,7 +156,7 @@ function formatBytes(bytes?: number | null) {
               class="btn-secondary px-3 py-1 text-xs"
               @click="emit('cancel', task.id)"
             >
-              {{ t('common.cancel', '取消') }}
+              {{ t('common.cancel', 'Cancel') }}
             </button>
 
             <button
@@ -164,7 +164,7 @@ function formatBytes(bytes?: number | null) {
               class="btn-primary px-3 py-1 text-xs"
               @click="emit('retry', task.id)"
             >
-              {{ t('offline.retry', '重试') }}
+              {{ t('offline.retry', 'Retry') }}
             </button>
           </div>
         </div>

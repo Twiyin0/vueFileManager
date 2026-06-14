@@ -3,6 +3,8 @@ import yaml from 'js-yaml'
 import { resolveFromRoot } from './runtime-paths'
 
 const configPath = resolveFromRoot('config.yml')
+const envPath = resolveFromRoot('.env')
+const configWriteMarkerPath = resolveFromRoot('.config-write-marker')
 
 export type AppLanguage = 'zh-CN' | 'en-US'
 
@@ -67,7 +69,7 @@ interface Config {
     host: string
     jwt_secret: string
   }
-  language: AppLanguage
+  default_language: AppLanguage
   storage_root: string
   upload_limit: number
   max_concurrent_uploads: number
@@ -93,7 +95,7 @@ const defaultConfig: Config = {
     host: '',
     jwt_secret: 'vue-file-manager-secret-key-2024'
   },
-  language: 'zh-CN',
+  default_language: 'zh-CN',
   storage_root: './uploads',
   upload_limit: 100,
   max_concurrent_uploads: 3,
@@ -152,30 +154,94 @@ function normalizeLanguage(language: unknown): AppLanguage {
   return language === 'en-US' ? 'en-US' : 'zh-CN'
 }
 
+function toNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function loadEnvFile() {
+  if (!fs.existsSync(envPath)) return
+
+  const content = fs.readFileSync(envPath, 'utf8')
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+
+    const separatorIndex = trimmed.indexOf('=')
+    if (separatorIndex === -1) continue
+
+    const key = trimmed.slice(0, separatorIndex).trim()
+    if (!key || key in process.env) continue
+
+    let value = trimmed.slice(separatorIndex + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+
+    process.env[key] = value
+  }
+}
+
+function resolveDefaultLanguage(): AppLanguage {
+  return normalizeLanguage(process.env.DEFAULT_LANGUAGE || defaultConfig.default_language)
+}
+
 function mergeConfig(loaded: any): Config {
   return {
     admin: { ...defaultConfig.admin, ...loaded.admin },
-    server: { ...defaultConfig.server, ...loaded.server },
-    language: normalizeLanguage(loaded.language),
+    server: {
+      ...defaultConfig.server,
+      ...loaded.server,
+      port: toNumber(loaded.server?.port, defaultConfig.server.port)
+    },
+    default_language: resolveDefaultLanguage(),
     storage_root: loaded.storage_root || defaultConfig.storage_root,
-    upload_limit: Number(loaded.upload_limit || defaultConfig.upload_limit),
-    max_concurrent_uploads: Number(loaded.max_concurrent_uploads || defaultConfig.max_concurrent_uploads),
-    resumable_upload_cache_minutes: loaded.resumable_upload_cache_minutes ?? defaultConfig.resumable_upload_cache_minutes,
+    upload_limit: toNumber(loaded.upload_limit, defaultConfig.upload_limit),
+    max_concurrent_uploads: toNumber(loaded.max_concurrent_uploads, defaultConfig.max_concurrent_uploads),
+    resumable_upload_cache_minutes: toNumber(
+      loaded.resumable_upload_cache_minutes,
+      defaultConfig.resumable_upload_cache_minutes
+    ),
     ip_list_mode: loaded.ip_list_mode === 'whitelist' ? 'whitelist' : 'blacklist',
     site: { ...defaultConfig.site, ...loaded.site },
     database: {
       type: loaded.database?.type || defaultConfig.database.type,
       sqlite: { ...defaultConfig.database.sqlite, ...loaded.database?.sqlite },
-      mysql: { ...defaultConfig.database.mysql, ...loaded.database?.mysql },
-      postgres: { ...defaultConfig.database.postgres, ...loaded.database?.postgres }
+      mysql: {
+        ...defaultConfig.database.mysql,
+        ...loaded.database?.mysql,
+        port: toNumber(loaded.database?.mysql?.port, defaultConfig.database.mysql.port)
+      },
+      postgres: {
+        ...defaultConfig.database.postgres,
+        ...loaded.database?.postgres,
+        port: toNumber(loaded.database?.postgres?.port, defaultConfig.database.postgres.port)
+      }
     },
     storage_pools: Array.isArray(loaded.storage_pools) && loaded.storage_pools.length > 0
       ? loaded.storage_pools
       : defaultConfig.storage_pools,
-    smtp: { ...defaultConfig.smtp, ...loaded.smtp },
+    smtp: {
+      ...defaultConfig.smtp,
+      ...loaded.smtp,
+      port: toNumber(loaded.smtp?.port, defaultConfig.smtp.port)
+    },
     plugins: { ...defaultConfig.plugins, ...loaded.plugins }
   }
 }
+
+function markInternalConfigWrite() {
+  try {
+    fs.writeFileSync(configWriteMarkerPath, String(Date.now()), 'utf8')
+  } catch {
+    // ignore marker write failures
+  }
+}
+
+loadEnvFile()
 
 let config: Config = defaultConfig
 
@@ -186,10 +252,12 @@ try {
     config = mergeConfig(loaded || {})
     console.log('Loaded config.yml')
   } else {
+    config = mergeConfig({})
     console.log('config.yml not found, using default config')
   }
 } catch (err: any) {
   console.error('Failed to load config file:', err.message, 'using default config')
+  config = mergeConfig({})
 }
 
 export function updateConfigFile(mutator: (rawConfig: any) => void): Config {
@@ -198,13 +266,17 @@ export function updateConfigFile(mutator: (rawConfig: any) => void): Config {
     : {}
 
   mutator(existing)
+  delete existing.language
+  delete existing.default_language
+
+  markInternalConfigWrite()
   fs.writeFileSync(configPath, yaml.dump(existing, { lineWidth: -1 }), 'utf8')
   config = mergeConfig(existing)
   return config
 }
 
 export default config
-export { configPath }
+export { configPath, envPath, configWriteMarkerPath }
 export type {
   Config,
   StoragePoolConfig,

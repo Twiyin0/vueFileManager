@@ -1,25 +1,20 @@
 import { Router, Response } from 'express'
-import config, { type AppLanguage, updateConfigFile } from '../../config'
+import config, { updateConfigFile } from '../../config'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../../middleware/auth'
 import { getDatabaseStatus, testDatabaseConnection } from '../../services/database'
 import { sendServerError } from './shared'
 
 const router = Router()
 
-function isSupportedLanguage(language: unknown): language is AppLanguage {
-  return language === 'zh-CN' || language === 'en-US'
-}
-
 router.get('/upload-limit', authMiddleware, adminMiddleware, (_req: AuthRequest, res: Response) => {
   res.json({
     upload_limit: config.upload_limit,
-    max_concurrent_uploads: config.max_concurrent_uploads,
-    language: config.language
+    max_concurrent_uploads: config.max_concurrent_uploads
   })
 })
 
 router.put('/upload-limit', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
-  const { upload_limit, max_concurrent_uploads, language } = req.body
+  const { upload_limit, max_concurrent_uploads } = req.body
 
   if (typeof upload_limit !== 'number' || upload_limit < 1 || upload_limit > 10240) {
     return res.status(400).json({ error: 'upload_limit must be between 1 and 10240 MB' })
@@ -29,25 +24,18 @@ router.put('/upload-limit', authMiddleware, adminMiddleware, (req: AuthRequest, 
     return res.status(400).json({ error: 'max_concurrent_uploads must be between 1 and 16' })
   }
 
-  if (!isSupportedLanguage(language)) {
-    return res.status(400).json({ error: 'language must be zh-CN or en-US' })
-  }
-
   config.upload_limit = upload_limit
   config.max_concurrent_uploads = max_concurrent_uploads
-  config.language = language
 
   updateConfigFile((rawConfig) => {
     rawConfig.upload_limit = upload_limit
     rawConfig.max_concurrent_uploads = max_concurrent_uploads
-    rawConfig.language = language
   })
 
   res.json({
     upload_limit,
     max_concurrent_uploads,
-    language,
-    message: 'System settings saved. Restart the service to fully apply them.'
+    message: 'Upload settings saved without restarting the service.'
   })
 })
 
@@ -97,7 +85,7 @@ router.put('/database', authMiddleware, adminMiddleware, (req: AuthRequest, res:
   })
 
   res.json({
-    message: 'Database configuration saved. Restart the service to switch runtime connections.',
+    message: 'Database configuration saved. Restart manually only when you want runtime connections to switch.',
     status: getDatabaseStatus()
   })
 })

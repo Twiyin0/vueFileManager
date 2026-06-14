@@ -79,15 +79,15 @@ function openFilePicker() {
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')" />
       <div class="relative card max-h-[90vh] w-full max-w-lg overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('upload.title', '上传文件') }}</h3>
+        <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('upload.title', 'Upload Files') }}</h3>
         <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
-          {{ t('upload.targetPath', '上传到：{path}').replace('{path}', currentPath || t('upload.rootPath', '根目录')) }}
+          {{ t('upload.targetPath', 'Upload to: {path}').replace('{path}', currentPath || t('upload.rootPath', 'Root Directory')) }}
         </p>
 
         <div v-if="pools && pools.length > 0" class="mb-4">
-          <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('upload.targetPool', '目标存储池') }}</label>
+          <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('upload.targetPool', 'Target Storage Pool') }}</label>
           <select v-model="selectedPoolId" class="input-field" :disabled="isUploadingState">
-            <option :value="undefined">{{ t('upload.currentPool', '当前存储池') }}</option>
+            <option :value="undefined">{{ t('upload.currentPool', 'Current Storage Pool') }}</option>
             <option v-for="pool in pools" :key="pool.id" :value="pool.id">
               {{ pool.name }}
             </option>
@@ -108,10 +108,10 @@ function openFilePicker() {
           <Icon name="upload" class="mx-auto mb-3 h-12 w-12" style="color: var(--text-secondary-color)" />
           <p class="text-sm" style="color: var(--text-color)">
             {{ isUploadingState
-              ? t('upload.busyHint', '上传任务进行中，可关闭此窗口，右下角会继续显示进度')
-              : t('upload.dropHint', '点击或拖拽文件到此处上传') }}
+              ? t('upload.busyHint', 'Upload is in progress. You can close this window and keep watching progress at the bottom-right corner.')
+              : t('upload.dropHint', 'Click or drag files here to upload') }}
           </p>
-          <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">{{ t('upload.limitHint', '单文件大小受服务端上传限制控制') }}</p>
+          <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">{{ t('upload.limitHint', 'Single file size is controlled by the server upload limit') }}</p>
         </div>
 
         <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect" />
@@ -122,7 +122,7 @@ function openFilePicker() {
           style="background-color: var(--surface-color); border-color: var(--border-color)"
         >
           <div class="mb-2 text-sm font-medium" style="color: var(--text-color)">
-            {{ isUploadingState ? t('upload.queue', '上传队列') : t('upload.pendingFiles', '待上传文件') }}
+            {{ isUploadingState ? t('upload.queue', 'Upload Queue') : t('upload.pendingFiles', 'Pending Files') }}
           </div>
           <div v-for="(file, index) in pendingFiles" :key="index" class="mb-2 flex items-center justify-between text-xs last:mb-0">
             <span class="max-w-[260px] truncate" style="color: var(--text-color)">{{ file.name }}</span>
@@ -145,7 +145,7 @@ function openFilePicker() {
         >
           <span class="flex items-center gap-1">
             <Icon name="triangle-exclamation" class="h-3.5 w-3.5 flex-shrink-0" />
-            {{ t('upload.skippedFiles', '已自动跳过 {count} 个系统文件：{files}')
+            {{ t('upload.skippedFiles', 'Skipped {count} system files automatically: {files}')
               .replace('{count}', String(skippedFiles.length))
               .replace('{files}', skippedFiles.join(', ')) }}
           </span>
@@ -157,15 +157,15 @@ function openFilePicker() {
             class="btn-primary text-sm"
             @click="emit('upload', pendingFiles, effectivePoolId)"
           >
-            {{ t('upload.start', '开始上传') }}
+            {{ t('upload.start', 'Start Upload') }}
           </button>
 
           <button v-if="isUploadingState" class="btn-secondary text-sm" @click="emit('cancel')">
-            {{ t('upload.cancel', '取消上传') }}
+            {{ t('upload.cancel', 'Cancel Upload') }}
           </button>
 
           <button class="btn-secondary text-sm" @click="emit('close')">
-            {{ isUploadingState ? t('upload.hideWindow', '隐藏窗口') : t('common.close', '关闭') }}
+            {{ isUploadingState ? t('upload.hideWindow', 'Hide Window') : t('common.close', 'Close') }}
           </button>
         </div>
       </div>

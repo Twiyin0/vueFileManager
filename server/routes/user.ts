@@ -1,17 +1,33 @@
 import { Router, Response } from 'express'
 import crypto from 'crypto'
 import db from '../db'
-import config from '../config'
+import config, { type AppLanguage } from '../config'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getUserQuota, formatBytes } from '../services/quota'
 
 const router = Router()
 
+function normalizeLanguage(language: unknown): AppLanguage {
+  return language === 'en-US' ? 'en-US' : 'zh-CN'
+}
+
+function getDefaultLanguage(): AppLanguage {
+  return normalizeLanguage(config.default_language)
+}
+
+async function ensureUserSettingsRow(userId: number) {
+  const settings = await db.prepare('SELECT user_id FROM user_settings WHERE user_id = ?').get(userId)
+  if (settings) return
+  await db.prepare('INSERT INTO user_settings (user_id, language) VALUES (?, ?)').run(userId, getDefaultLanguage())
+}
+
 router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    await ensureUserSettingsRow(req.userId!)
+
     const user = await db.prepare(`
       SELECT u.id, u.username, u.role, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
-             s.guest_enabled, s.guest_path, s.theme, s.upload_concurrency
+             s.guest_enabled, s.guest_path, s.theme, s.language, s.upload_concurrency
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
       WHERE u.id = ?
@@ -47,32 +63,33 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
         settings: {
           guestEnabled: !!user.guest_enabled,
           guestPath: user.guest_path,
-          theme: user.theme,
+          theme: user.theme || 'system',
+          language: normalizeLanguage(user.language || getDefaultLanguage()),
           uploadConcurrency: Number(user.upload_concurrency || 0),
-          serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3),
+          serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3)
         },
         pools: pools.map((pool) => ({
           id: pool.id,
           name: pool.name,
           storageType: pool.storage_type,
           isDefault: !!pool.is_default,
-          createdAt: pool.created_at,
+          createdAt: pool.created_at
         })),
         stats: {
           trashCount,
           favCount,
           shareCount,
           apiKeyCount,
-          guestShareCount,
+          guestShareCount
         },
         storage: {
           quota: quota.quota,
           used: quota.used,
           remaining: quota.remaining,
           quotaFormatted: formatBytes(quota.quota),
-          usedFormatted: formatBytes(quota.used),
-        },
-      },
+          usedFormatted: formatBytes(quota.used)
+        }
+      }
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -81,29 +98,19 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const settings = await db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(req.userId!) as any
+    await ensureUserSettingsRow(req.userId!)
 
-    if (!settings) {
-      await db.prepare('INSERT INTO user_settings (user_id) VALUES (?)').run(req.userId!)
-      return res.json({
-        settings: {
-          guestEnabled: false,
-          guestPath: '',
-          theme: 'system',
-          uploadConcurrency: 0,
-          serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3),
-        },
-      })
-    }
+    const settings = await db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(req.userId!) as any
 
     res.json({
       settings: {
         guestEnabled: !!settings.guest_enabled,
-        guestPath: settings.guest_path,
-        theme: settings.theme,
+        guestPath: settings.guest_path || '',
+        theme: settings.theme || 'system',
+        language: normalizeLanguage(settings.language || getDefaultLanguage()),
         uploadConcurrency: Number(settings.upload_concurrency || 0),
-        serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3),
-      },
+        serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3)
+      }
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -112,7 +119,9 @@ router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
 
 router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { guestEnabled, guestPath, theme, uploadConcurrency } = req.body
+    await ensureUserSettingsRow(req.userId!)
+
+    const { guestEnabled, guestPath, theme, language, uploadConcurrency } = req.body
     const updates: string[] = []
     const values: any[] = []
 
@@ -127,6 +136,10 @@ router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
     if (theme !== undefined) {
       updates.push('theme = ?')
       values.push(theme)
+    }
+    if (language !== undefined) {
+      updates.push('language = ?')
+      values.push(normalizeLanguage(language))
     }
     if (uploadConcurrency !== undefined) {
       const parsed = Number(uploadConcurrency)
@@ -171,7 +184,7 @@ router.post('/apikeys', authMiddleware, async (req: AuthRequest, res: Response) 
       req.userId!,
       name,
       key,
-      perms,
+      perms
     )
 
     res.json({ message: 'API Key 创建成功', key, name, permissions: perms })
@@ -220,16 +233,21 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
       return res.status(404).json({ error: '存储池不存在' })
     }
 
-    const existing = await db.prepare('SELECT id FROM guest_shares WHERE user_id = ? AND folder_path = ? AND storage_pool_id = ?')
-      .get(req.userId!, folderPath, storagePoolId) as any
+    const existing = await db.prepare(`
+      SELECT id FROM guest_shares
+      WHERE user_id = ? AND folder_path = ? AND storage_pool_id = ?
+    `).get(req.userId!, folderPath, storagePoolId) as any
+
     if (existing) {
       return res.status(409).json({ error: '该文件夹已经分享至访客模式' })
     }
 
     const perms = permissions || 'read'
     const nextLabel = label || folderPath.split('/').pop() || '根目录'
-    const result = await db.prepare('INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions) VALUES (?, ?, ?, ?, ?)')
-      .run(req.userId!, folderPath, storagePoolId, nextLabel, perms)
+    const result = await db.prepare(`
+      INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.userId!, folderPath, storagePoolId, nextLabel, perms)
 
     res.json({
       message: '已分享至访客模式',
@@ -238,9 +256,8 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
         folder_path: folderPath,
         storage_pool_id: storagePoolId,
         label: nextLabel,
-        permissions: perms,
-        pool_name: pool.name,
-      },
+        permissions: perms
+      }
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -249,29 +266,20 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
 
 router.put('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { permissions, label } = req.body
-    const id = parseInt(req.params.id as string, 10)
+    const { label, permissions } = req.body
+    const share = await db.prepare('SELECT id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
 
-    const share = await db.prepare('SELECT id, label, permissions FROM guest_shares WHERE id = ? AND user_id = ?')
-      .get(id, req.userId!) as any
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: '访客分享不存在' })
     }
 
-    const newPermissions = permissions || share.permissions
-    const newLabel = label !== undefined ? label : share.label
+    await db.prepare(`
+      UPDATE guest_shares
+      SET label = ?, permissions = ?
+      WHERE id = ? AND user_id = ?
+    `).run(label || '', permissions || 'read', req.params.id, req.userId!)
 
-    await db.prepare('UPDATE guest_shares SET permissions = ?, label = ? WHERE id = ? AND user_id = ?')
-      .run(newPermissions, newLabel, id, req.userId!)
-
-    res.json({
-      message: '已更新',
-      share: {
-        id,
-        permissions: newPermissions,
-        label: newLabel,
-      },
-    })
+    res.json({ message: '访客分享已更新' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -281,9 +289,9 @@ router.delete('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res:
   try {
     const result = await db.prepare('DELETE FROM guest_shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: '访客分享不存在' })
     }
-    res.json({ message: '已取消访客分享' })
+    res.json({ message: '访客分享已删除' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

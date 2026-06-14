@@ -97,17 +97,17 @@ function handleConfirm() {
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')" />
       <div class="relative card max-h-[90vh] w-full max-w-lg overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">{{ t('move.title', '移动到') }}</h3>
+        <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">{{ t('move.title', 'Move To') }}</h3>
 
         <div class="mb-3">
-          <label class="mb-1 block text-xs" style="color: var(--text-secondary-color)">{{ t('move.targetPool', '目标存储池') }}</label>
+          <label class="mb-1 block text-xs" style="color: var(--text-secondary-color)">{{ t('move.targetPool', 'Target Storage Pool') }}</label>
           <select v-model="selectedPoolId" class="input-field text-sm">
             <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.name }}</option>
           </select>
         </div>
 
         <div class="mb-3 flex items-center gap-2 text-sm">
-          <span style="color: var(--text-secondary-color)">{{ t('common.path', '路径') }}：</span>
+          <span style="color: var(--text-secondary-color)">{{ t('common.path', 'Path') }}{{ t('common.colon', ': ') }}</span>
           <span class="font-mono" style="color: var(--text-color)">{{ navigatePath || '/' }}</span>
           <button
             v-if="navigatePath"
@@ -115,7 +115,7 @@ function handleConfirm() {
             style="color: var(--accent-color)"
             @click="goUp"
           >
-            {{ t('move.goUp', '返回上级') }}
+            {{ t('move.goUp', 'Go Up') }}
           </button>
         </div>
 
@@ -127,7 +127,7 @@ function handleConfirm() {
             </svg>
           </div>
           <div v-else-if="folders.length === 0" class="py-6 text-center text-sm" style="color: var(--text-secondary-color)">
-            {{ t('move.noSubfolders', '当前目录没有子文件夹') }}
+            {{ t('move.noSubfolders', 'No subfolders in the current directory') }}
           </div>
           <div v-else>
             <button
@@ -145,22 +145,22 @@ function handleConfirm() {
         </div>
 
         <div class="mb-4 rounded p-2 text-xs" style="background-color: var(--hover-color); color: var(--text-secondary-color)">
-          {{ t('move.targetSummary', '目标：{pool} / {path}')
+          {{ t('move.targetSummary', 'Target: {pool} / {path}')
             .replace('{pool}', currentPoolName || '-')
-            .replace('{path}', navigatePath || t('upload.rootPath', '根目录')) }}
+            .replace('{path}', navigatePath || t('upload.rootPath', 'Root Directory')) }}
           <button
             class="ml-2 rounded px-2 py-0.5 text-xs transition-colors hover:bg-gray-200 dark:hover:bg-dark-hover"
             style="color: var(--accent-color)"
             @click="selectCurrent"
           >
-            {{ t('move.selectCurrent', '选择当前目录') }}
+            {{ t('move.selectCurrent', 'Select Current Directory') }}
           </button>
         </div>
 
         <div class="flex justify-end gap-3">
-          <button class="btn-secondary text-sm" @click="emit('close')">{{ t('common.cancel', '取消') }}</button>
+          <button class="btn-secondary text-sm" @click="emit('close')">{{ t('common.cancel', 'Cancel') }}</button>
           <button class="btn-primary text-sm" :disabled="!selectedPoolId" @click="handleConfirm">
-            {{ t('move.confirmHere', '移动到此') }}
+            {{ t('move.confirmHere', 'Move Here') }}
           </button>
         </div>
       </div>

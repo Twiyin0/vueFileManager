@@ -54,14 +54,14 @@ const saveToastStyle = computed(() => {
             :href="state.previewUrl"
             :download="fileName"
             class="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/10"
-            :title="t('file.download', '下载')"
+            :title="t('file.download', 'Download')"
           >
             <Icon name="download" class="h-5 w-5" />
           </a>
 
           <button
             class="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/10"
-            :title="t('common.close', '关闭')"
+            :title="t('common.close', 'Close')"
             @click="emit('close')"
           >
             <Icon name="xmark" class="h-5 w-5" />
@@ -72,7 +72,7 @@ const saveToastStyle = computed(() => {
       <button
         v-if="state.galleryFiles.length > 1"
         class="gallery-nav-btn fixed left-4 top-1/2 z-[3000] -translate-y-1/2"
-        :title="t('preview.previousImage', '上一张')"
+        :title="t('preview.previousImage', 'Previous image')"
         @click="state.navigateImage(-1)"
       >
         <Icon name="chevron-left" class="h-5 w-5" />
@@ -81,7 +81,7 @@ const saveToastStyle = computed(() => {
       <button
         v-if="state.galleryFiles.length > 1"
         class="gallery-nav-btn fixed right-4 top-1/2 z-[3000] -translate-y-1/2"
-        :title="t('preview.nextImage', '下一张')"
+        :title="t('preview.nextImage', 'Next image')"
         @click="state.navigateImage(1)"
       >
         <Icon name="chevron-right" class="h-5 w-5" />
@@ -110,7 +110,7 @@ const saveToastStyle = computed(() => {
           <div class="flex items-center gap-0.5">
             <button
               class="rounded p-1 transition-colors hover:opacity-80"
-              :title="state.isFullscreen ? t('preview.exitFullscreen', '退出全屏') : t('preview.fullscreen', '全屏')"
+              :title="state.isFullscreen ? t('preview.exitFullscreen', 'Exit fullscreen') : t('preview.fullscreen', 'Fullscreen')"
               @click="state.isFullscreen = !state.isFullscreen"
             >
               <Icon :name="state.isFullscreen ? 'compress-alt' : 'expand-alt'" class="h-3.5 w-3.5" style="color: var(--text-color)" />
@@ -120,14 +120,14 @@ const saveToastStyle = computed(() => {
               :href="state.previewUrl"
               :download="fileName"
               class="rounded p-1 transition-colors hover:opacity-80"
-              :title="t('file.download', '下载')"
+              :title="t('file.download', 'Download')"
             >
               <Icon name="download" class="h-3.5 w-3.5" style="color: var(--text-color)" />
             </a>
 
             <button
               class="rounded p-1 transition-colors hover:opacity-80"
-              :title="t('common.close', '关闭')"
+              :title="t('common.close', 'Close')"
               @click="emit('close')"
             >
               <Icon name="xmark" class="h-3.5 w-3.5" style="color: var(--text-color)" />
@@ -174,34 +174,34 @@ const saveToastStyle = computed(() => {
               class="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-b px-2.5 py-1"
               style="border-color: var(--border-color); background-color: var(--hover-color)"
             >
-              <button class="toolbar-btn" :disabled="state.pdfPageNum <= 1" :title="t('preview.prevPage', '上一页')" @click="state.pdfPrevPage">
+              <button class="toolbar-btn" :disabled="state.pdfPageNum <= 1" :title="t('preview.prevPage', 'Previous page')" @click="state.pdfPrevPage">
                 <Icon name="chevron-left" class="h-4 w-4" />
               </button>
 
               <span class="text-sm font-mono" style="color: var(--text-color)">{{ state.pdfPageNum }} / {{ state.pdfTotalPages }}</span>
 
-              <button class="toolbar-btn" :disabled="state.pdfPageNum >= state.pdfTotalPages" :title="t('preview.nextPage', '下一页')" @click="state.pdfNextPage">
+              <button class="toolbar-btn" :disabled="state.pdfPageNum >= state.pdfTotalPages" :title="t('preview.nextPage', 'Next page')" @click="state.pdfNextPage">
                 <Icon name="chevron-right" class="h-4 w-4" />
               </button>
 
               <span class="mx-1 h-5 w-px" style="background: var(--border-color)" />
 
-              <button class="toolbar-btn" :title="t('preview.zoomOut', '缩小')" @click="state.pdfZoomOut">
+              <button class="toolbar-btn" :title="t('preview.zoomOut', 'Zoom out')" @click="state.pdfZoomOut">
                 <Icon name="minus" class="h-4 w-4" />
               </button>
 
-              <button class="toolbar-btn px-1.5 font-mono text-xs" :title="t('preview.resetZoom', '重置缩放')" @click="state.pdfResetZoom">
+              <button class="toolbar-btn px-1.5 font-mono text-xs" :title="t('preview.resetZoom', 'Reset zoom')" @click="state.pdfResetZoom">
                 {{ Math.round(state.pdfScale * 100) }}%
               </button>
 
-              <button class="toolbar-btn" :title="t('preview.zoomIn', '放大')" @click="state.pdfZoomIn">
+              <button class="toolbar-btn" :title="t('preview.zoomIn', 'Zoom in')" @click="state.pdfZoomIn">
                 <Icon name="plus" class="h-4 w-4" />
               </button>
 
               <span class="flex-1" />
 
               <a :href="state.previewUrl" :download="fileName" class="toolbar-btn text-xs">
-                {{ t('file.download', '下载') }}
+                {{ t('file.download', 'Download') }}
               </a>
             </div>
 
@@ -237,7 +237,7 @@ const saveToastStyle = computed(() => {
                   }"
                   @click="state.setMarkdownPreviewMode('rendered')"
                 >
-                  {{ t('preview.markdownRendered', '渲染') }}
+                  {{ t('preview.markdownRendered', 'Rendered') }}
                 </button>
 
                 <button
@@ -248,7 +248,7 @@ const saveToastStyle = computed(() => {
                   }"
                   @click="state.setMarkdownPreviewMode('text')"
                 >
-                  {{ t('preview.markdownSource', '文本') }}
+                  {{ t('preview.markdownSource', 'Source') }}
                 </button>
               </div>
 
@@ -261,7 +261,7 @@ const saveToastStyle = computed(() => {
                 :disabled="state.isSaving"
                 @click="state.saveTextFile"
               >
-                {{ state.isSaving ? t('common.save', '保存') + '...' : t('common.save', '保存') }}
+                {{ state.isSaving ? t('common.save', 'Save') + '...' : t('common.save', 'Save') }}
               </button>
             </div>
 
@@ -321,10 +321,10 @@ const saveToastStyle = computed(() => {
             style="color: var(--text-secondary-color)"
           >
             <Icon name="file-alt" class="mb-4 h-16 w-16" />
-            <p v-if="state.fileType === 'doc-legacy'" class="text-lg">{{ t('preview.docLegacyUnsupported', '不支持在线预览 .doc 格式，请转换为 .docx') }}</p>
-            <p v-else-if="state.fileType === 'ppt-legacy'" class="text-lg">{{ t('preview.pptLegacyUnsupported', '不支持在线预览 PPT，请下载查看') }}</p>
-            <p v-else class="text-lg">{{ t('preview.unsupported', '不支持预览此文件类型') }}</p>
-            <a :href="state.previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">{{ t('preview.downloadFile', '下载文件') }}</a>
+            <p v-if="state.fileType === 'doc-legacy'" class="text-lg">{{ t('preview.docLegacyUnsupported', 'Online preview for .doc is not supported. Please convert it to .docx.') }}</p>
+            <p v-else-if="state.fileType === 'ppt-legacy'" class="text-lg">{{ t('preview.pptLegacyUnsupported', 'Online preview for PPT is not supported. Please download the file instead.') }}</p>
+            <p v-else class="text-lg">{{ t('preview.unsupported', 'Preview is not available for this file type') }}</p>
+            <a :href="state.previewUrl" :download="fileName" class="btn-primary mt-4 text-sm">{{ t('preview.downloadFile', 'Download File') }}</a>
           </div>
         </div>
       </div>

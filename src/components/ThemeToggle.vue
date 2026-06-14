@@ -10,9 +10,9 @@ const showDropdown = ref(false)
 const dropdownRef = ref<HTMLDivElement>()
 
 const themes = computed<{ mode: ThemeMode; label: string; icon: string; activeColor: string }[]>(() => [
-  { mode: 'light', label: t('theme.light', '亮色'), icon: 'sun', activeColor: '#eab308' },
-  { mode: 'dark', label: t('theme.dark', '暗色'), icon: 'moon', activeColor: '#60a5fa' },
-  { mode: 'system', label: t('theme.system', '跟随系统'), icon: 'monitor', activeColor: '#22c55e' }
+  { mode: 'light', label: t('theme.light', 'Light'), icon: 'sun', activeColor: '#eab308' },
+  { mode: 'dark', label: t('theme.dark', 'Dark'), icon: 'moon', activeColor: '#60a5fa' },
+  { mode: 'system', label: t('theme.system', 'Follow System'), icon: 'monitor', activeColor: '#22c55e' }
 ])
 
 const currentTheme = computed(() => themes.value.find((theme) => theme.mode === themeStore.mode) || themes.value[2])

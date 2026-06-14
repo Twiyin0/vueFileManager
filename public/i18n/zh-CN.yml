@@ -52,6 +52,10 @@ common:
   no: 否
   default: 默认
   backToTop: 回到顶部
+  expand: 展开
+  collapse: 收起
+  separator: " · "
+  colon: ：
 language:
   zh-CN: 简体中文
   en-US: English
@@ -101,7 +105,13 @@ file:
   batchCopy: 批量复制
   batchMove: 批量移动
   batchDownload: 打包下载
+  batchDirectDownload: 批量下载
+  batchZipDownload: 打包下载
   batchDelete: 批量删除
+  batchDirectDownloadNoFiles: 所选内容中没有可直接下载的文件
+  batchDirectDownloadStarted: 已开始下载 {count} 个文件
+  batchDirectDownloadStartedWithFolders: 已开始下载 {count} 个文件，文件夹请使用打包下载
+  batchZipDownloadStarted: 已开始打包下载所选内容
   clearSelection: 取消选择
   clear: 清空
   paste: 粘贴
@@ -277,24 +287,6 @@ webdav:
   tip1: Windows 资源管理器、macOS Finder、Cyberduck、RaiDrive 等客户端优先使用“客户端地址 + 用户名/密码”。
   tip2: 如果只想快速验证接口，优先使用“浏览器测试 URL”，它会带上当前登录 Token。
   tip3: 桌面客户端优先使用 /dav/pool/ID 这种地址；不带池 ID 时会落到当前默认存储池。
-apiKeys:
-  create: 创建 Key
-  description: API Key 用于程序化访问文件管理 API。请求头中添加：
-  emptyTitle: 暂无 API Key
-  copy: 复制
-  createdTitle: API Key 已创建
-  createdHint: 请妥善保存此 Key。关闭后将无法再次查看完整内容。
-  copyAndClose: 复制并关闭
-  createTitle: 创建 API Key
-  name: 名称
-  namePlaceholder: 例如：我的应用
-  permissions: 权限
-  creating: 创建中...
-  deleteTitle: 删除 API Key
-  deleteMessage: 确定要删除“{name}”吗？使用此 Key 的应用将无法继续访问。
-  readDesc: 查看文件列表、预览和下载文件
-  writeDesc: 上传文件、创建目录和编辑内容
-  deleteDesc: 删除文件或目录
 admin:
   uploadLimit: 上传限制
   editUploadLimit: 修改系统设置
@@ -302,54 +294,15 @@ admin:
   uploadLimitHint: 请输入 1 到 10240 之间的整数
   maxConcurrentUploads: 最大同时上传文件数
   maxConcurrentUploadsHint: 请输入 1 到 16 之间的整数
-  language: 默认语言
-  languageHint: 保存后会立即更新当前页面语言，其他用户刷新后生效
   database: 数据库配置
-  databaseType: 数据库类型
-  sqlitePath: SQLite 文件路径
+  testing: 测试中...
   testConnection: 测试连接
   saveConfig: 保存配置
-  testing: 测试中...
-  saving: 保存中...
   runtimeStatus: 运行状态
   unavailable: 暂未获取状态
+  databaseType: 数据库类型
+  sqlitePath: SQLite 文件路径
   ssl: 启用 SSL
-  users: 用户管理
-  createUser: 创建用户
-  totalUsers: 用户总数
-  adminUsers: 管理员
-  bannedUsers: 已封禁
-  guestEnabledUsers: 已开启访客
-  userSearchPlaceholder: 搜索用户名、邮箱、角色或 IP
-  noMatchedUsers: 没有匹配的用户
-  noUsers: 暂无用户
-  storageUsage: 存储用量
-  loginIp: 登录 IP
-  registerTime: 注册时间
-  lastLoginTime: 最近登录
-  verifyUser: 手动验证
-  resetPassword: 重置密码
-  banUser: 封禁用户
-  unbanUser: 解封用户
-  deleteUser: 删除用户
-  promoteToAdmin: 升级为管理员
-  demoteToUser: 降级为普通用户
-  userDetails: 用户详情
-  registerIp: 注册 IP
-  lastLoginIp: 最后登录 IP
-  theme: 主题
-  guestModeStatus: 访客模式
-  guestPath: 访客路径
-  stats: 数据统计
-  storagePools: 存储池
-  noStoragePools: 暂无存储池
-  localStorage: 本地存储
-  remoteStorage: 远程存储
-  setNewPasswordFor: 为 {username} 设置新密码
-  newPasswordPlaceholder: 新密码，至少 6 位
-  editQuota: 调整存储配额
-  quotaMb: 配额（MB）
-  currentQuota: 当前配额
   addIpEntry: 添加 IP 条目
   ipPattern: IP 地址或 CIDR 网段
   ipPatternPlaceholder: 例如 192.168.1.1 或 192.168.1.0/24
@@ -382,13 +335,53 @@ admin:
   switchBlacklistWarning: 切换为黑名单模式后，只有列表中的 IP 会被拦截。确定继续吗？
   userCreated: 用户创建成功
   passwordReset: 密码已重置
-  settingsSaved: 系统设置已保存
-  databaseSaved: 数据库配置已保存，重启服务后切换运行连接
+  settingsSaved: 上传配置已保存，服务不会自动重启。
+  databaseSaved: 数据库配置已保存。仅当你手动重启服务时，运行中的数据库连接才会切换。
   uploadLimitValidation: 请输入 1 到 10240 之间的上传限制
   concurrencyValidation: 请输入 1 到 16 之间的并发数
+  saving: 保存中...
+  users: 用户管理
+  createUser: 创建用户
+  totalUsers: 用户总数
+  adminUsers: 管理员
+  bannedUsers: 已封禁
+  guestEnabledUsers: 已开启访客
+  userSearchPlaceholder: 搜索用户名、邮箱、角色或 IP
+  noMatchedUsers: 没有匹配的用户
+  noUsers: 暂无用户
+  storageUsage: 存储用量
+  loginIp: 登录 IP
+  registerTime: 注册时间
+  lastLoginTime: 最近登录
+  verifyUser: 手动验证
+  resetPassword: 重置密码
+  banUser: 封禁用户
+  unbanUser: 解封用户
+  deleteUser: 删除用户
+  promoteToAdmin: 升级为管理员
+  demoteToUser: 降级为普通用户
+  userDetails: 用户详情
+  registerIp: 注册 IP
+  lastLoginIp: 最后登录 IP
+  theme: 主题
+  guestModeStatus: 访客模式
+  guestPath: 访客路径
+  stats: 数据统计
+  storagePools: 存储池
+  noStoragePools: 暂无存储池
+  localStorage: 本地存储
+  remoteStorage: 云端存储
+  setNewPasswordFor: 为 {username} 设置新密码
+  newPasswordPlaceholder: 新密码，至少 6 位
+  editQuota: 调整存储配额
+  quotaMb: 配额（MB）
+  currentQuota: 当前配额
 settings:
   title: 用户设置
   theme: 主题设置
+  languageTitle: 界面语言
+  language: 界面语言
+  languageHint: 语言设置会保存到当前账户，后续登录继续生效。
   upload: 上传设置
   uploadConcurrency: 最大同时上传文件数
   uploadConcurrencyHint: 设置为 0 表示跟随服务端默认值
@@ -397,8 +390,8 @@ settings:
   guestMode: 访客模式
   enableGuestMode: 启用访客模式
   guestLink: 访客链接
-  guestShares: 分享目录
-  noGuestShares: 暂无分享目录，可在文件列表中对文件夹执行访客分享
+  guestShares: 访客目录
+  noGuestShares: 暂无访客目录，可在文件列表中对文件夹执行访客分享
   editPermissions: 编辑权限
   cancelShare: 取消分享
   userInfo: 用户信息
@@ -408,6 +401,8 @@ settings:
   save: 保存设置
   saved: 设置已保存
   storageDescription: 可在存储池页面中管理本地、又拍云及其他后端存储。
+  guestSharesWithCount: 访客目录（{count}）
+  cancelShareMessage: 确认取消“{name}”的访客分享吗？
 permissions:
   read: 读取
   write: 写入
@@ -438,3 +433,150 @@ preview:
   pptLegacyUnsupported: 不支持在线预览 PPT，请下载查看
   unsupported: 不支持预览此文件类型
   downloadFile: 下载文件
+register:
+  title: 创建账户
+  subtitle: 注册 VueFileManager 账户
+  usernamePlaceholder: 3-20 个字符
+  optional: 可选
+  emailPlaceholder: your@email.com
+  emailRequired: 请输入邮箱
+  sendCode: 发送验证码
+  sendingCode: 发送中...
+  countdown: "{count}s"
+  code: 验证码
+  codePlaceholder: 6 位验证码
+  passwordPlaceholder: 至少 6 位
+  confirmPassword: 确认密码
+  confirmPasswordPlaceholder: 再次输入密码
+  passwordMismatch: 两次输入的密码不一致
+  submitting: 注册中...
+  submit: 注册
+  hasAccount: 已有账户？
+login:
+  subtitle: 登录到您的账户
+  usernamePlaceholder: 请输入用户名
+  passwordPlaceholder: 请输入密码
+  loggingIn: 登录中...
+  noAccount: 还没有账户？
+  guestEntry: 以访客身份浏览
+guest:
+  mode: 访客模式
+  userMode: 用户模式
+  browsePublicFiles: 浏览公开分享的文件
+  noPublicFiles: 暂无公开分享的文件
+  noPublicFilesHint: 用户可以在设置中开启访客模式并分享文件夹
+  sharedFoldersCount: "{count} 个共享文件夹"
+  processingOnServer: 服务器处理中
+  ownerFileArtist: "{owner} 的文件"
+  audioLoadFailed: 音频加载失败：{message}
+  audioReadFailed: 无法读取音频文件
+  audioRefreshFailed: 无法刷新播放列表
+  downloadFailed: 下载失败
+  deleteFailed: 删除失败
+  renameFailed: 重命名失败
+  uploadFailed: 上传失败
+  uploadCancelled: 上传已取消
+  dragUploadOverlay: 拖放文件到此处上传
+  noSharedFolders: 暂无分享的文件夹
+  folderFallback: 文件夹
+  searchPlaceholder: 搜索...
+  searchResults: 搜索结果：{count} 个
+pluginsPage:
+  disabledTitle: 插件系统未启用
+  disabledHint: "在 config.yml 中设置 plugins.enabled: true"
+  centerTitle: 插件中心
+  centerDescription: 统一管理主题插件与功能插件。修改启用状态后需重启服务生效。
+  docs: 开发文档
+  themesTitle: 主题插件
+  noThemesTitle: 暂无主题插件
+  noThemesDescription: 在 plugins/ 目录中创建主题目录，并提供 manifest.json 与 style.css。
+  disabledBadge: 已禁用
+  author: 作者：{author}
+  featuresTitle: 功能插件
+  noFeaturesTitle: 暂无功能插件
+  noFeaturesDescription: 功能插件可以声明入口文件、静态资源和能力说明。当前版本先提供统一注册与开关管理，便于后续继续扩展挂载能力。
+  pluginDocs: 插件文档
+  entryPrefix: "entry: {entry}"
+directoryReadme:
+  title: 目录说明
+  collapsedHint: README 已收起
+  loading: 正在加载 README...
+  loadFailed: 加载 README 失败
+markdownDoc:
+  tocTitle: 目录
+fileDetail:
+  title: 文件详情
+  type: 类型
+  folderType: 文件夹
+  size: 大小
+  modified: 修改时间
+  path: 路径
+  addFavourite: 收藏
+folderTree:
+  allPools: 全部存储池
+  backToPools: 返回存储池
+  loading: 加载中...
+apiKeys:
+  create: 创建 Key
+  description: API Key 用于程序化访问文件管理 API。请求头中添加：
+  emptyTitle: 暂无 API Key
+  copy: 复制
+  createdTitle: API Key 已创建
+  createdHint: 请妥善保存此 Key。关闭后将无法再次查看完整内容。
+  copyAndClose: 复制并关闭
+  createTitle: 创建 API Key
+  name: 名称
+  namePlaceholder: 例如：我的应用
+  permissions: 权限
+  creating: 创建中...
+  deleteTitle: 删除 API Key
+  deleteMessage: 确定要删除“{name}”吗？使用此 Key 的应用将无法继续访问。
+  readDesc: 查看文件列表、预览和下载文件
+  writeDesc: 上传文件、创建目录和编辑内容
+  deleteDesc: 删除文件或目录
+storagePoolsPage:
+  usageTitle: 本地存储用量
+  remaining: 剩余 {size}
+  toggleBulkSelect: 批量选择
+  clearBulkSelect: 取消批量选择
+  bulkDelete: 批量删除
+  add: 添加存储池
+  selectedSummary: 已选 {count} 个存储池，默认存储池不会被删除
+  validationNameRequired: 请输入存储池名称
+  updated: 存储池已更新
+  created: 存储池已创建
+  defaultCannotDelete: 不能删除默认存储池
+  deleteConfirm: 确定删除存储池“{name}”吗？
+  deleted: 存储池已删除
+  noDeletableSelected: 所选存储池均不可删除
+  bulkDeleteConfirm: 确定批量删除 {count} 个存储池吗？
+  batchPartialFailure: "{message}，部分失败：{error}"
+  defaultUpdated: 默认存储池已更新
+  testing: 测试中...
+  testConnection: 测试连接
+  setDefault: 设为默认
+  noPoolsTitle: 还没有存储池
+  noPoolsDescription: 添加存储池来管理你的文件存储
+  addFirst: 添加第一个存储池
+  editTitle: 编辑存储池
+  addTitle: 添加存储池
+  name: 存储池名称
+  namePlaceholder: 例如：主存储、备份存储
+  type: 存储类型
+  localHint: 本地存储会自动按用户名隔离目录，无需单独填写磁盘路径。
+  rootPath: 根路径映射
+  operatorPlaceholder: 操作员
+  passwordPlaceholderEdit: 密码，编辑时留空表示不修改
+  rootPathPlaceholder: 映射根路径 /
+  hostPlaceholder: 主机地址
+  ftpPortPlaceholder: 端口 21
+  usernamePlaceholder: 用户名
+  remoteRootPlaceholder: 远程根目录 /
+  sftpPortPlaceholder: 端口 22
+  privateKeyPlaceholder: 私钥内容，可替代密码
+  secretAccessKeyPlaceholder: Secret Access Key，编辑时留空表示不修改
+  forcePathStyle: 强制 Path Style
+  saveInProgress: 保存中...
+  updateAction: 更新
+  createAction: 创建
+  upyun: 又拍云
