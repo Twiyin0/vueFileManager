@@ -159,7 +159,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
 
     const user = await db.prepare(`
       SELECT u.id, u.username, u.role, u.register_ip, u.last_login_ip, u.created_at,
-             s.guest_enabled, s.guest_path, s.theme
+             s.guest_enabled, s.guest_path, s.theme, s.upload_concurrency
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
       WHERE u.id = ?
@@ -180,7 +180,9 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
         settings: {
           guestEnabled: !!user.guest_enabled,
           guestPath: user.guest_path,
-          theme: user.theme
+          theme: user.theme,
+          uploadConcurrency: Number(user.upload_concurrency || 0),
+          serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3)
         }
       }
     })

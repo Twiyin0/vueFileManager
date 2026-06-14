@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
+import { useI18n } from '@/composables/useI18n'
 
 interface TrashItem {
   id: number
@@ -15,6 +16,7 @@ interface TrashItem {
   deleted_by?: string
 }
 
+const { t } = useI18n()
 const loading = ref(false)
 const items = ref<TrashItem[]>([])
 const message = ref('')
@@ -29,7 +31,7 @@ const fileIconMap: Record<string, { icon: string; color: string }> = {
   archive: { icon: 'box-archive', color: 'text-yellow-500' },
   code: { icon: 'code', color: 'text-cyan-500' },
   text: { icon: 'text', color: 'text-gray-500' },
-  file: { icon: 'file-alt', color: 'text-gray-400' },
+  file: { icon: 'file-alt', color: 'text-gray-400' }
 }
 
 useKeepAliveRefresh(loadTrash)
@@ -54,7 +56,7 @@ async function loadTrash() {
     const res = await api.get<{ items: TrashItem[] }>('/trash')
     items.value = res.items
   } catch (err: any) {
-    showMsg(err.message || '加载回收站失败', 'error')
+    showMsg(err.message || t('trash.loadFailed', '加载回收站失败'), 'error')
   } finally {
     loading.value = false
   }
@@ -73,38 +75,38 @@ function showMsg(text: string, type: 'success' | 'error') {
 async function restoreItem(item: TrashItem) {
   try {
     await api.post(`/trash/${item.id}/restore`)
-    showMsg('已恢复', 'success')
+    showMsg(t('trash.restored', '已恢复'), 'success')
     await loadTrash()
   } catch (err: any) {
-    showMsg(err.message || '恢复失败', 'error')
+    showMsg(err.message || t('trash.restoreFailed', '恢复失败'), 'error')
   }
 }
 
 async function deleteItem(item: TrashItem) {
-  if (!window.confirm(`确定永久删除“${item.file_name}”吗？此操作不可恢复。`)) {
+  if (!window.confirm(t('trash.deleteConfirm', '确定永久删除“{name}”吗？此操作不可恢复。').replace('{name}', item.file_name))) {
     return
   }
 
   try {
     await api.delete(`/trash/${item.id}`)
-    showMsg('已永久删除', 'success')
+    showMsg(t('trash.deleted', '已永久删除'), 'success')
     await loadTrash()
   } catch (err: any) {
-    showMsg(err.message || '删除失败', 'error')
+    showMsg(err.message || t('trash.deleteFailed', '删除失败'), 'error')
   }
 }
 
 async function emptyTrash() {
-  if (!window.confirm('确定清空回收站吗？此操作不可恢复。')) {
+  if (!window.confirm(t('trash.emptyConfirm', '确定清空回收站吗？此操作不可恢复。'))) {
     return
   }
 
   try {
     await api.delete('/trash')
-    showMsg('回收站已清空', 'success')
+    showMsg(t('trash.emptied', '回收站已清空'), 'success')
     await loadTrash()
   } catch (err: any) {
-    showMsg(err.message || '清空失败', 'error')
+    showMsg(err.message || t('trash.emptyFailed', '清空失败'), 'error')
   }
 }
 
@@ -116,7 +118,7 @@ function formatDate(date: string) {
 <template>
   <div class="px-4 pt-4">
     <div v-if="items.length > 0" class="mb-4 flex justify-end">
-      <button @click="emptyTrash" class="btn-danger text-sm">清空回收站</button>
+      <button class="btn-danger text-sm" @click="emptyTrash">{{ t('trash.emptyAction', '清空回收站') }}</button>
     </div>
 
     <div
@@ -137,18 +139,11 @@ function formatDate(date: string) {
     </div>
 
     <div v-else-if="items.length > 0" class="space-y-2">
-      <div
-        v-for="item in items"
-        :key="item.id"
-        class="card flex items-center justify-between p-4"
-      >
+      <div v-for="item in items" :key="item.id" class="card flex items-center justify-between p-4">
         <div class="flex min-w-0 items-center gap-3">
-          <Icon
-            :name="getFileIcon(item.file_name, item.file_type).icon"
-            :class="['h-6 w-6 flex-shrink-0', getFileIcon(item.file_name, item.file_type).color]"
-          />
+          <Icon :name="getFileIcon(item.file_name, item.file_type).icon" :class="['h-6 w-6 flex-shrink-0', getFileIcon(item.file_name, item.file_type).color]" />
           <div class="min-w-0">
-            <p class="truncate font-medium text-light-text dark:text-dark-text">
+            <p class="font-medium text-light-text dark:text-dark-text">
               {{ item.file_name }}
               <span
                 v-if="item.deleted_by"
@@ -158,24 +153,26 @@ function formatDate(date: string) {
               </span>
             </p>
             <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
-              原路径：{{ item.original_path }}
+              {{ t('trash.originalPath', '原路径：{path}').replace('{path}', item.original_path) }}
             </p>
             <p class="text-xs text-gray-500 dark:text-dark-text-secondary">
-              存储池：{{ item.pool_name || item.storage_pool_id }} · 删除时间：{{ formatDate(item.deleted_at) }}
+              {{ t('trash.metaLine', '存储池：{pool} · 删除时间：{time}')
+                .replace('{pool}', String(item.pool_name || item.storage_pool_id))
+                .replace('{time}', formatDate(item.deleted_at)) }}
             </p>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button @click="restoreItem(item)" class="btn-secondary px-3 py-1.5 text-sm">恢复</button>
-          <button @click="deleteItem(item)" class="btn-danger px-3 py-1.5 text-sm">永久删除</button>
+          <button class="btn-secondary px-3 py-1.5 text-sm" @click="restoreItem(item)">{{ t('trash.restore', '恢复') }}</button>
+          <button class="btn-danger px-3 py-1.5 text-sm" @click="deleteItem(item)">{{ t('trash.deletePermanent', '永久删除') }}</button>
         </div>
       </div>
     </div>
 
     <div v-else class="py-20 text-center">
       <Icon name="trash" class="mx-auto mb-4 h-16 w-16 text-gray-300 dark:text-gray-600" />
-      <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">回收站为空</h3>
-      <p class="text-gray-500 dark:text-dark-text-secondary">删除的文件和文件夹会显示在这里。</p>
+      <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('trash.emptyTitle', '回收站为空') }}</h3>
+      <p class="text-gray-500 dark:text-dark-text-secondary">{{ t('trash.emptyDescription', '删除的文件和文件夹会显示在这里。') }}</p>
     </div>
   </div>
 </template>

@@ -16,6 +16,8 @@ export interface User {
     guestEnabled: boolean
     guestPath: string
     theme: string
+    uploadConcurrency: number
+    serverDefaultUploadConcurrency?: number
     upyunOperator: string
     upyunBucket: string
     upyunEndpoint: string

@@ -6,7 +6,9 @@
 admin:
   username: admin
   # 密码的 MD5 值，默认为 MD5("admin") = 21232f297a57a5a743894a0e4a801fc3
-  # 计算方式: echo -n "your-password" | md5
+  # 计算方式:
+  #   Linux/macOS: echo -n "your-password" | md5
+  #   Windows PowerShell: (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes("your-password"))) -Algorithm MD5).Hash.ToLower()
   password: 21232f297a57a5a743894a0e4a801fc3
 
 # ============================================================
@@ -14,11 +16,20 @@ admin:
 # ============================================================
 server:
   port: 3000
-  # 监听地址：localhost（仅本机访问）、0.0.0.0（可从局域网访问）
-  # 留空或 localhost 仅本机可访问，设为 0.0.0.0 可从局域网其他设备访问
-  host: '0.0.0.0'
-  # JWT 密钥，用于 Token 签名，生产环境请修改
+  # 监听地址：
+  # - 127.0.0.1 / localhost: 仅本机访问
+  # - 0.0.0.0: 允许局域网或反向代理访问
+  host: 0.0.0.0
+  # JWT 密钥，用于 Token 签名，生产环境请务必修改
   jwt_secret: vue-file-manager-secret-key-2024
+
+# ============================================================
+# 界面语言
+# ============================================================
+# 可选值：
+# - zh-CN
+# - en-US
+language: en-US
 
 # ============================================================
 # 本地存储根目录
@@ -30,17 +41,23 @@ storage_root: ./uploads
 # ============================================================
 # 上传限制
 # ============================================================
-# 单文件上传大小限制（单位 MB），默认 100
+# 单文件上传大小限制（单位 MB）
 upload_limit: 100
 
-# 断点续传缓存保留时间（单位 分钟），未完成上传超时后自动清理
+# 最大同时上传文件数
+# 该值会作为前后端默认并发上传上限
+max_concurrent_uploads: 3
+
+# 断点续传缓存保留时间（单位 分钟）
+# 未完成上传超时后自动清理
 resumable_upload_cache_minutes: 120
 
 # ============================================================
 # IP 访问控制
 # ============================================================
-# 模式: blacklist（黑名单，拦截列表中的 IP）/ whitelist（白名单，仅允许列表中的 IP）
-# 默认 blacklist，可在管理面板中切换
+# 模式:
+# - blacklist: 黑名单，拦截列表中的 IP
+# - whitelist: 白名单，仅允许列表中的 IP
 ip_list_mode: blacklist
 
 # ============================================================
@@ -48,9 +65,45 @@ ip_list_mode: blacklist
 # ============================================================
 site:
   # ICP 备案号（留空不显示）
-  icp_beian: '备案码'
+  icp_beian: ''
   # 公安备案号（留空不显示）
-  police_beian: '公安备案码'
+  police_beian: ''
+
+# ============================================================
+# 数据库配置
+# ============================================================
+# 当前支持：
+# - sqlite
+# - mysql
+# - postgres
+#
+# 切换数据库时请同时填写对应连接信息
+database:
+  # 可选值: sqlite / mysql / postgres
+  type: sqlite
+
+  # SQLite 配置
+  sqlite:
+    # SQLite 数据文件路径
+    path: ./data/filemanager.db
+
+  # MySQL 配置示例
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    password: ''
+    database: vue_file_manager
+    ssl: false
+
+  # PostgreSQL 配置示例
+  postgres:
+    host: 127.0.0.1
+    port: 5432
+    user: postgres
+    password: ''
+    database: vue_file_manager
+    ssl: false
 
 # ============================================================
 # 存储池配置
@@ -60,23 +113,21 @@ site:
 #
 # 格式说明：
 #   name: 存储池名称
-#   type: 存储类型 (local / upyun)
+#   type: 存储类型
 #   default: 是否为默认存储池
 #   config: 存储配置（根据类型不同）
 #
-# 本地存储 config：
-#   localPath: 本地目录路径
-#
-# 又拍云 config：
-#   upyunOperator: 操作员名称
-#   upyunPassword: 操作员密码
-#   upyunBucket: 服务名（Bucket）
-#   upyunEndpoint: API 端点（默认 v0.api.upyun.com）
+# 当前已实现/可用的常见类型示例：
+# - local
+# - upyun
+# - ftp
+# - s3
 storage_pools:
   - name: 本地存储
     type: local
     default: true
     config:
+      # 本地目录路径
       localPath: ./uploads
 
   # 又拍云示例（取消注释并填入真实信息）
@@ -100,7 +151,7 @@ storage_pools:
   #     ftpPassword: your-password
   #     ftpRemotePath: /uploads
 
-  # S3/OSS 示例
+  # S3 / OSS 兼容示例
   # - name: S3 存储
   #   type: s3
   #   default: false
@@ -113,7 +164,7 @@ storage_pools:
   #     s3Prefix: uploads/
 
 # ============================================================
-# SMTP 邮箱配置（用于注册验证码）
+# SMTP 邮箱配置（用于注册验证码/邮件功能）
 # ============================================================
 smtp:
   enabled: false

@@ -1,67 +1,44 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import Icon from '@/components/Icon.vue'
 import { headerLinks } from '@/app/modules'
+import { useI18n } from '@/composables/useI18n'
 
 const authStore = useAuthStore()
 const route = useRoute()
-const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
-watch(sidebarCollapsed, (v) => localStorage.setItem('sidebarCollapsed', String(v)))
+const { t } = useI18n()
 
-// 移动端 sidebar 覆盖层
+const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
+watch(sidebarCollapsed, (value) => localStorage.setItem('sidebarCollapsed', String(value)))
+
 const isMobile = ref(window.innerWidth < 640)
 const showMobileSidebar = ref(false)
+const showMoreMenu = ref(false)
+const moreMenuRef = ref<HTMLDivElement>()
+
+const pageTitle = ref('')
+const pageTitleKey = ref(0)
+const siteConfig = ref({ icp_beian: '', police_beian: '' })
+const showBackToTop = ref(false)
+
+let scrollTarget: HTMLElement | null = null
+
+const sortedHeaderLinks = computed(() => [...headerLinks].sort((a, b) => a.order - b.order))
 
 function handleResize() {
   isMobile.value = window.innerWidth < 640
   if (!isMobile.value) showMobileSidebar.value = false
 }
-onMounted(() => window.addEventListener('resize', handleResize))
-onUnmounted(() => window.removeEventListener('resize', handleResize))
 
-// 移动端更多菜单
-const showMoreMenu = ref(false)
-const moreMenuRef = ref<HTMLDivElement>()
-
-function handleMoreMenuOutside(e: MouseEvent) {
-  if (moreMenuRef.value && !moreMenuRef.value.contains(e.target as Node)) {
+function handleMoreMenuOutside(event: MouseEvent) {
+  if (moreMenuRef.value && !moreMenuRef.value.contains(event.target as Node)) {
     showMoreMenu.value = false
   }
 }
-onMounted(() => document.addEventListener('click', handleMoreMenuOutside))
-onUnmounted(() => document.removeEventListener('click', handleMoreMenuOutside))
-
-const sortedHeaderLinks = computed(() => [...headerLinks].sort((a, b) => a.order - b.order))
-
-const pageTitle = ref('')
-const pageTitleKey = ref(0)
-
-watch(() => route.path, (path) => {
-  const newTitle = (route.meta.pageTitle as string) || ''
-  if (newTitle !== pageTitle.value) {
-    pageTitleKey.value++
-    pageTitle.value = newTitle
-  }
-  // 移动端切换路由时关闭 sidebar
-  showMobileSidebar.value = false
-}, { immediate: true })
-
-const siteConfig = ref({ icp_beian: '', police_beian: '' })
-
-onMounted(async () => {
-  try {
-    const res = await fetch('/api/site-config')
-    if (res.ok) siteConfig.value = await res.json()
-  } catch {}
-})
-
-// 回到顶部按钮
-const showBackToTop = ref(false)
-let scrollTarget: HTMLElement | null = null
 
 function handleScroll() {
   showBackToTop.value = (scrollTarget?.scrollTop ?? 0) > 300
@@ -71,124 +48,190 @@ function scrollToTop() {
   scrollTarget?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-onMounted(() => {
-  setTimeout(() => {
+function getRoutePageTitle() {
+  const key = route.meta.pageTitleKey as string | undefined
+  const fallback = (route.meta.pageTitle as string) || ''
+  return key ? t(key, fallback) : fallback
+}
+
+watch(
+  () => [route.path, route.meta.pageTitleKey, route.meta.pageTitle, route.fullPath, t('app.name', 'VueFileManager')],
+  () => {
+    const nextTitle = getRoutePageTitle()
+    if (nextTitle !== pageTitle.value) {
+      pageTitleKey.value += 1
+      pageTitle.value = nextTitle
+    }
+    showMobileSidebar.value = false
+  },
+  { immediate: true }
+)
+
+onMounted(async () => {
+  window.addEventListener('resize', handleResize)
+  document.addEventListener('click', handleMoreMenuOutside)
+
+  try {
+    const response = await fetch('/api/site-config')
+    if (response.ok) {
+      const data = await response.json()
+      siteConfig.value = {
+        icp_beian: data.icp_beian || '',
+        police_beian: data.police_beian || ''
+      }
+    }
+  } catch {}
+
+  window.setTimeout(() => {
     scrollTarget = document.querySelector('main.flex-1.overflow-auto')
     scrollTarget?.addEventListener('scroll', handleScroll)
   }, 100)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  document.removeEventListener('click', handleMoreMenuOutside)
   scrollTarget?.removeEventListener('scroll', handleScroll)
 })
 </script>
 
 <template>
   <div class="layout-wrapper">
-    <!-- Header -->
     <header class="header-bar">
-      <!-- 左侧 -->
-      <div class="flex items-center gap-2 min-w-0">
-        <!-- 移动端汉堡菜单（控制 sidebar） -->
-        <button v-if="isMobile && authStore.isLoggedIn"
+      <div class="min-w-0 flex items-center gap-2">
+        <button
+          v-if="isMobile && authStore.isLoggedIn"
+          class="flex-shrink-0 rounded-lg p-1.5 transition-opacity hover:opacity-80"
+          style="color: var(--text-secondary-color)"
           @click="showMobileSidebar = !showMobileSidebar"
-          class="p-1.5 rounded-lg hover:opacity-80 transition-opacity flex-shrink-0"
-          style="color: var(--text-secondary-color)">
-          <Icon name="menu" class="w-5 h-5" />
+        >
+          <Icon name="menu" class="h-5 w-5" />
         </button>
-        <router-link to="/" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
-          <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
-          <span class="hidden sm:inline" style="color: var(--text-color)">VueFileManager</span>
+
+        <router-link to="/" class="flex flex-shrink-0 items-center gap-2 text-lg font-bold">
+          <img src="/logo.svg" :alt="t('app.name', 'VueFileManager')" class="rounded" style="width: 28px; height: 28px;" />
+          <span class="hidden sm:inline" style="color: var(--text-color)">{{ t('app.name', 'VueFileManager') }}</span>
         </router-link>
+
         <Transition name="page-title" mode="out-in">
-          <span v-if="pageTitle && !isMobile" :key="pageTitleKey" class="text-sm font-medium truncate" style="color: var(--text-secondary-color)">
+          <span v-if="pageTitle && !isMobile" :key="pageTitleKey" class="truncate text-sm font-medium" style="color: var(--text-secondary-color)">
             / {{ pageTitle }}
           </span>
         </Transition>
       </div>
 
-      <!-- 右侧 -->
-      <div class="flex items-center gap-2 flex-shrink-0">
-        <!-- 桌面端：直接显示链接 -->
+      <div class="flex flex-shrink-0 items-center gap-2">
         <template v-if="!isMobile">
           <router-link
             v-for="link in sortedHeaderLinks"
             :key="link.to"
             :to="link.to"
-            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
-            :title="link.label"
+            class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-opacity hover:opacity-80"
+            :title="link.labelKey ? t(link.labelKey, link.label) : link.label"
             style="color: var(--text-secondary-color)"
           >
-            <Icon :name="link.icon" class="w-5 h-5" />
-            <span class="text-sm font-medium">{{ link.label }}</span>
+            <Icon :name="link.icon" class="h-5 w-5" />
+            <span class="text-sm font-medium">{{ link.labelKey ? t(link.labelKey, link.label) : link.label }}</span>
           </router-link>
-          <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="p-1.5 rounded-lg hover:opacity-80 transition-opacity" title="GitHub" style="color: var(--text-secondary-color)">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <a
+            href="https://github.com/Twiyin0/vueFileManager"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="rounded-lg p-1.5 transition-opacity hover:opacity-80"
+            :title="t('app.github', 'GitHub')"
+            style="color: var(--text-secondary-color)"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           </a>
           <ThemeToggle />
           <template v-if="authStore.isLoggedIn">
-            <router-link to="/settings" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:opacity-80 transition-opacity" title="设置" style="color: var(--text-color)">
-              <Icon name="gear" class="w-5 h-5" />
+            <router-link
+              to="/settings"
+              class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-opacity hover:opacity-80"
+              :title="t('app.settings', '设置')"
+              style="color: var(--text-color)"
+            >
+              <Icon name="gear" class="h-5 w-5" />
             </router-link>
             <div class="flex items-center gap-2">
               <span class="text-sm" style="color: var(--text-secondary-color)">{{ authStore.user?.username }}</span>
-              <button @click="authStore.logout()" class="text-sm text-red-500 hover:text-red-600">退出</button>
+              <button class="text-sm text-red-500 hover:text-red-600" @click="authStore.logout()">
+                {{ t('app.logout', '退出') }}
+              </button>
             </div>
           </template>
           <template v-else>
-            <router-link to="/login" class="btn-primary text-sm">登录</router-link>
+            <router-link to="/login" class="btn-primary text-sm">{{ t('app.login', '登录') }}</router-link>
           </template>
         </template>
 
-        <!-- 移动端：主题 + 更多菜单 -->
         <template v-else>
           <ThemeToggle />
           <div ref="moreMenuRef" class="relative">
-            <button @click.stop="showMoreMenu = !showMoreMenu"
-              class="p-1.5 rounded-lg hover:opacity-80 transition-opacity"
-              style="color: var(--text-secondary-color)">
-              <Icon name="dots-vertical" class="w-5 h-5" />
+            <button
+              class="rounded-lg p-1.5 transition-opacity hover:opacity-80"
+              style="color: var(--text-secondary-color)"
+              @click.stop="showMoreMenu = !showMoreMenu"
+            >
+              <Icon name="dots-vertical" class="h-5 w-5" />
             </button>
+
             <Transition name="dropdown">
-              <div v-if="showMoreMenu"
-                class="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border py-1 shadow-sm"
-                style="background-color: var(--card-color); border-color: var(--border-color)">
+              <div
+                v-if="showMoreMenu"
+                class="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border py-1 shadow-sm"
+                style="background-color: var(--card-color); border-color: var(--border-color)"
+              >
                 <router-link
                   v-for="link in sortedHeaderLinks"
                   :key="link.to"
                   :to="link.to"
+                  class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                  style="color: var(--text-color)"
                   @click="showMoreMenu = false"
-                  class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                  style="color: var(--text-color)">
-                  <Icon :name="link.icon" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                  {{ link.label }}
+                >
+                  <Icon :name="link.icon" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+                  {{ link.labelKey ? t(link.labelKey, link.label) : link.label }}
                 </router-link>
-                <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" @click="showMoreMenu = false"
+                <a
+                  href="https://github.com/Twiyin0/vueFileManager"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                  style="color: var(--text-color)">
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" style="color: var(--text-secondary-color)"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                  GitHub
+                  style="color: var(--text-color)"
+                  @click="showMoreMenu = false"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" style="color: var(--text-secondary-color)"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                  {{ t('app.github', 'GitHub') }}
                 </a>
-                <div class="border-t my-1" style="border-color: var(--border-color)" />
+                <div class="my-1 border-t" style="border-color: var(--border-color)" />
                 <template v-if="authStore.isLoggedIn">
-                  <router-link to="/settings" @click="showMoreMenu = false"
+                  <router-link
+                    to="/settings"
                     class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                    style="color: var(--text-color)">
-                    <Icon name="gear" class="w-4 h-4" style="color: var(--text-secondary-color)" />
-                    设置
+                    style="color: var(--text-color)"
+                    @click="showMoreMenu = false"
+                  >
+                    <Icon name="gear" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+                    {{ t('app.settings', '设置') }}
                   </router-link>
-                  <button @click="authStore.logout(); showMoreMenu = false"
-                    class="w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover text-red-500">
-                    <Icon name="arrow-right-from-bracket" class="w-4 h-4" />
-                    退出 ({{ authStore.user?.username }})
+                  <button
+                    class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
+                    @click="authStore.logout(); showMoreMenu = false"
+                  >
+                    <Icon name="arrow-right-from-bracket" class="h-4 w-4" />
+                    {{ t('app.logout', '退出') }} ({{ authStore.user?.username }})
                   </button>
                 </template>
                 <template v-else>
-                  <router-link to="/login" @click="showMoreMenu = false"
+                  <router-link
+                    to="/login"
                     class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover"
-                    style="color: var(--accent-color)">
-                    <Icon name="arrow-right-to-bracket" class="w-4 h-4" />
-                    登录
+                    style="color: var(--accent-color)"
+                    @click="showMoreMenu = false"
+                  >
+                    <Icon name="arrow-right-to-bracket" class="h-4 w-4" />
+                    {{ t('app.login', '登录') }}
                   </router-link>
                 </template>
               </div>
@@ -198,51 +241,43 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- 侧边栏 + 内容区 -->
     <div class="content-row">
-      <!-- 移动端 sidebar 遮罩 -->
       <Transition name="sidebar-overlay">
-        <div v-if="isMobile && showMobileSidebar"
+        <div
+          v-if="isMobile && showMobileSidebar"
           class="fixed inset-0 z-40 bg-black/40 dark:bg-black/60"
-          @click="showMobileSidebar = false" />
+          @click="showMobileSidebar = false"
+        />
       </Transition>
 
-      <!-- 桌面端 sidebar -->
       <Sidebar v-if="authStore.isLoggedIn && !isMobile" :collapsed="sidebarCollapsed" @toggle="sidebarCollapsed = !sidebarCollapsed" />
 
-      <!-- 移动端 sidebar（覆盖层） -->
       <Transition name="sidebar-slide">
-        <Sidebar v-if="authStore.isLoggedIn && isMobile && showMobileSidebar"
-          :collapsed="false"
-          :mobile="true"
-          @toggle="showMobileSidebar = false" />
+        <Sidebar v-if="authStore.isLoggedIn && isMobile && showMobileSidebar" :collapsed="false" :mobile="true" @toggle="showMobileSidebar = false" />
       </Transition>
 
-      <main class="flex-1 overflow-auto min-w-0">
+      <main class="min-w-0 flex-1 overflow-auto">
         <slot />
-        <footer class="px-4 py-1.5 text-center flex-shrink-0" style="color: var(--text-secondary-color)">
+        <footer class="flex-shrink-0 px-4 py-1.5 text-center" style="color: var(--text-secondary-color)">
           <p class="text-xs opacity-60" style="line-height: 1.4">
             © {{ new Date().getFullYear() }}
-            <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity" style="color: var(--accent-color)">VueFileManager</a>
-            by <a href="https://github.com/Twiyin0" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity" style="color: var(--accent-color)">Twiyin0</a>
+            <a href="https://github.com/Twiyin0/vueFileManager" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100" style="color: var(--accent-color)">VueFileManager</a>
+            by <a href="https://github.com/Twiyin0" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100" style="color: var(--accent-color)">Twiyin0</a>
             · MIT License
             <template v-if="siteConfig.icp_beian || siteConfig.police_beian">
               <span class="mx-1">·</span>
-              <a v-if="siteConfig.icp_beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity">{{ siteConfig.icp_beian }}</a>
+              <a v-if="siteConfig.icp_beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100">{{ siteConfig.icp_beian }}</a>
               <span v-if="siteConfig.icp_beian && siteConfig.police_beian" class="mx-1">|</span>
-              <a v-if="siteConfig.police_beian" href="https://www.beian.gov.cn/" target="_blank" rel="noopener noreferrer" class="hover:opacity-100 transition-opacity">{{ siteConfig.police_beian }}</a>
+              <a v-if="siteConfig.police_beian" href="https://www.beian.gov.cn/" target="_blank" rel="noopener noreferrer" class="transition-opacity hover:opacity-100">{{ siteConfig.police_beian }}</a>
             </template>
           </p>
         </footer>
       </main>
     </div>
 
-    <!-- 回到顶部按钮 -->
     <Transition name="back-to-top">
-      <button v-if="showBackToTop" @click="scrollToTop"
-        class="back-to-top-btn"
-        title="回到顶部">
-        <Icon name="arrow-up" class="w-5 h-5" />
+      <button v-if="showBackToTop" class="back-to-top-btn" :title="t('common.backToTop', '回到顶部')" @click="scrollToTop">
+        <Icon name="arrow-up" class="h-5 w-5" />
       </button>
     </Transition>
   </div>
@@ -267,6 +302,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
+
 .dark .header-bar {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
@@ -284,7 +320,6 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* 移动端 sidebar 覆盖层 */
 @media (max-width: 639px) {
   .content-row :deep(aside) {
     position: fixed;
@@ -298,18 +333,17 @@ onUnmounted(() => {
   }
 }
 
-/* 回到顶部按钮 */
 .back-to-top-btn {
   position: fixed;
-  bottom: 1.5rem;
   right: 1.5rem;
+  bottom: 1.5rem;
   width: 2.5rem;
   height: 2.5rem;
+  border: none;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
   cursor: pointer;
   background-color: var(--accent-color);
   color: white;
@@ -317,6 +351,7 @@ onUnmounted(() => {
   transition: opacity 0.2s;
   z-index: 30;
 }
+
 .back-to-top-btn:hover {
   opacity: 0.85;
 }
@@ -324,9 +359,11 @@ onUnmounted(() => {
 .back-to-top-enter-active {
   animation: bounceIn 0.6s ease;
 }
+
 .back-to-top-leave-active {
   transition: all 0.2s ease;
 }
+
 .back-to-top-leave-to {
   opacity: 0;
   transform: translateY(20px);
@@ -340,61 +377,47 @@ onUnmounted(() => {
   100% { transform: translateY(0) scale(1); }
 }
 
-/* 页面标题切换动效 */
 .page-title-enter-active,
 .page-title-leave-active {
   transition: all 0.2s ease;
 }
+
 .page-title-enter-from {
   opacity: 0;
   transform: translateX(8px);
 }
+
 .page-title-leave-to {
   opacity: 0;
   transform: translateX(-8px);
 }
 
-/* 下拉菜单动效 */
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.15s ease;
 }
+
 .dropdown-enter-from,
 .dropdown-leave-to {
   opacity: 0;
   transform: translateY(-4px);
 }
 
-/* sidebar 遮罩动效 */
 .sidebar-overlay-enter-active,
 .sidebar-overlay-leave-active {
   transition: opacity 0.2s ease;
 }
+
 .sidebar-overlay-enter-from,
 .sidebar-overlay-leave-to {
   opacity: 0;
 }
 
-/* 页面切换动效 */
-.page-fade-enter-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.page-fade-leave-active {
-  transition: opacity 0.12s ease;
-}
-.page-fade-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-.page-fade-leave-to {
-  opacity: 0;
-}
-
-/* sidebar 滑入动效 */
 .sidebar-slide-enter-active,
 .sidebar-slide-leave-active {
   transition: transform 0.25s ease;
 }
+
 .sidebar-slide-enter-from,
 .sidebar-slide-leave-to {
   transform: translateX(-100%);

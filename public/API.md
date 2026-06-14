@@ -1,11 +1,13 @@
-# VueFileManager API
+[English](./API_en.md)
 
-Base URL examples:
+# VueFileManager API 文档
 
-- Development backend: `http://localhost:3000`
-- API base: `http://localhost:3000/api`
+基础地址示例：
 
-## Authentication
+- 开发后端：`http://localhost:3000`
+- API 基础路径：`http://localhost:3000/api`
+
+## 认证方式
 
 ### JWT
 
@@ -13,28 +15,54 @@ Base URL examples:
 Authorization: Bearer <token>
 ```
 
-### API key
+### API Key
 
 ```http
 X-API-Key: <key>
 ```
 
-### WebDAV auth
+### WebDAV 认证
 
-Supported for `/dav`:
+适用于 `/dav`：
 
-- Basic auth
-- JWT bearer token
-- API key
-- query string testing with `?token=` or `?apiKey=`
+- Basic Auth
+- JWT Bearer Token
+- API Key
+- 也支持通过 `?token=` 或 `?apiKey=` 查询参数测试
 
-## Auth routes
+## 公开接口
+
+### `GET /api/site-config`
+
+返回站点基础配置：
+
+- `language`
+- `icp_beian`
+- `police_beian`
+- `smtp_enabled`
+- `themes_enabled`
+- `plugins_enabled`
+- `webdav_enabled`
+
+### `GET /api/themes/styles`
+
+返回当前启用主题的样式列表。
+
+### `GET /api/themes/list`
+
+返回所有发现到的主题清单。
+
+### `GET /api/plugins/list`
+
+返回所有发现到的插件清单。
+
+## 认证接口
 
 ### `POST /api/auth/send-code`
 
-Send email verification code when SMTP is enabled.
+在启用 SMTP 时发送邮箱验证码。
 
-Request:
+请求体：
 
 ```json
 { "email": "user@example.com" }
@@ -42,20 +70,20 @@ Request:
 
 ### `POST /api/auth/register`
 
-Request:
+请求体：
 
 ```json
 { "username": "user", "password": "secret123", "email": "user@example.com", "code": "123456" }
 ```
 
-Notes:
+说明：
 
-- `email` and `code` are required only when SMTP registration is enabled
-- password is stored as MD5 in current implementation
+- 只有在启用 SMTP 注册时才要求 `email` 和 `code`
+- 当前实现中的密码仍以 MD5 存储
 
 ### `POST /api/auth/login`
 
-Request:
+请求体：
 
 ```json
 { "username": "admin", "password": "admin" }
@@ -63,447 +91,213 @@ Request:
 
 ### `GET /api/auth/me`
 
-Return current authenticated user and basic settings.
+返回当前登录用户和基础设置。
 
-## File routes
+## 文件接口
 
-All `/api/files/*` routes require JWT or API key unless noted.
+除非特别说明，所有 `/api/files/*` 接口都要求 JWT 或 API Key。
 
-Common permission model for API keys:
+API Key 的通用权限模型：
 
 - `read`
 - `write`
 - `delete`
 
-Most file routes accept `poolId` in query or body.
+多数文件接口都支持在 query 或 body 中传入 `poolId`。
 
 ### `GET /api/files/list`
 
-Query:
+查询参数：
 
 - `path`
 - `poolId`
 
-Behavior:
-
-- if neither `path` nor `poolId` is provided, root can return storage pools as virtual folders
-- junk files such as `._*`, `.DS_Store`, `.trash`, and temp upload files are filtered
-
-### `GET /api/files/info`
-
-Query:
-
-- `path`
-- `poolId`
-
-### `GET /api/files/download`
-
-Download file content.
-
-### `GET /api/files/preview`
-
-Preview file content.
-
-Supported preview types include:
-
-- images
-- audio
-- video
-- PDF
-- text and code files
-- docx, xlsx, csv MIME mapping support
-
-Notes:
-
-- local audio/video supports `Range`
-- preview responses use `ETag`
+用于列出目录内容。
 
 ### `POST /api/files/upload`
 
-Multipart upload.
+表单上传接口，支持普通上传和前端并发上传。
 
-Query/body:
+常用参数：
 
 - `path`
 - `poolId`
-
-Field:
-
-- `file`
-
-### `POST /api/files/upload-stream`
-
-Streaming upload.
-
-Headers:
-
-- `X-File-Name`
-- `X-Dir-Path`
-- `X-Pool-Id`
-
-### `POST /api/files/upload/init`
-
-Initialize resumable upload.
-
-Request:
-
-```json
-{
-  "fileName": "large.zip",
-  "fileSize": 104857600,
-  "dirPath": "target-dir",
-  "poolId": 1
-}
-```
-
-### `PATCH /api/files/upload/:uploadId/chunk`
-
-Upload chunk with `Content-Range`.
-
-### `GET /api/files/upload/:uploadId/status`
-
-Return resumable upload status.
-
-### `POST /api/files/upload/:uploadId/complete`
-
-Merge uploaded chunks and finalize file.
-
-### `DELETE /api/files/upload/:uploadId`
-
-Cancel and clean resumable upload cache.
-
-### `POST /api/files/write`
-
-Write text file content.
-
-Request:
-
-```json
-{ "path": "notes.txt", "content": "hello", "poolId": 1 }
-```
-
-Notes:
-
-- request content must be a string
-- 10 MB limit
-- 30 second timeout guard
 
 ### `POST /api/files/mkdir`
 
+创建目录。
+
+请求体：
+
+```json
+{ "path": "/example", "poolId": 1 }
+```
+
 ### `POST /api/files/rename`
+
+重命名文件或目录。
 
 ### `POST /api/files/move`
 
+移动文件或目录。
+
 ### `POST /api/files/copy`
 
-### `POST /api/files/cross-copy`
-
-Request:
-
-```json
-{
-  "srcPaths": ["a.txt"],
-  "names": ["a.txt"],
-  "srcPoolId": 1,
-  "destPoolId": 2,
-  "destPath": ""
-}
-```
-
-### `POST /api/files/cross-move`
+复制文件或目录，支持跨存储池。
 
 ### `DELETE /api/files/delete`
 
-### `POST /api/files/delete`
-
-Delete to recycle bin by default. Use `permanent: true` for permanent delete.
+删除单个文件或目录。
 
 ### `POST /api/files/batch-delete`
 
-### `POST /api/files/batch-move`
+批量删除。
 
-### `GET /api/files/search`
+### `GET /api/files/download`
 
-Query:
+下载文件。
 
-- `q`
-- `path`
-- `poolId`
+### `GET /api/files/preview`
 
-### `POST /api/files/download-zip`
+预览文件内容，文本、图片、音频、视频等前端预览都会依赖这个接口。
 
-### `POST /api/files/remote-upload`
+### `POST /api/files/write`
 
-Create upload from a remote URL and save directly into storage.
+写回文本文件内容，用于文本预览编辑保存。
 
-### `POST /api/files/offline-download`
+请求体：
 
-Create server-side offline download task.
+```json
+{ "path": "/note.txt", "content": "hello", "poolId": 1 }
+```
 
-### `GET /api/files/offline-download/tasks`
+## 用户设置接口
 
-### `POST /api/files/offline-download/tasks/:id/cancel`
+### `GET /api/user/settings`
 
-### `POST /api/files/offline-download/tasks/:id/retry`
+返回当前用户设置，包括：
 
-### `POST /api/files/offline-download/tasks/clear-finished`
+- `guestEnabled`
+- `guestPath`
+- `theme`
+- `uploadConcurrency`
 
-### `GET /api/files/storage-stats`
+### `PUT /api/user/settings`
 
-JWT only.
+更新当前用户设置。
 
-## Storage pool routes
+## 管理接口
 
-JWT required.
+所有 `/api/admin/*` 接口都要求管理员 JWT。
 
-### `GET /api/storage-pools`
+### `GET /api/admin/upload-limit`
 
-Return user pools with masked secrets.
+返回系统设置：
 
-For local pools, response includes `resolvedPath`.
+- `upload_limit`
+- `max_concurrent_uploads`
+- `language`
 
-### `POST /api/storage-pools`
+### `PUT /api/admin/upload-limit`
 
-Supported `storageType` values:
-
-- `local`
-- `upyun`
-- `ftp`
-- `s3`
-- `sftp`
-
-### `PUT /api/storage-pools/:id`
-
-### `DELETE /api/storage-pools/:id`
-
-Cannot delete default pool.
-
-### `POST /api/storage-pools/batch-delete`
-
-### `POST /api/storage-pools/:id/set-default`
-
-### `POST /api/storage-pools/:id/test`
-
-Tests connectivity for the current pool config.
-
-## Trash routes
-
-JWT required.
-
-- `GET /api/trash`
-- `POST /api/trash/:id/restore`
-- `DELETE /api/trash/:id`
-- `DELETE /api/trash`
-
-## Favourites routes
-
-JWT required.
-
-- `GET /api/favourites`
-- `POST /api/favourites`
-- `DELETE /api/favourites`
-- `GET /api/favourites/check`
-
-## Share routes
-
-### `POST /api/share/create`
-
-JWT required.
-
-Request:
+更新系统设置：
 
 ```json
 {
-  "filePath": "docs/file.txt",
-  "fileType": "file",
-  "password": "optional",
-  "expiresIn": 24,
-  "maxDownloads": 100,
-  "storagePoolId": 1
+  "upload_limit": 100,
+  "max_concurrent_uploads": 3,
+  "language": "zh-CN"
 }
 ```
 
-Response includes:
+### `GET /api/admin/database`
 
-- `shareCode`
-- `signKey`
-- `url`
-- `signUrl`
+返回数据库配置和当前运行状态。
 
-### `GET /api/share/list`
+### `PUT /api/admin/database`
 
-JWT required.
+保存数据库配置。
 
-### `DELETE /api/share/:id`
+### `POST /api/admin/database/test`
 
-JWT required.
+测试数据库连接。
 
-### `GET /api/share/s/:code`
+### `GET /api/admin/users`
 
-Public metadata lookup.
+返回用户列表及存储用量统计。
 
-### `GET /api/share/list/:code`
+### `GET /api/admin/users/:id`
 
-Public folder share listing.
+返回用户详情，包括：
 
-Requires:
+- 基础信息
+- 访客设置
+- 存储池
+- 回收站 / 收藏 / 分享 / API Key 统计
+- 存储配额和用量
 
-- `sign`
-- `t`
-- optional `password`
+### `POST /api/admin/users`
 
-### `GET /api/share/download/:code`
+创建用户。
 
-Public download with sign verification.
+### `PUT /api/admin/users/:id/role`
 
-### `GET /api/share/preview/:code`
+修改角色。
 
-Public preview with sign verification.
+### `PUT /api/admin/users/:id/ban`
 
-Share sign algorithm in current backend:
+封禁或解封用户。
 
-1. `hash = md5(username + signKey)`
-2. `sign = hash.slice(4, 12) + timestamp`
-3. query params: `sign` and `t`
+### `PUT /api/admin/users/:id/password`
 
-## User routes
+重置用户密码。
 
-JWT required.
+### `PUT /api/admin/users/:id/quota`
 
-- `GET /api/user/info`
-- `GET /api/user/settings`
-- `PUT /api/user/settings`
-- `GET /api/user/apikeys`
-- `POST /api/user/apikeys`
-- `DELETE /api/user/apikeys/:id`
-- `GET /api/user/guest-shares`
-- `POST /api/user/guest-shares`
-- `PUT /api/user/guest-shares/:id`
-- `DELETE /api/user/guest-shares/:id`
+修改用户存储配额。
 
-Notes:
+### `PUT /api/admin/users/:id/verify`
 
-- guest share default permission is `read`
-- normalized guest permission model is `read`, `write`, `edit`, `delete`
-- alias compatibility still exists for `preview`, `download`, `upload`, `rename`
+手动验证用户。
 
-## Admin routes
+### `DELETE /api/admin/users/:id`
 
-Admin JWT required.
+删除用户。
 
-### User management
+### `GET /api/admin/ip-blacklist`
 
-- `GET /api/admin/users`
-- `GET /api/admin/users/:id`
-- `POST /api/admin/users`
-- `PUT /api/admin/users/:id/role`
-- `PUT /api/admin/users/:id/ban`
-- `PUT /api/admin/users/:id/password`
-- `DELETE /api/admin/users/:id`
-- `PUT /api/admin/users/:id/quota`
-- `PUT /api/admin/users/:id/verify`
+返回当前 IP 条目列表。
 
-### IP list management
+### `GET /api/admin/ip-list/mode`
 
-- `GET /api/admin/ip-blacklist`
-- `POST /api/admin/ip-blacklist`
-- `DELETE /api/admin/ip-blacklist/:id`
-- `GET /api/admin/ip-list/mode`
-- `PUT /api/admin/ip-list/mode`
+返回当前 IP 控制模式：`blacklist` 或 `whitelist`。
 
-### System management
+### `PUT /api/admin/ip-list/mode`
 
-- `GET /api/admin/upload-limit`
-- `PUT /api/admin/upload-limit`
-- `GET /api/admin/database`
-- `PUT /api/admin/database`
-- `POST /api/admin/database/test`
+切换 IP 控制模式。
 
-## Guest routes
+### `POST /api/admin/ip-blacklist`
 
-Public routes under `/api/guest`.
+添加 IP 条目。
 
-- `GET /api/guest`
-- `GET /api/guest/:username/list`
-- `GET /api/guest/:username/:shareId/list`
-- `GET /api/guest/:username/:shareId/preview`
-- `GET /api/guest/:username/:shareId/download`
-- `POST /api/guest/:username/:shareId/upload`
-- `POST /api/guest/:username/:shareId/write`
-- `POST /api/guest/:username/:shareId/delete`
-- `POST /api/guest/:username/:shareId/mkdir`
-- `POST /api/guest/:username/:shareId/rename`
+### `DELETE /api/admin/ip-blacklist/:id`
 
-Guest permissions:
-
-- `read`
-- `write`
-- `edit`
-- `delete`
-
-Alias handling:
-
-- `read` covers `preview`, `download`
-- `write` covers `upload`
-- `edit` covers `rename`
-
-## Public file route
-
-### `GET /f/:username/*`
-
-Legacy public file access route.
-
-## Public platform routes
-
-- `GET /api/site-config`
-- `GET /api/themes/styles`
-- `GET /api/themes/list`
-- `PUT /api/themes/:name/toggle`
-- `GET /api/plugins/list`
-- `PUT /api/plugins/:name/toggle`
-
-Notes:
-
-- toggle routes currently verify JWT token presence and validity
-- these routes do not currently enforce admin role in code
+删除 IP 条目。
 
 ## WebDAV
 
-Mounted at `/dav`.
+WebDAV 入口示例：
 
-Recommended URLs:
+- `http://127.0.0.1:3000/dav/pool/1`
 
-- default root: `/dav`
-- specific pool: `/dav/pool/:id`
+支持认证：
 
-Supported methods include:
+- Basic Auth
+- JWT
+- API Key
 
-- `OPTIONS`
-- `HEAD`
-- `PROPFIND`
-- `GET`
-- `PUT`
-- `DELETE`
-- `MKCOL`
-- `MOVE`
+说明：
 
-## Error shape
-
-Most errors return:
-
-```json
-{ "error": "message" }
-```
-
-## Common status codes
-
-- `200` success
-- `400` bad request
-- `401` unauthorized
-- `403` forbidden
-- `404` not found
-- `409` conflict
-- `410` expired or exceeded
-- `413` payload too large
-- `499` client cancelled upload
-- `500` server error
+- Windows 资源管理器对 WebDAV 的兼容性更严格
+- 如果是 HTTP 明文访问，Windows 客户端通常需要放宽 `BasicAuthLevel`
+- macOS Finder 与 Windows Explorer 的请求细节不同，服务端兼容逻辑需要同时考虑两端

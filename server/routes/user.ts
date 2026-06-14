@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import crypto from 'crypto'
 import db from '../db'
+import config from '../config'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getUserQuota, formatBytes } from '../services/quota'
 
@@ -10,7 +11,7 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const user = await db.prepare(`
       SELECT u.id, u.username, u.role, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
-             s.guest_enabled, s.guest_path, s.theme
+             s.guest_enabled, s.guest_path, s.theme, s.upload_concurrency
       FROM users u
       LEFT JOIN user_settings s ON u.id = s.user_id
       WHERE u.id = ?
@@ -47,6 +48,8 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
           guestEnabled: !!user.guest_enabled,
           guestPath: user.guest_path,
           theme: user.theme,
+          uploadConcurrency: Number(user.upload_concurrency || 0),
+          serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3),
         },
         pools: pools.map((pool) => ({
           id: pool.id,
@@ -87,6 +90,8 @@ router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
           guestEnabled: false,
           guestPath: '',
           theme: 'system',
+          uploadConcurrency: 0,
+          serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3),
         },
       })
     }
@@ -96,6 +101,8 @@ router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
         guestEnabled: !!settings.guest_enabled,
         guestPath: settings.guest_path,
         theme: settings.theme,
+        uploadConcurrency: Number(settings.upload_concurrency || 0),
+        serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3),
       },
     })
   } catch (err: any) {
@@ -105,7 +112,7 @@ router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
 
 router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { guestEnabled, guestPath, theme } = req.body
+    const { guestEnabled, guestPath, theme, uploadConcurrency } = req.body
     const updates: string[] = []
     const values: any[] = []
 
@@ -120,6 +127,14 @@ router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
     if (theme !== undefined) {
       updates.push('theme = ?')
       values.push(theme)
+    }
+    if (uploadConcurrency !== undefined) {
+      const parsed = Number(uploadConcurrency)
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 16) {
+        return res.status(400).json({ error: 'uploadConcurrency must be an integer between 0 and 16' })
+      }
+      updates.push('upload_concurrency = ?')
+      values.push(parsed)
     }
 
     if (updates.length > 0) {

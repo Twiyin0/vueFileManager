@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Icon from '@/components/Icon.vue'
+import { useI18n } from '@/composables/useI18n'
 
 const props = defineProps<{
   visible: boolean
@@ -19,20 +20,20 @@ const emit = defineEmits<{
   (e: 'action', action: string, item?: any): void
 }>()
 
+const { t } = useI18n()
 const menuRef = ref<HTMLElement>()
 
 const menuStyle = computed(() => {
   const maxHeight = window.innerHeight * 0.7
   let top = props.y
-  // 如果底部会超出屏幕，向上调整
   if (top + maxHeight > window.innerHeight) {
     top = Math.max(8, window.innerHeight - maxHeight - 8)
   }
-  return { left: props.x + 'px', top: top + 'px' }
+  return { left: `${props.x}px`, top: `${top}px` }
 })
 
-function handleClickOutside(e: Event) {
-  if (menuRef.value && !menuRef.value.contains(e.target as Node)) {
+function handleClickOutside(event: Event) {
+  if (menuRef.value && !menuRef.value.contains(event.target as Node)) {
     emit('close')
   }
 }
@@ -60,144 +61,265 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" ref="menuRef"
-      class="fixed z-50 bg-white dark:bg-dark-card rounded-lg shadow-sm border dark:border-dark-border border-light-border py-1 min-w-[180px] max-h-[70vh] overflow-y-auto"
-      :style="menuStyle">
-      <!-- 单文件操作 -->
+    <div
+      v-if="visible"
+      ref="menuRef"
+      class="fixed z-50 min-w-[180px] max-h-[70vh] overflow-y-auto rounded-lg border border-light-border bg-white py-1 shadow-sm dark:border-dark-border dark:bg-dark-card"
+      :style="menuStyle"
+    >
       <template v-if="item">
-        <button @click="handleAction('open')" v-if="item.type === 'folder'"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="folder" class="w-4 h-4 text-blue-500" /> 打开
+        <button
+          v-if="item.type === 'folder'"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('open')"
+        >
+          <Icon name="folder" class="h-4 w-4 text-blue-500" />
+          {{ t('file.open', '打开') }}
         </button>
-        <button @click="handleAction('preview')" v-if="item.type === 'file' && isAllowed('preview')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="eye" class="w-4 h-4" /> 预览
+
+        <button
+          v-if="item.type === 'file' && isAllowed('preview')"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('preview')"
+        >
+          <Icon name="eye" class="h-4 w-4" />
+          {{ t('file.preview', '预览') }}
         </button>
-        <button @click="handleAction('download')" v-if="isAllowed('download')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="download" class="w-4 h-4" /> 下载
+
+        <button
+          v-if="isAllowed('download')"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('download')"
+        >
+          <Icon name="download" class="h-4 w-4" />
+          {{ t('file.download', '下载') }}
         </button>
+
         <template v-if="!readOnly">
-          <div class="border-t dark:border-dark-border border-light-border my-1"></div>
-          <button @click="handleAction('rename')" v-if="isAllowed('rename')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="pen" class="w-4 h-4" /> 重命名
+          <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
+
+          <button
+            v-if="isAllowed('rename')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('rename')"
+          >
+            <Icon name="pen" class="h-4 w-4" />
+            {{ t('file.rename', '重命名') }}
           </button>
-          <button @click="handleAction('move')" v-if="isAllowed('move')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 移动到
+
+          <button
+            v-if="isAllowed('move')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('move')"
+          >
+            <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
+            {{ t('file.moveTo', '移动到') }}
           </button>
-          <button @click="handleAction('copy')" v-if="isAllowed('copy')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="clipboard" class="w-4 h-4" /> 复制
+
+          <button
+            v-if="isAllowed('copy')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('copy')"
+          >
+            <Icon name="clipboard" class="h-4 w-4" />
+            {{ t('file.copy', '复制') }}
           </button>
-          <button @click="handleAction('share')" v-if="isAllowed('share')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="link-alt" class="w-4 h-4" /> 分享
+
+          <button
+            v-if="isAllowed('share')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('share')"
+          >
+            <Icon name="link-alt" class="h-4 w-4" />
+            {{ t('file.share', '分享') }}
           </button>
-          <button @click="handleAction('favourite')" v-if="isAllowed('favourite')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="star-sharp" class="w-4 h-4 text-yellow-500" /> 收藏
+
+          <button
+            v-if="isAllowed('favourite')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('favourite')"
+          >
+            <Icon name="star-sharp" class="h-4 w-4 text-yellow-500" />
+            {{ t('file.favourite', '收藏') }}
           </button>
-          <button @click="handleAction('guest-share')" v-if="item.type === 'folder' && isAllowed('guest-share')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="globe" class="w-4 h-4" /> 分享至访客
+
+          <button
+            v-if="item.type === 'folder' && isAllowed('guest-share')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('guest-share')"
+          >
+            <Icon name="globe" class="h-4 w-4" />
+            {{ t('file.shareToGuest', '分享至访客') }}
           </button>
         </template>
-        <div class="border-t dark:border-dark-border border-light-border my-1"></div>
-        <button @click="handleAction('info')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="circle-information" class="w-4 h-4" /> 详情
+
+        <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('info')"
+        >
+          <Icon name="circle-information" class="h-4 w-4" />
+          {{ t('file.details', '详情') }}
         </button>
-        <button @click="handleAction('delete')" v-if="!readOnly && isAllowed('delete')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
-          <Icon name="trash" class="w-4 h-4" /> 删除
+
+        <button
+          v-if="!readOnly && isAllowed('delete')"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+          @click="handleAction('delete')"
+        >
+          <Icon name="trash" class="h-4 w-4" />
+          {{ t('common.delete', '删除') }}
         </button>
-        <!-- 批量操作（有选中项时显示） -->
+
         <template v-if="selectedItems && selectedItems.length > 0">
-          <div class="border-t dark:border-dark-border border-light-border my-1"></div>
+          <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
           <div class="px-4 py-1.5 text-xs" style="color: var(--text-secondary-color)">
-            批量操作 ({{ selectedItems.length }} 项)
+            {{ t('file.batchActions', '批量操作') }} ({{ selectedItems.length }})
           </div>
-          <button @click="handleAction('batch-copy')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="clipboard" class="w-4 h-4" /> 批量复制
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('batch-copy')"
+          >
+            <Icon name="clipboard" class="h-4 w-4" />
+            {{ t('file.batchCopy', '批量复制') }}
           </button>
-          <button @click="handleAction('batch-move')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 批量移动
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('batch-move')"
+          >
+            <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
+            {{ t('file.batchMove', '批量移动') }}
           </button>
-          <button @click="handleAction('batch-download')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="download" class="w-4 h-4" /> 打包下载
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('batch-download')"
+          >
+            <Icon name="download" class="h-4 w-4" />
+            {{ t('file.batchDownload', '打包下载') }}
           </button>
-          <button @click="handleAction('batch-delete')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
-            <Icon name="trash" class="w-4 h-4" /> 批量删除
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            @click="handleAction('batch-delete')"
+          >
+            <Icon name="trash" class="h-4 w-4" />
+            {{ t('file.batchDelete', '批量删除') }}
           </button>
-          <button @click="handleAction('clear-selection')"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-            <Icon name="xmark" class="w-4 h-4" /> 取消选择
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('clear-selection')"
+          >
+            <Icon name="xmark" class="h-4 w-4" />
+            {{ t('file.clearSelection', '取消选择') }}
           </button>
         </template>
-        <div class="border-t dark:border-dark-border border-light-border my-1"></div>
-        <button @click="handleAction('refresh')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="refresh-cw" class="w-4 h-4" /> 刷新
+
+        <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('refresh')"
+        >
+          <Icon name="refresh-cw" class="h-4 w-4" />
+          {{ t('common.refresh', '刷新') }}
         </button>
       </template>
 
-      <!-- 批量操作 -->
       <template v-else-if="selectedItems && selectedItems.length > 0">
         <div class="px-4 py-2 text-xs text-gray-500 dark:text-dark-text-secondary">
-          已选择 {{ selectedItems.length }} 项
+          {{ t('file.selectedItems', '已选择 {count} 项').replace('{count}', String(selectedItems.length)) }}
         </div>
-        <button @click="handleAction('batch-download')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="download" class="w-4 h-4" /> 打包下载
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('batch-download')"
+        >
+          <Icon name="download" class="h-4 w-4" />
+          {{ t('file.batchDownload', '打包下载') }}
         </button>
-        <button @click="handleAction('batch-copy')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="clipboard" class="w-4 h-4" /> 批量复制
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('batch-copy')"
+        >
+          <Icon name="clipboard" class="h-4 w-4" />
+          {{ t('file.batchCopy', '批量复制') }}
         </button>
-        <button @click="handleAction('batch-move')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="arrow-narrow-right-move" class="w-4 h-4" /> 批量移动
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('batch-move')"
+        >
+          <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
+          {{ t('file.batchMove', '批量移动') }}
         </button>
-        <div class="border-t dark:border-dark-border border-light-border my-1"></div>
-        <button @click="handleAction('batch-delete')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
-          <Icon name="trash" class="w-4 h-4" /> 批量删除
+
+        <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+          @click="handleAction('batch-delete')"
+        >
+          <Icon name="trash" class="h-4 w-4" />
+          {{ t('file.batchDelete', '批量删除') }}
         </button>
       </template>
 
-      <!-- 空白区域（readOnly 模式下只显示刷新） -->
       <template v-else-if="readOnly">
-        <button @click="handleAction('refresh')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="refresh-cw" class="w-4 h-4" /> 刷新
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('refresh')"
+        >
+          <Icon name="refresh-cw" class="h-4 w-4" />
+          {{ t('common.refresh', '刷新') }}
         </button>
       </template>
+
       <template v-else>
-        <button @click="handleAction('new-folder')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="folder" class="w-4 h-4 text-blue-500" /> 新建文件夹
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('new-folder')"
+        >
+          <Icon name="folder" class="h-4 w-4 text-blue-500" />
+          {{ t('file.newFolder', '新建文件夹') }}
         </button>
-        <button @click="handleAction('upload')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="upload" class="w-4 h-4" /> 上传文件
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('upload')"
+        >
+          <Icon name="upload" class="h-4 w-4" />
+          {{ t('file.uploadFile', '上传文件') }}
         </button>
-        <button v-if="showRemoteUploadAction !== false" @click="handleAction('remote-upload')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="network-wired" class="w-4 h-4" /> 远程上传
+
+        <button
+          v-if="showRemoteUploadAction !== false"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('remote-upload')"
+        >
+          <Icon name="network-wired" class="h-4 w-4" />
+          {{ t('file.remoteUpload', '远程上传') }}
         </button>
-        <button v-if="clipboardCount && clipboardCount > 0" @click="handleAction('paste')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="clipboard" class="w-4 h-4" /> 粘贴 ({{ clipboardCount }})
+
+        <button
+          v-if="clipboardCount && clipboardCount > 0"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('paste')"
+        >
+          <Icon name="clipboard" class="h-4 w-4" />
+          {{ t('file.pasteCount', '粘贴 ({count})').replace('{count}', String(clipboardCount)) }}
         </button>
-        <button @click="handleAction('refresh')"
-          class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-hover dark:text-dark-text text-light-text flex items-center gap-2">
-          <Icon name="refresh-cw" class="w-4 h-4" /> 刷新
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('refresh')"
+        >
+          <Icon name="refresh-cw" class="h-4 w-4" />
+          {{ t('common.refresh', '刷新') }}
         </button>
       </template>
     </div>

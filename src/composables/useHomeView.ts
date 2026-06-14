@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
 import { useOfflineTasks } from '@/composables/useOfflineTasks'
 import { useFilesStore, type FileItem } from '@/stores/files'
+import { useAuthStore } from '@/stores/auth'
 import APlayer from 'aplayer'
 
 import 'aplayer/dist/APlayer.min.css'
@@ -12,6 +13,7 @@ export function useHomeView() {
   const route = useRoute()
   const router = useRouter()
   const filesStore = useFilesStore()
+  const authStore = useAuthStore()
 
   const showUpload = ref(false)
   const showCreateFolder = ref(false)
@@ -73,13 +75,22 @@ export function useHomeView() {
   const isDragging = ref(false)
   let dragCounter = 0
 
-  const uploadProgress = ref<{ file: string; percent: number }[]>([])
+  const uploadProgress = ref<{ file: string; percent: number; status?: 'pending' | 'uploading' | 'processing' | 'completed' | 'cancelled' | 'error'; error?: string }[]>([])
   const showUploadProgress = ref(false)
+  const uploadPanelCollapsed = ref(false)
   const uploadStatus = ref('')
   const activeUploads = ref<XMLHttpRequest[]>([])
+  const activeUploadMap = ref<Map<string, XMLHttpRequest>>(new Map())
   const pendingUploadFiles = ref<File[]>([])
   const uploadError = ref('')
+  const uploadSummary = ref({ total: 0, completed: 0, failed: 0, cancelled: 0, uploading: 0 })
   const isUploadBusy = computed(() => uploadStatus.value === 'uploading' || uploadStatus.value === 'processing')
+  const currentUploadConcurrency = computed(() => {
+    const userSetting = Number(authStore.user?.settings?.uploadConcurrency || 0)
+    if (Number.isInteger(userSetting) && userSetting > 0) return userSetting
+    return serverDefaultUploadConcurrency.value
+  })
+  const uploadActiveCount = computed(() => activeUploadMap.value.size)
   const uploadStatusLabel = computed(() => {
     if (uploadStatus.value === 'cancelled') return '已取消'
     if (uploadStatus.value === 'processing') return '服务器处理中'
@@ -89,6 +100,7 @@ export function useHomeView() {
 
   const pools = ref<{ id: number; name: string }[]>([])
   const showPoolDropdown = ref(false)
+  const serverDefaultUploadConcurrency = ref(3)
 
   const currentPoolId = computed(() => {
     const pool = route.query.pool as string
@@ -128,6 +140,7 @@ export function useHomeView() {
   onMounted(async () => {
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
     if (!hasInitialized) {
+      serverDefaultUploadConcurrency.value = Number(authStore.user?.settings?.serverDefaultUploadConcurrency || 3)
       try {
         const res = await api.get<{ pools: Array<{ id: number; name: string }> }>('/storage-pools')
         pools.value = res.pools.map((pool) => ({ id: pool.id, name: pool.name }))
@@ -468,6 +481,164 @@ export function useHomeView() {
     }, 300)
   }
 
+  async function handleUploadConcurrent(files: FileList | File[], uploadPoolId?: number) {
+    const junkPatterns = [/^\._/, /^\.DS_Store$/, /^Thumbs\.db$/, /^__MACOSX\//]
+    const arr = Array.from(files).filter((file) => !junkPatterns.some((pattern) => pattern.test(file.name)))
+    if (arr.length === 0) return
+
+    const targetPoolId = uploadPoolId || currentPoolId.value
+    pendingUploadFiles.value = arr
+    showUpload.value = false
+    showUploadProgress.value = true
+    uploadPanelCollapsed.value = false
+    uploadError.value = ''
+    uploadStatus.value = 'uploading'
+    uploadSummary.value = { total: arr.length, completed: 0, failed: 0, cancelled: 0, uploading: 0 }
+    uploadProgress.value = arr.map((file) => ({
+      file: file.name,
+      percent: 0,
+      status: 'pending'
+    }))
+    activeUploads.value = []
+    activeUploadMap.value = new Map()
+
+    const token = localStorage.getItem('token')
+    const dirPath = currentPath.value || ''
+    const params = new URLSearchParams()
+    if (dirPath) params.set('path', dirPath)
+    if (targetPoolId) params.set('poolId', String(targetPoolId))
+    const query = params.toString() ? `?${params}` : ''
+    const uploadUrl = `/api/files/upload-stream${query}`
+    const concurrency = Math.max(1, currentUploadConcurrency.value)
+    let nextIndex = 0
+
+    const runSingle = (file: File, index: number) => new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      const key = `${index}:${file.name}`
+      const encodedName = encodeURIComponent(file.name)
+      const encodedDirPath = dirPath ? encodeURIComponent(dirPath) : ''
+
+      activeUploads.value.push(xhr)
+      activeUploadMap.value.set(key, xhr)
+      uploadSummary.value.uploading = activeUploadMap.value.size
+      uploadProgress.value[index].status = 'uploading'
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          uploadProgress.value[index].percent = Math.round((event.loaded / event.total) * 100)
+          if (event.loaded === event.total) {
+            uploadProgress.value[index].status = 'processing'
+          }
+        }
+      }
+
+      xhr.onload = () => {
+        activeUploadMap.value.delete(key)
+        activeUploads.value = activeUploads.value.filter((item) => item !== xhr)
+        uploadSummary.value.uploading = activeUploadMap.value.size
+        if (xhr.status >= 200 && xhr.status < 300) {
+          uploadProgress.value[index].percent = 100
+          uploadProgress.value[index].status = 'completed'
+          uploadSummary.value.completed += 1
+          resolve()
+          return
+        }
+
+        let message = xhr.statusText || '上传失败'
+        try {
+          const data = JSON.parse(xhr.responseText || '{}')
+          message = data.error || data.message || message
+        } catch {}
+        uploadProgress.value[index].status = 'error'
+        uploadProgress.value[index].error = message
+        uploadSummary.value.failed += 1
+        reject(new Error(message))
+      }
+
+      xhr.onerror = () => {
+        activeUploadMap.value.delete(key)
+        activeUploads.value = activeUploads.value.filter((item) => item !== xhr)
+        uploadSummary.value.uploading = activeUploadMap.value.size
+        uploadProgress.value[index].status = 'error'
+        uploadProgress.value[index].error = '上传失败'
+        uploadSummary.value.failed += 1
+        reject(new Error('上传失败'))
+      }
+
+      xhr.onabort = () => {
+        activeUploadMap.value.delete(key)
+        activeUploads.value = activeUploads.value.filter((item) => item !== xhr)
+        uploadSummary.value.uploading = activeUploadMap.value.size
+        uploadProgress.value[index].status = 'cancelled'
+        uploadSummary.value.cancelled += 1
+        reject(new Error('UPLOAD_CANCELLED'))
+      }
+
+      xhr.open('POST', uploadUrl)
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      }
+      xhr.setRequestHeader('X-File-Name', encodedName)
+      if (encodedDirPath) xhr.setRequestHeader('X-Dir-Path', encodedDirPath)
+      if (targetPoolId) xhr.setRequestHeader('X-Pool-Id', String(targetPoolId))
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+      xhr.send(file)
+    })
+
+    const worker = async () => {
+      while (nextIndex < arr.length && uploadStatus.value === 'uploading') {
+        const index = nextIndex++
+        try {
+          await runSingle(arr[index], index)
+        } catch (err: any) {
+          if (err.message !== 'UPLOAD_CANCELLED') {
+            uploadError.value = `${arr[index].name}: ${err.message || '上传失败'}`
+          }
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, arr.length) }, () => worker()))
+
+    if (uploadStatus.value !== 'cancelled') {
+      uploadStatus.value = uploadSummary.value.failed > 0 ? 'error' : 'completed'
+    }
+
+    pendingUploadFiles.value = []
+    filesStore.fetchFiles(currentPath.value, currentPoolId.value).catch(() => {})
+  }
+
+  function cancelUploadsConcurrent() {
+    uploadStatus.value = 'cancelled'
+    let cancelledCount = 0
+    uploadProgress.value.forEach((item) => {
+      if (item.status === 'pending') {
+        item.status = 'cancelled'
+        cancelledCount += 1
+      }
+    })
+    uploadSummary.value.cancelled += cancelledCount
+
+    if (activeUploadMap.value.size === 0) {
+      pendingUploadFiles.value = []
+      showUpload.value = false
+      return
+    }
+
+    activeUploadMap.value.forEach((xhr) => {
+      try { xhr.abort() } catch {}
+    })
+    activeUploadMap.value = new Map()
+    activeUploads.value = []
+    uploadSummary.value.uploading = 0
+    pendingUploadFiles.value = []
+    showUpload.value = false
+  }
+
+  function toggleUploadPanelCollapsed() {
+    uploadPanelCollapsed.value = !uploadPanelCollapsed.value
+  }
+
   function handleDragEnter(event: DragEvent) {
     event.preventDefault()
     dragCounter++
@@ -559,6 +730,22 @@ export function useHomeView() {
   async function handleBatchDownload() {
     if (selectedFiles.value.size === 0) return
     try {
+      const allFiles = showSearch.value ? searchResults.value : filesStore.files
+      const selectedItems = Array.from(selectedFiles.value)
+        .map((path) => allFiles.find((item) => item.path === path))
+        .filter((item): item is FileItem => !!item)
+      const filesOnly = selectedItems.filter((item) => item.type === 'file')
+      const hasFolders = selectedItems.some((item) => item.type === 'folder')
+
+      if (!hasFolders && filesOnly.length > 0) {
+        await filesStore.downloadFiles(
+          filesOnly.map((file) => ({ path: file.path, poolId: file.poolId || currentPoolId.value })),
+          Math.max(1, currentUploadConcurrency.value)
+        )
+        showToast(`已开始下载 ${filesOnly.length} 个文件`, 'success')
+        return
+      }
+
       const response = await fetch('/api/files/download-zip', {
         method: 'POST',
         headers: {
@@ -577,6 +764,7 @@ export function useHomeView() {
       link.download = 'download.zip'
       link.click()
       URL.revokeObjectURL(url)
+      showToast(hasFolders ? '已打包下载所选内容' : '已打包下载所选文件', 'success')
     } catch (err: any) {
       alert(err.message)
     }
@@ -931,12 +1119,15 @@ export function useHomeView() {
     isDragging,
     uploadProgress,
     showUploadProgress,
+    uploadPanelCollapsed,
     uploadStatus,
     activeUploads,
     pendingUploadFiles,
     uploadError,
     isUploadBusy,
     uploadStatusLabel,
+    uploadActiveCount,
+    uploadSummary,
     currentPoolId,
     canUseRemoteUpload,
     pools,
@@ -956,8 +1147,9 @@ export function useHomeView() {
     getFilePreviewUrl,
     goUp,
     goBackToPools,
-    handleUpload,
-    cancelUploads,
+    handleUpload: handleUploadConcurrent,
+    cancelUploads: cancelUploadsConcurrent,
+    toggleUploadPanelCollapsed,
     handleDragEnter,
     handleDragLeave,
     handleDragOver,

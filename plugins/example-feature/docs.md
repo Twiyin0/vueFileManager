@@ -1,32 +1,35 @@
+[English](./docs_en.md)
+
 # example-feature
 
-This is a sample feature plugin.
+这是一个示例功能插件。
 
-It demonstrates:
+它主要演示：
 
-- `kind: "feature"` manifest structure
-- `entry` and `docs` relative asset declarations
-- `capabilities` metadata
+- `kind: "feature"` 的清单结构
+- `entry` 和 `docs` 的相对资源声明方式
+- `capabilities` 元数据字段
 
-## Current runtime behavior
+## 当前运行时行为
 
-This plugin is discoverable and publicly visible, but it is not auto-mounted as executable runtime logic.
+这个插件当前可以被发现并公开展示，但不会被自动挂载为可执行的运行时代码。
 
-Current behavior:
+当前行为包括：
 
-- appears in the plugin center
-- appears in `GET /api/plugins/list`
-- exposes static files under `/plugins/example-feature/*`
+- 会出现在插件中心
+- 会出现在 `GET /api/plugins/list`
+- 会通过 `/plugins/example-feature/*` 暴露静态文件
 
-## Files
+## 文件组成
 
-- `manifest.json`: plugin metadata
-- `entry.js`: public example entry asset
-- `docs.md`: this documentation file
+- `manifest.json`：插件元数据
+- `entry.js`：公开示例入口资源
+- `docs.md`：当前中文文档
+- `docs_en.md`：英文文档
 
-## Capabilities
+## 能力声明
 
 - `offline-task-hooks`
 - `admin-panel-link`
 
-These are descriptive declarations only in the current implementation.
+这些字段在当前实现中仅作为描述性声明。

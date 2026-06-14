@@ -1,5 +1,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api'
+import type { AppLanguage } from '@/stores/i18n'
+import { useI18nStore } from '@/stores/i18n'
 
 export interface AdminUser {
   id: number
@@ -21,6 +23,7 @@ export interface UserDetail {
   id: number
   username: string
   email?: string | null
+  verified?: boolean
   role: string
   banned: boolean
   registerIp: string
@@ -67,6 +70,10 @@ interface ConfirmAction {
   onConfirm: () => void | Promise<void>
 }
 
+function interpolate(template: string, values: Record<string, string | number>) {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''))
+}
+
 export function createDefaultDatabaseForm(): DatabaseConfigForm {
   return {
     type: 'sqlite',
@@ -79,17 +86,19 @@ export function createDefaultDatabaseForm(): DatabaseConfigForm {
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
+  const index = Math.floor(Math.log(bytes) / Math.log(1024))
+  return `${(bytes / Math.pow(1024, index)).toFixed(index > 0 ? 1 : 0)} ${units[index]}`
 }
 
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
-  const d = new Date(dateStr.replace(' ', 'T') + 'Z')
-  return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  const date = new Date(dateStr.replace(' ', 'T') + 'Z')
+  return `${date.toLocaleDateString('zh-CN')} ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
 }
 
 export function useAdminPage() {
+  const i18n = useI18nStore()
+
   const users = ref<AdminUser[]>([])
   const loading = ref(true)
   const search = ref('')
@@ -112,7 +121,7 @@ export function useAdminPage() {
     show: false,
     title: '',
     message: '',
-    confirmText: '确认',
+    confirmText: i18n.t('common.confirm', '确认'),
     danger: false,
     onConfirm: () => {}
   })
@@ -120,8 +129,13 @@ export function useAdminPage() {
   const quotaDialog = ref({ show: false, userId: 0, username: '', quotaMB: 0 })
 
   const uploadLimit = ref(100)
+  const maxConcurrentUploads = ref(3)
+  const language = ref<AppLanguage>('zh-CN')
   const showUploadLimitDialog = ref(false)
-  const newUploadLimit = ref('')
+  const newUploadLimit = ref('100')
+  const newMaxConcurrentUploads = ref('3')
+  const newLanguage = ref<AppLanguage>('zh-CN')
+
   const databaseSaving = ref(false)
   const databaseTesting = ref(false)
   const databaseMessage = ref('')
@@ -137,13 +151,13 @@ export function useAdminPage() {
 
   const filteredUsers = computed(() => {
     if (!search.value) return users.value
-    const q = search.value.toLowerCase()
+    const keyword = search.value.toLowerCase()
     return users.value.filter((user) =>
-      user.username.toLowerCase().includes(q) ||
-      (user.email && user.email.toLowerCase().includes(q)) ||
-      user.role.includes(q) ||
-      (user.register_ip && user.register_ip.includes(q)) ||
-      (user.last_login_ip && user.last_login_ip.includes(q))
+      user.username.toLowerCase().includes(keyword) ||
+      (user.email && user.email.toLowerCase().includes(keyword)) ||
+      user.role.toLowerCase().includes(keyword) ||
+      (user.register_ip && user.register_ip.includes(keyword)) ||
+      (user.last_login_ip && user.last_login_ip.includes(keyword))
     )
   })
 
@@ -153,6 +167,10 @@ export function useAdminPage() {
     banned: users.value.filter((user) => user.banned).length,
     guests: users.value.filter((user) => user.guest_enabled).length
   }))
+
+  function t(key: string, fallback?: string) {
+    return i18n.t(key, fallback)
+  }
 
   function setDatabaseMessage(message: string, type: 'success' | 'error' | 'info' = 'info') {
     databaseMessage.value = message
@@ -171,10 +189,12 @@ export function useAdminPage() {
     }
   }
 
-  async function fetchUploadLimit() {
+  async function fetchSystemSettings() {
     try {
-      const res = await api.get<{ upload_limit: number }>('/admin/upload-limit')
+      const res = await api.get<{ upload_limit: number; max_concurrent_uploads: number; language: AppLanguage }>('/admin/upload-limit')
       uploadLimit.value = res.upload_limit
+      maxConcurrentUploads.value = Number(res.max_concurrent_uploads || 3)
+      language.value = res.language || 'zh-CN'
     } catch {}
   }
 
@@ -245,17 +265,23 @@ export function useAdminPage() {
 
   async function handleResetPwd() {
     resetPwdError.value = ''
+    if (!resetPwdUser.value) return
     try {
-      await api.put(`/admin/users/${resetPwdUser.value!.id}/password`, resetPwdForm.value)
+      await api.put(`/admin/users/${resetPwdUser.value.id}/password`, resetPwdForm.value)
       showResetPwdDialog.value = false
-      alert('密码已重置')
+      alert(t('admin.passwordReset', '密码已重置'))
     } catch (err: any) {
       resetPwdError.value = err.message
     }
   }
 
   function openQuotaDialog(user: AdminUser) {
-    quotaDialog.value = { show: true, userId: user.id, username: user.username, quotaMB: Math.round(user.storage_quota / 1024 / 1024) }
+    quotaDialog.value = {
+      show: true,
+      userId: user.id,
+      username: user.username,
+      quotaMB: Math.round(user.storage_quota / 1024 / 1024)
+    }
   }
 
   async function saveQuota() {
@@ -270,12 +296,19 @@ export function useAdminPage() {
 
   function toggleRole(user: AdminUser) {
     const newRole = user.role === 'admin' ? 'user' : 'admin'
+    const isPromoting = newRole === 'admin'
     confirmAction.value = {
       show: true,
-      title: newRole === 'admin' ? '升级为管理员' : '降级为普通用户',
-      message: `确定要将「${user.username}」${newRole === 'admin' ? '升级为管理员' : '降级为普通用户'}吗？`,
-      confirmText: newRole === 'admin' ? '升级' : '降级',
-      danger: newRole !== 'admin',
+      title: t(isPromoting ? 'admin.confirmRoleTitleAdmin' : 'admin.confirmRoleTitleUser', isPromoting ? '升级为管理员' : '降级为普通用户'),
+      message: interpolate(
+        t(
+          isPromoting ? 'admin.confirmRoleMessageAdmin' : 'admin.confirmRoleMessageUser',
+          isPromoting ? '确认将“{username}”升级为管理员吗？' : '确认将“{username}”降级为普通用户吗？'
+        ),
+        { username: user.username }
+      ),
+      confirmText: t(isPromoting ? 'admin.promoteToAdmin' : 'admin.demoteToUser', isPromoting ? '升级为管理员' : '降级为普通用户'),
+      danger: !isPromoting,
       onConfirm: async () => {
         try {
           await api.put(`/admin/users/${user.id}/role`, { role: newRole })
@@ -291,11 +324,12 @@ export function useAdminPage() {
     const isBanning = !user.banned
     confirmAction.value = {
       show: true,
-      title: isBanning ? '封禁用户' : '解封用户',
-      message: isBanning
-        ? `确定要封禁「${user.username}」吗？该用户将无法登录。`
-        : `确定要解封「${user.username}」吗？`,
-      confirmText: isBanning ? '封禁' : '解封',
+      title: t(isBanning ? 'admin.confirmBanTitle' : 'admin.confirmUnbanTitle', isBanning ? '封禁用户' : '解封用户'),
+      message: interpolate(
+        t(isBanning ? 'admin.confirmBanMessage' : 'admin.confirmUnbanMessage', isBanning ? '确认封禁“{username}”吗？该用户将无法继续登录。' : '确认解封“{username}”吗？'),
+        { username: user.username }
+      ),
+      confirmText: t(isBanning ? 'admin.banUser' : 'admin.unbanUser', isBanning ? '封禁用户' : '解封用户'),
       danger: isBanning,
       onConfirm: async () => {
         try {
@@ -311,9 +345,12 @@ export function useAdminPage() {
   function confirmDelete(user: AdminUser) {
     confirmAction.value = {
       show: true,
-      title: '删除用户',
-      message: `确定要删除用户「${user.username}」吗？该用户的所有数据（文件、存储池、分享等）将被永久删除，此操作不可撤销。`,
-      confirmText: '删除',
+      title: t('admin.deleteUser', '删除用户'),
+      message: interpolate(
+        t('admin.confirmDeleteUserMessage', '确认删除用户“{username}”吗？该用户相关数据将被永久删除。'),
+        { username: user.username }
+      ),
+      confirmText: t('common.delete', '删除'),
       danger: true,
       onConfirm: async () => {
         try {
@@ -329,9 +366,9 @@ export function useAdminPage() {
   function verifyUser(user: AdminUser) {
     confirmAction.value = {
       show: true,
-      title: '手动验证',
-      message: `确定要手动验证「${user.username}」吗？这将允许该用户无需邮箱验证码即可登录。`,
-      confirmText: '验证',
+      title: t('admin.verifyUser', '手动验证'),
+      message: interpolate(t('admin.verifyUserMessage', '确认手动验证“{username}”吗？'), { username: user.username }),
+      confirmText: t('admin.verifyUser', '手动验证'),
       danger: false,
       onConfirm: async () => {
         await api.put(`/admin/users/${user.id}/verify`)
@@ -341,24 +378,41 @@ export function useAdminPage() {
   }
 
   function handleConfirm() {
-    confirmAction.value.onConfirm()
+    void confirmAction.value.onConfirm()
     confirmAction.value.show = false
   }
 
   function openUploadLimitDialog() {
     newUploadLimit.value = String(uploadLimit.value)
+    newMaxConcurrentUploads.value = String(maxConcurrentUploads.value)
+    newLanguage.value = language.value
     showUploadLimitDialog.value = true
   }
 
   async function saveUploadLimit() {
-    const val = parseInt(newUploadLimit.value)
-    if (isNaN(val) || val < 1 || val > 10240) {
-      alert('请输入 1-10240 之间的数字')
+    const limit = parseInt(newUploadLimit.value, 10)
+    const concurrency = parseInt(newMaxConcurrentUploads.value, 10)
+
+    if (Number.isNaN(limit) || limit < 1 || limit > 10240) {
+      alert(t('admin.uploadLimitValidation', '请输入 1 到 10240 之间的上传限制'))
       return
     }
+
+    if (Number.isNaN(concurrency) || concurrency < 1 || concurrency > 16) {
+      alert(t('admin.concurrencyValidation', '请输入 1 到 16 之间的并发数'))
+      return
+    }
+
     try {
-      await api.put('/admin/upload-limit', { upload_limit: val })
-      uploadLimit.value = val
+      await api.put('/admin/upload-limit', {
+        upload_limit: limit,
+        max_concurrent_uploads: concurrency,
+        language: newLanguage.value
+      })
+      uploadLimit.value = limit
+      maxConcurrentUploads.value = concurrency
+      language.value = newLanguage.value
+      await i18n.loadLanguage(newLanguage.value)
       showUploadLimitDialog.value = false
     } catch (err: any) {
       alert(err.message)
@@ -397,10 +451,16 @@ export function useAdminPage() {
 
   async function toggleIpListMode() {
     const newMode = ipListMode.value === 'blacklist' ? 'whitelist' : 'blacklist'
-    const msg = newMode === 'whitelist'
-      ? '切换为白名单模式，仅列表中的 IP 可访问。本地默认地址（127.0.0.1 等）将自动补充。确定切换？'
-      : '切换为黑名单模式，列表中的 IP 将被拦截访问。确定切换？'
-    if (!confirm(msg)) return
+    const confirmed = window.confirm(
+      t(
+        newMode === 'whitelist' ? 'admin.switchWhitelistWarning' : 'admin.switchBlacklistWarning',
+        newMode === 'whitelist'
+          ? '切换为白名单模式后，只有白名单内的 IP 可以访问。确定继续吗？'
+          : '切换为黑名单模式后，只有列表中的 IP 会被拦截。确定继续吗？'
+      )
+    )
+    if (!confirmed) return
+
     try {
       await api.put('/admin/ip-list/mode', { mode: newMode })
       ipListMode.value = newMode
@@ -430,9 +490,9 @@ export function useAdminPage() {
   function confirmDeleteIp(entry: IpBlacklistEntry) {
     confirmAction.value = {
       show: true,
-      title: `删除${ipListMode.value === 'whitelist' ? '白名单' : '黑名单'}条目`,
-      message: `确定要删除「${entry.ip_pattern}」吗？该 IP/网段将${ipListMode.value === 'whitelist' ? '不再被允许访问' : '恢复访问'}。`,
-      confirmText: '删除',
+      title: t('common.delete', '删除'),
+      message: interpolate(t('admin.confirmDeleteIpMessage', '确认删除 IP 条目“{pattern}”吗？'), { pattern: entry.ip_pattern }),
+      confirmText: t('common.delete', '删除'),
       danger: true,
       onConfirm: async () => {
         try {
@@ -446,11 +506,11 @@ export function useAdminPage() {
   }
 
   onMounted(() => {
-    fetchUsers()
-    fetchUploadLimit()
-    fetchDatabaseConfig()
-    fetchIpBlacklist()
-    fetchIpListMode()
+    void fetchUsers()
+    void fetchSystemSettings()
+    void fetchDatabaseConfig()
+    void fetchIpBlacklist()
+    void fetchIpListMode()
   })
 
   return {
@@ -471,8 +531,12 @@ export function useAdminPage() {
     confirmAction,
     quotaDialog,
     uploadLimit,
+    maxConcurrentUploads,
+    language,
     showUploadLimitDialog,
     newUploadLimit,
+    newMaxConcurrentUploads,
+    newLanguage,
     databaseSaving,
     databaseTesting,
     databaseMessage,

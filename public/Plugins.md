@@ -1,8 +1,10 @@
-# Plugin Development
+[English](./Plugins_en.md)
 
-VueFileManager loads themes and feature plugins from the `plugins/` directory.
+# 插件开发
 
-## Plugin directory
+VueFileManager 会从 `plugins/` 目录加载主题插件和功能插件。
+
+## 插件目录结构
 
 ```text
 plugins/
@@ -14,18 +16,19 @@ plugins/
     manifest.json
     entry.js
     docs.md
+    docs_en.md
 ```
 
-Each plugin is a self-contained directory with a required `manifest.json`.
+每个插件目录都必须自包含，并至少包含一个 `manifest.json`。
 
-## Supported plugin kinds
+## 支持的插件类型
 
 - `theme`
 - `feature`
 
-If `kind` is omitted, the current loader treats the plugin as a theme.
+如果省略 `kind`，当前加载器会把该插件视为主题插件。
 
-## Common manifest fields
+## 通用清单字段
 
 ```json
 {
@@ -38,18 +41,18 @@ If `kind` is omitted, the current loader treats the plugin as a theme.
 }
 ```
 
-Fields:
+字段说明：
 
-- `name`: unique plugin id, should match directory intent
-- `version`: plugin version
-- `description`: optional description
-- `author`: optional author
-- `enabled`: optional, defaults to enabled unless explicitly `false`
-- `kind`: `theme` or `feature`
+- `name`：唯一插件 ID，建议与目录语义一致
+- `version`：插件版本
+- `description`：可选描述
+- `author`：可选作者
+- `enabled`：可选，除非显式设为 `false`，否则默认启用
+- `kind`：`theme` 或 `feature`
 
-## Theme plugin
+## 主题插件
 
-Theme plugins require a `style` file:
+主题插件需要提供一个 `style` 文件：
 
 ```json
 {
@@ -61,14 +64,14 @@ Theme plugins require a `style` file:
 }
 ```
 
-Notes:
+说明：
 
-- `style` must be a relative path inside the plugin directory
-- active theme CSS is exposed through `/api/themes/styles`
+- `style` 必须是插件目录内的相对路径
+- 启用中的主题 CSS 会通过 `/api/themes/styles` 暴露
 
-## Feature plugin
+## 功能插件
 
-Feature plugins can declare static assets and capabilities:
+功能插件可以声明静态资源和能力描述：
 
 ```json
 {
@@ -84,86 +87,38 @@ Feature plugins can declare static assets and capabilities:
 }
 ```
 
-Fields:
+字段说明：
 
-- `entry`: optional JS entry file
-- `docs`: optional markdown documentation file
-- `capabilities`: optional list of declared capabilities
+- `entry`：可选的 JS 入口文件
+- `docs`：可选的文档文件
+- `capabilities`：可选的能力声明列表
 
-Important:
+重要说明：
 
-- current runtime exposes `entry` and `docs` as static assets
-- current runtime does not automatically execute feature plugin code on backend or frontend boot
-- `entry.js` is contract metadata and a public asset, not a live hook system yet
+- 当前功能插件主要用于元数据展示和静态资源暴露
+- 还不是完整的运行时自动扩展点
+- 如果要扩展真实业务能力，通常仍需要修改主仓库代码
 
-## Asset path rules
+## 文档命名约定
 
-Plugin asset paths must:
+项目内文档采用中英文双文件模式：
 
-- be relative paths
-- stay inside the plugin directory
-- not include `..`
-- point to files that exist
+- 中文文档：默认文件名，例如 `docs.md`
+- 英文文档：追加 `_en`，例如 `docs_en.md`
 
-Invalid plugin manifests are skipped at load time.
+中英文文档互相链接：
 
-## Public plugin APIs
+- 中文页顶部写：`[English](./docs_en.md)`
+- 英文页顶部写：`[中文](./docs.md)`
 
-### `GET /api/plugins/list`
+## 资源路径约束
 
-Returns plugin summaries.
+- 插件资源路径必须保持相对路径
+- 不能越出插件目录
+- 不要引用构建后才存在的私有临时产物路径
 
-Feature plugins include:
+## 调试建议
 
-- `capabilities`
-- `docs`
-- `entry`
-- `assetBasePath`
-
-Theme plugins are returned with:
-
-- `kind: "theme"`
-- `capabilities: ["theme-style"]`
-
-### `PUT /api/plugins/:name/toggle`
-
-Enable or disable a plugin by updating its manifest file.
-
-Current behavior:
-
-- requires a valid JWT token
-- does not currently enforce admin role in code
-- usually requires restart for full runtime effect
-
-## Theme compatibility APIs
-
-Theme plugins also appear through:
-
-- `GET /api/themes/list`
-- `PUT /api/themes/:name/toggle`
-
-## Recommended capability names
-
-Current examples:
-
-- `theme-style`
-- `offline-task-hooks`
-- `admin-panel-link`
-- `storage-provider`
-- `webdav-extension`
-
-These are descriptive declarations only. They are not enforced runtime contracts yet.
-
-## Example feature plugin
-
-See:
-
-- [plugins/example-feature/manifest.json](../plugins/example-feature/manifest.json)
-- [plugins/example-feature/docs.md](../plugins/example-feature/docs.md)
-
-## Practical guidance
-
-- Keep plugin directories self-contained
-- Treat `manifest.json` as the contract
-- Avoid depending on private internal source paths
-- Ship `docs.md` when the plugin needs setup or compatibility notes
+- 修改清单后，检查 `/api/plugins/list`
+- 修改主题样式后，检查 `/api/themes/styles`
+- 涉及插件开关时，通常需要重启服务让状态完全生效

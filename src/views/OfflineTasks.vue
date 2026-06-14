@@ -3,6 +3,9 @@ import { onUnmounted, watch } from 'vue'
 import OfflineTasksPanel from '@/components/OfflineTasksPanel.vue'
 import { useOfflineTasks } from '@/composables/useOfflineTasks'
 import { useKeepAliveRefresh } from '@/composables/useKeepAliveRefresh'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const {
   tasks,
@@ -47,11 +50,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="px-4 pt-4 space-y-4">
+  <div class="space-y-4 px-4 pt-4">
     <div class="card">
-      <h2 class="text-lg font-semibold mb-2" style="color: var(--text-color)">后台离线任务</h2>
+      <h2 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('offline.pageTitle', '后台离线任务') }}</h2>
       <p class="text-sm" style="color: var(--text-secondary-color)">
-        这里集中展示服务器端的远程下载队列。任务执行中会自动轮询刷新，失败后可以直接重试。
+        {{ t('offline.pageDescription', '这里集中展示服务器端的远程下载队列。任务执行中会自动轮询刷新，失败后可以直接重试。') }}
       </p>
     </div>
 

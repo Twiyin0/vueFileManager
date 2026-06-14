@@ -519,8 +519,8 @@ async function handleCreateFolder() {
 }
 
 // 上传
-async function handleUpload(fileList: FileList) {
-  const arr = Array.from(fileList)
+async function handleUpload(files: FileList | File[]) {
+  const arr = Array.from(files)
   if (arr.length === 0) return
   pendingUploadFiles.value = arr
   showUpload.value = true

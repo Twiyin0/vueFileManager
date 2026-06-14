@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import FilePreview from '@/components/FilePreview.vue'
 import Icon from '@/components/Icon.vue'
+import { useI18n } from '@/composables/useI18n'
 
 const route = useRoute()
+const { t, language } = useI18n()
 
 const loading = ref(true)
 const error = ref('')
@@ -15,8 +17,6 @@ const password = ref('')
 const shareInfo = ref<any>(null)
 const showPreview = ref(false)
 const fileToPreview = ref<any>(null)
-
-// 文件夹浏览
 const folderFiles = ref<any[]>([])
 const folderLoading = ref(false)
 const currentSubPath = ref('')
@@ -25,7 +25,6 @@ const shareCode = computed(() => route.params.code as string)
 const sign = computed(() => route.query.sign as string)
 const timestamp = computed(() => route.query.t as string)
 
-// 文件图标映射
 const fileIconMap: Record<string, { icon: string; color: string }> = {
   folder: { icon: 'folder', color: 'text-blue-500' },
   image: { icon: 'image', color: 'text-green-500' },
@@ -51,19 +50,23 @@ function getFileType(name: string): string {
 }
 
 function getIconInfo(name: string, type: string) {
-  const ft = type === 'folder' ? 'folder' : getFileType(name)
-  return fileIconMap[ft] || fileIconMap.file
+  const key = type === 'folder' ? 'folder' : getFileType(name)
+  return fileIconMap[key] || fileIconMap.file
 }
 
 function formatSize(bytes: number): string {
   if (!bytes) return '-'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
+  const index = Math.floor(Math.log(bytes) / Math.log(1024))
+  return `${(bytes / Math.pow(1024, index)).toFixed(index > 0 ? 1 : 0)} ${units[index]}`
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('zh-CN') + ' ' + new Date(dateStr).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  const date = new Date(dateStr)
+  return `${date.toLocaleDateString(language.value || 'zh-CN')} ${date.toLocaleTimeString(language.value || 'zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })}`
 }
 
 async function fetchShare(providedPassword?: string) {
@@ -72,7 +75,7 @@ async function fetchShare(providedPassword?: string) {
   try {
     const params = new URLSearchParams()
     if (providedPassword) params.set('password', providedPassword)
-    const res = await api.get<any>(`/share/s/${shareCode.value}${params.toString() ? '?' + params.toString() : ''}`)
+    const res = await api.get<any>(`/share/s/${shareCode.value}${params.toString() ? `?${params.toString()}` : ''}`)
 
     if (res.needPassword) {
       needPassword.value = true
@@ -80,9 +83,8 @@ async function fetchShare(providedPassword?: string) {
     } else {
       needPassword.value = false
       shareInfo.value = res
-      // 文件夹分享：加载内容
       if (res.fileType === 'folder') {
-        fetchFolderContents()
+        await fetchFolderContents()
       }
     }
   } catch (err: any) {
@@ -112,8 +114,8 @@ async function fetchFolderContents(subPath?: string) {
 }
 
 function navigateFolder(subPath: string) {
-  const newPath = currentSubPath.value ? `${currentSubPath.value}/${subPath}` : subPath
-  fetchFolderContents(newPath)
+  const nextPath = currentSubPath.value ? `${currentSubPath.value}/${subPath}` : subPath
+  fetchFolderContents(nextPath)
 }
 
 function goUpFolder() {
@@ -125,16 +127,14 @@ function goUpFolder() {
 function openFile(file: any) {
   if (file.type === 'folder') {
     navigateFolder(file.name)
-  } else {
-    // 预览文件
-    fileToPreview.value = file
-    showPreview.value = true
+    return
   }
+  fileToPreview.value = file
+  showPreview.value = true
 }
 
 function getPreviewUrlForFile(file: any): string {
   const params = new URLSearchParams()
-  // 只传相对路径（子目录+文件名），后端会拼上 share.file_path
   const relPath = currentSubPath.value ? `${currentSubPath.value}/${file.name}` : file.name
   params.set('path', relPath)
   if (sign.value) params.set('sign', sign.value)
@@ -158,153 +158,196 @@ function handleDownloadFile(file: any) {
 }
 
 function handleDownloadSingle() {
-  const p = new URLSearchParams()
-  if (password.value) p.set('password', password.value)
-  if (sign.value) p.set('sign', sign.value)
-  if (timestamp.value) p.set('t', timestamp.value)
-  window.open(`/api/share/download/${shareCode.value}?${p.toString()}`, '_blank')
+  const params = new URLSearchParams()
+  if (password.value) params.set('password', password.value)
+  if (sign.value) params.set('sign', sign.value)
+  if (timestamp.value) params.set('t', timestamp.value)
+  window.open(`/api/share/download/${shareCode.value}?${params.toString()}`, '_blank')
 }
 
 function previewSingleFile() {
-  const p = new URLSearchParams()
-  if (sign.value) p.set('sign', sign.value)
-  if (timestamp.value) p.set('t', timestamp.value)
-  if (password.value) p.set('password', password.value)
+  const params = new URLSearchParams()
+  if (sign.value) params.set('sign', sign.value)
+  if (timestamp.value) params.set('t', timestamp.value)
+  if (password.value) params.set('password', password.value)
   fileToPreview.value = {
     name: shareInfo.value.fileName,
     path: shareInfo.value.filePath,
-    _sharePath: `/api/share/preview/${shareCode.value}?${p.toString()}`
+    _sharePath: `/api/share/preview/${shareCode.value}?${params.toString()}`
   }
   showPreview.value = true
 }
 
-onMounted(() => fetchShare())
-
 function submitPassword() {
   fetchShare(password.value)
 }
+
+onMounted(() => {
+  fetchShare()
+})
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col" style="background-color: var(--bg-color)">
-    <!-- Header -->
-    <header class="h-11 flex items-center justify-between px-3 sm:px-4 flex-shrink-0" style="background-color: var(--surface-color)">
-      <router-link to="/guest" class="flex items-center gap-2 font-bold text-lg flex-shrink-0">
+  <div class="flex min-h-screen flex-col" style="background-color: var(--bg-color)">
+    <header class="flex h-11 flex-shrink-0 items-center justify-between px-3 sm:px-4" style="background-color: var(--surface-color)">
+      <router-link to="/guest" class="flex flex-shrink-0 items-center gap-2 text-lg font-bold">
         <img src="/logo.svg" alt="VueFileManager" class="rounded" style="width: 28px; height: 28px;" />
         <span class="hidden sm:inline" style="color: var(--text-color)">VueFileManager</span>
       </router-link>
       <ThemeToggle />
     </header>
 
-    <!-- 内容 -->
     <main class="flex-1 overflow-auto">
-      <!-- 加载中 -->
       <div v-if="loading" class="flex items-center justify-center py-20">
-        <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        <svg class="h-8 w-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
       </div>
 
-      <!-- 错误 -->
-      <div v-else-if="error" class="max-w-md mx-auto p-4 sm:p-8 text-center">
-        <Icon name="exclamation" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-red-400" />
-        <h2 class="text-lg sm:text-xl font-semibold mb-2" style="color: var(--text-color)">访问失败</h2>
+      <div v-else-if="error" class="mx-auto max-w-md p-4 text-center sm:p-8">
+        <Icon name="exclamation" class="mx-auto mb-3 h-12 w-12 text-red-400 sm:mb-4 sm:h-16 sm:w-16" />
+        <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.errorTitle', '访问失败') }}</h2>
         <p class="text-sm" style="color: var(--text-secondary-color)">{{ error }}</p>
       </div>
 
-      <!-- 需要密码 -->
-      <div v-else-if="needPassword" class="max-w-md mx-auto p-4 sm:p-8">
-        <div class="text-center mb-4 sm:mb-6">
-          <Icon name="lock" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4" style="color: var(--accent-color)" />
-          <h2 class="text-lg sm:text-xl font-semibold mb-2" style="color: var(--text-color)">需要密码</h2>
-          <p class="text-sm" style="color: var(--text-secondary-color)">此分享链接需要密码才能访问</p>
-          <p v-if="shareInfo?.owner" class="text-xs mt-1" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</p>
+      <div v-else-if="needPassword" class="mx-auto max-w-md p-4 sm:p-8">
+        <div class="mb-4 text-center sm:mb-6">
+          <Icon name="lock" class="mx-auto mb-3 h-12 w-12 sm:mb-4 sm:h-16 sm:w-16" style="color: var(--accent-color)" />
+          <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.passwordRequiredTitle', '需要密码') }}</h2>
+          <p class="text-sm" style="color: var(--text-secondary-color)">{{ t('sharePage.passwordRequiredDescription', '此分享链接需要密码才能访问') }}</p>
+          <p v-if="shareInfo?.owner" class="mt-1 text-xs" style="color: var(--text-secondary-color)">
+            {{ t('sharePage.owner', '分享者：{owner}').replace('{owner}', shareInfo.owner) }}
+          </p>
         </div>
-        <form @submit.prevent="submitPassword" class="space-y-4">
-          <input v-model="password" type="password" class="input-field" placeholder="请输入访问密码" autofocus />
+
+        <form class="space-y-4" @submit.prevent="submitPassword">
+          <input
+            v-model="password"
+            type="password"
+            class="input-field"
+            :placeholder="t('sharePage.passwordPlaceholder', '请输入访问密码')"
+            autofocus
+          />
           <button type="submit" class="btn-primary w-full" :disabled="loading || !password">
-            {{ loading ? '验证中...' : '验证' }}
+            {{ loading ? t('sharePage.verifying', '验证中...') : t('sharePage.verify', '验证') }}
           </button>
         </form>
       </div>
 
-      <!-- 文件夹分享 -->
       <template v-else-if="shareInfo && shareInfo.fileType === 'folder'">
         <div class="px-4 pt-4">
-          <!-- 面包屑 -->
-          <div class="flex items-center gap-1.5 text-sm mb-4 flex-wrap min-w-0">
-            <button @click="fetchFolderContents()" class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover truncate max-w-[120px] sm:max-w-none" style="color: var(--accent-color)">
+          <div class="mb-4 flex min-w-0 flex-wrap items-center gap-1.5 text-sm">
+            <button
+              class="max-w-[120px] truncate rounded-md px-2 py-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover sm:max-w-none"
+              style="color: var(--accent-color)"
+              @click="fetchFolderContents()"
+            >
               {{ shareInfo.fileName }}
             </button>
-            <template v-for="(segment, index) in currentSubPath.split('/').filter(Boolean)" :key="index">
-              <Icon name="chevron-right" class="w-4 h-4 flex-shrink-0" style="color: var(--text-secondary-color)" />
-              <button @click="fetchFolderContents(currentSubPath.split('/').filter(Boolean).slice(0, index + 1).join('/'))"
-                class="px-2 py-1 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover truncate max-w-[100px] sm:max-w-none"
-                :style="{ color: index === currentSubPath.split('/').filter(Boolean).length - 1 ? 'var(--text-color)' : 'var(--accent-color)' }">
+
+            <template v-for="(segment, index) in currentSubPath.split('/').filter(Boolean)" :key="`${segment}-${index}`">
+              <Icon name="chevron-right" class="h-4 w-4 flex-shrink-0" style="color: var(--text-secondary-color)" />
+              <button
+                class="max-w-[100px] truncate rounded-md px-2 py-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-hover sm:max-w-none"
+                :style="{ color: index === currentSubPath.split('/').filter(Boolean).length - 1 ? 'var(--text-color)' : 'var(--accent-color)' }"
+                @click="fetchFolderContents(currentSubPath.split('/').filter(Boolean).slice(0, index + 1).join('/'))"
+              >
                 {{ segment }}
               </button>
             </template>
-            <span class="ml-2 text-xs hidden sm:inline flex-shrink-0" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</span>
+
+            <span v-if="shareInfo.owner" class="ml-2 hidden flex-shrink-0 text-xs sm:inline" style="color: var(--text-secondary-color)">
+              {{ t('sharePage.owner', '分享者：{owner}').replace('{owner}', shareInfo.owner) }}
+            </span>
           </div>
 
-          <!-- 文件列表 -->
           <div v-if="folderLoading" class="flex items-center justify-center py-12">
-            <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            <svg class="h-8 w-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           </div>
 
-          <div v-else-if="folderFiles.length === 0" class="text-center py-12" style="color: var(--text-secondary-color)">
-            <Icon name="folder" class="w-16 h-16 mx-auto mb-3" />
-            <p>空文件夹</p>
+          <div v-else-if="folderFiles.length === 0" class="py-12 text-center" style="color: var(--text-secondary-color)">
+            <Icon name="folder" class="mx-auto mb-3 h-16 w-16" />
+            <p>{{ t('sharePage.emptyFolder', '空文件夹') }}</p>
           </div>
 
           <div v-else class="card overflow-hidden" style="padding: 0">
-            <!-- 上级目录 -->
-            <div v-if="currentSubPath" class="flex items-center gap-2.5 px-4 py-2.5 cursor-pointer border-b transition-colors hover:bg-gray-50 dark:hover:bg-dark-hover" style="border-color: var(--border-color)" @click="goUpFolder">
-              <Icon name="arrow-up" class="w-5 h-5" style="color: var(--text-secondary-color)" />
+            <div
+              v-if="currentSubPath"
+              class="flex cursor-pointer items-center gap-2.5 border-b px-4 py-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-dark-hover"
+              style="border-color: var(--border-color)"
+              @click="goUpFolder"
+            >
+              <Icon name="arrow-up" class="h-5 w-5" style="color: var(--text-secondary-color)" />
               <span class="text-sm" style="color: var(--text-secondary-color)">..</span>
             </div>
-            <!-- 文件行 -->
-            <div v-for="file in folderFiles" :key="file.path"
-              class="flex items-center gap-2.5 px-4 py-2.5 cursor-pointer border-b last:border-0 transition-colors hover:bg-gray-50 dark:hover:bg-dark-hover"
+
+            <div
+              v-for="file in folderFiles"
+              :key="file.path"
+              class="flex cursor-pointer items-center gap-2.5 border-b px-4 py-2.5 transition-colors last:border-0 hover:bg-gray-50 dark:hover:bg-dark-hover"
               style="border-color: var(--border-color)"
-              @click="openFile(file)">
-              <Icon :name="getIconInfo(file.name, file.type).icon" :class="['w-5 h-5 flex-shrink-0', getIconInfo(file.name, file.type).color]" />
-              <span class="flex-1 text-sm truncate" style="color: var(--text-color)">{{ file.name }}</span>
+              @click="openFile(file)"
+            >
+              <Icon :name="getIconInfo(file.name, file.type).icon" :class="['h-5 w-5 flex-shrink-0', getIconInfo(file.name, file.type).color]" />
+              <span class="flex-1 truncate text-sm" style="color: var(--text-color)">{{ file.name }}</span>
               <span v-if="file.type !== 'folder'" class="text-xs" style="color: var(--text-secondary-color)">{{ formatSize(file.size) }}</span>
-              <button v-if="file.type !== 'folder'" @click.stop="handleDownloadFile(file)" class="p-2 sm:p-1 rounded hover:bg-gray-200 dark:hover:bg-dark-hover transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center" title="下载">
-                <Icon name="download" class="w-4 h-4" style="color: var(--text-secondary-color)" />
+              <span v-if="file.modified" class="hidden text-xs lg:inline" style="color: var(--text-secondary-color)">{{ formatDate(file.modified) }}</span>
+              <button
+                v-if="file.type !== 'folder'"
+                class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded p-2 transition-colors hover:bg-gray-200 dark:hover:bg-dark-hover sm:p-1"
+                :title="t('file.download', '下载')"
+                @click.stop="handleDownloadFile(file)"
+              >
+                <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
               </button>
             </div>
           </div>
         </div>
       </template>
 
-      <!-- 单文件分享 -->
-      <div v-else-if="shareInfo" class="max-w-lg mx-auto p-4 sm:p-8">
-        <div class="text-center mb-4 sm:mb-6">
-          <Icon name="file-alt" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4" style="color: var(--accent-color)" />
-          <h2 class="text-lg sm:text-xl font-semibold mb-2 truncate px-4" style="color: var(--text-color)">{{ shareInfo.fileName }}</h2>
-          <p class="text-sm" style="color: var(--text-secondary-color)">分享者：{{ shareInfo.owner }}</p>
+      <div v-else-if="shareInfo" class="mx-auto max-w-lg p-4 sm:p-8">
+        <div class="mb-4 text-center sm:mb-6">
+          <Icon name="file-alt" class="mx-auto mb-3 h-12 w-12 sm:mb-4 sm:h-16 sm:w-16" style="color: var(--accent-color)" />
+          <h2 class="mb-2 truncate px-4 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ shareInfo.fileName }}</h2>
+          <p v-if="shareInfo.owner" class="text-sm" style="color: var(--text-secondary-color)">
+            {{ t('sharePage.owner', '分享者：{owner}').replace('{owner}', shareInfo.owner) }}
+          </p>
         </div>
-        <div v-if="!sign" class="mb-4 p-3 rounded-lg text-sm" style="background: rgba(245,158,11,0.1); color: #d97706">
-          此分享链接需要签名参数才能下载，请使用带签名的完整链接访问。
+
+        <div
+          v-if="!sign"
+          class="mb-4 rounded-lg p-3 text-sm"
+          style="background: rgba(245,158,11,0.1); color: #d97706"
+        >
+          {{ t('sharePage.signatureRequired', '此分享链接需要签名参数才能下载，请使用带签名的完整链接访问。') }}
         </div>
+
         <div class="flex flex-col gap-3">
-          <button @click="handleDownloadSingle" class="btn-primary w-full flex items-center justify-center gap-2" :disabled="!sign">
-            <Icon name="download" class="w-5 h-5" /> 下载文件
+          <button
+            class="btn-primary flex w-full items-center justify-center gap-2"
+            :disabled="!sign"
+            @click="handleDownloadSingle"
+          >
+            <Icon name="download" class="h-5 w-5" />
+            {{ t('sharePage.downloadFile', '下载文件') }}
           </button>
-          <button v-if="sign" @click="previewSingleFile" class="btn-secondary w-full flex items-center justify-center gap-2">
-            <Icon name="eye" class="w-5 h-5" /> 预览文件
+
+          <button
+            v-if="sign"
+            class="btn-secondary flex w-full items-center justify-center gap-2"
+            @click="previewSingleFile"
+          >
+            <Icon name="eye" class="h-5 w-5" />
+            {{ t('sharePage.previewFile', '预览文件') }}
           </button>
         </div>
       </div>
     </main>
 
-    <!-- 文件预览 -->
     <FilePreview
       v-if="fileToPreview && sign"
       :show="showPreview"

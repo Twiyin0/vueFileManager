@@ -3,6 +3,7 @@ import type { AppNavMeta } from '@/types/router-meta'
 
 export interface HeaderLink {
   label: string
+  labelKey?: string
   icon: string
   to: string
   order: number
@@ -11,12 +12,18 @@ export interface HeaderLink {
 export interface SidebarSection {
   id: 'main' | 'admin'
   title?: string
+  titleKey?: string
   items: Array<{
     path: string
     label: string
+    labelKey?: string
     icon: string
     order: number
   }>
+}
+
+function nav(labelKey: string, fallback: string, icon: string, section: 'main' | 'admin', order: number): AppNavMeta {
+  return { label: fallback, labelKey, icon, section, order }
 }
 
 const appRouteModules: RouteRecordRaw[] = [
@@ -29,7 +36,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: '文件管理',
-      nav: { label: '文件管理', icon: 'folder', section: 'main', order: 10 }
+      pageTitleKey: 'nav.fileManager',
+      nav: nav('nav.fileManager', '文件管理', 'folder', 'main', 10)
     }
   },
   {
@@ -39,7 +47,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: '离线任务',
-      nav: { label: '离线任务', icon: 'download', section: 'main', order: 20 }
+      pageTitleKey: 'nav.offlineTasks',
+      nav: nav('nav.offlineTasks', '离线任务', 'download', 'main', 20)
     }
   },
   { path: '/guest', name: 'GuestList', component: () => import('@/views/GuestList.vue'), meta: { noLayout: true } },
@@ -52,7 +61,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: '我的收藏',
-      nav: { label: '我的收藏', icon: 'star-sharp', section: 'main', order: 30 }
+      pageTitleKey: 'nav.favourites',
+      nav: nav('nav.favourites', '我的收藏', 'star-sharp', 'main', 30)
     }
   },
   {
@@ -62,7 +72,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: '我的分享',
-      nav: { label: '我的分享', icon: 'link', section: 'main', order: 40 }
+      pageTitleKey: 'nav.myShares',
+      nav: nav('nav.myShares', '我的分享', 'link', 'main', 40)
     }
   },
   {
@@ -72,7 +83,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: '回收站',
-      nav: { label: '回收站', icon: 'trash', section: 'main', order: 50 }
+      pageTitleKey: 'nav.trash',
+      nav: nav('nav.trash', '回收站', 'trash', 'main', 50)
     }
   },
   {
@@ -81,8 +93,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/StoragePools.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '存储池管理',
-      nav: { label: '存储池', icon: 'server', section: 'main', order: 60 }
+      pageTitle: '存储池',
+      pageTitleKey: 'nav.storagePools',
+      nav: nav('nav.storagePools', '存储池', 'server', 'main', 60)
     }
   },
   {
@@ -92,7 +105,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: 'WebDAV',
-      nav: { label: 'WebDAV', icon: 'globe', section: 'main', order: 70 }
+      pageTitleKey: 'nav.webdav',
+      nav: nav('nav.webdav', 'WebDAV', 'globe', 'main', 70)
     }
   },
   {
@@ -102,7 +116,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: '设置',
-      nav: { label: '设置', icon: 'gear', section: 'main', order: 80 }
+      pageTitleKey: 'nav.settings',
+      nav: nav('nav.settings', '设置', 'gear', 'main', 80)
     }
   },
   {
@@ -112,7 +127,8 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       pageTitle: 'API Keys',
-      nav: { label: 'API Keys', icon: 'key', section: 'main', order: 90 }
+      pageTitleKey: 'nav.apiKeys',
+      nav: nav('nav.apiKeys', 'API Keys', 'key', 'main', 90)
     }
   },
   {
@@ -121,8 +137,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/Themes.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '插件中心',
-      nav: { label: '插件', icon: 'palette', section: 'main', order: 100 }
+      pageTitle: '插件',
+      pageTitleKey: 'nav.plugins',
+      nav: nav('nav.plugins', '插件', 'palette', 'main', 100)
     }
   },
   {
@@ -133,20 +150,21 @@ const appRouteModules: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: true,
       pageTitle: '管理面板',
-      nav: { label: '管理面板', icon: 'users', section: 'admin', order: 10 }
+      pageTitleKey: 'nav.admin',
+      nav: nav('nav.admin', '管理面板', 'users', 'admin', 10)
     }
   },
   { path: '/s/:code', name: 'Share', component: () => import('@/views/Share.vue'), meta: { noLayout: true } },
-  { path: '/api-docs', name: 'ApiDocs', component: () => import('@/views/ApiDocs.vue'), meta: { pageTitle: 'API 文档' } },
-  { path: '/theme-docs', name: 'ThemeDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发文档' } },
-  { path: '/plugin-docs', name: 'PluginDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发文档' } },
+  { path: '/api-docs', name: 'ApiDocs', component: () => import('@/views/ApiDocs.vue'), meta: { pageTitle: 'API 文档', pageTitleKey: 'nav.apiDocs' } },
+  { path: '/theme-docs', name: 'ThemeDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发', pageTitleKey: 'nav.themeDocs' } },
+  { path: '/plugin-docs', name: 'PluginDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发', pageTitleKey: 'nav.themeDocs' } }
 ]
 
 export const appRoutes: RouteRecordRaw[] = appRouteModules
 
 export const headerLinks: HeaderLink[] = [
-  { label: 'API 文档', icon: 'book-open', to: '/api-docs', order: 10 },
-  { label: '插件开发', icon: 'palette', to: '/theme-docs', order: 20 }
+  { label: 'API 文档', labelKey: 'nav.apiDocs', icon: 'book-open', to: '/api-docs', order: 10 },
+  { label: '插件开发', labelKey: 'nav.themeDocs', icon: 'palette', to: '/theme-docs', order: 20 }
 ]
 
 export function getSidebarSections(isAdmin: boolean): SidebarSection[] {
@@ -156,21 +174,29 @@ export function getSidebarSections(isAdmin: boolean): SidebarSection[] {
     .map((route) => ({
       path: route.path,
       label: route.meta!.nav!.label,
+      labelKey: route.meta!.nav!.labelKey,
       icon: route.meta!.nav!.icon,
       section: route.meta!.nav!.section || 'main',
       order: route.meta!.nav!.order || 999
     }))
     .sort((a, b) => a.order - b.order)
 
-  return [
+  const sections: SidebarSection[] = [
     {
-      id: 'main' as const,
-      items: items.filter((item) => item.section === 'main')
+      id: 'main',
+      items: items
+        .filter((item) => item.section === 'main')
+        .map(({ path, label, labelKey, icon, order }) => ({ path, label, labelKey, icon, order }))
     },
     {
-      id: 'admin' as const,
+      id: 'admin',
       title: '管理',
-      items: items.filter((item) => item.section === 'admin')
+      titleKey: 'nav.admin',
+      items: items
+        .filter((item) => item.section === 'admin')
+        .map(({ path, label, labelKey, icon, order }) => ({ path, label, labelKey, icon, order }))
     }
-  ].filter((section) => section.items.length > 0)
+  ]
+
+  return sections.filter((section) => section.items.length > 0)
 }
