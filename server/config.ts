@@ -73,6 +73,7 @@ interface Config {
   storage_root: string
   upload_limit: number
   max_concurrent_uploads: number
+  log_level: 1 | 2 | 3
   resumable_upload_cache_minutes: number
   ip_list_mode: 'blacklist' | 'whitelist'
   site: {
@@ -99,6 +100,7 @@ const defaultConfig: Config = {
   storage_root: './uploads',
   upload_limit: 100,
   max_concurrent_uploads: 3,
+  log_level: 2,
   resumable_upload_cache_minutes: 120,
   ip_list_mode: 'blacklist',
   site: {
@@ -129,7 +131,7 @@ const defaultConfig: Config = {
   },
   storage_pools: [
     {
-      name: '本地存储',
+      name: 'Default Storage',
       type: 'local',
       default: true,
       config: {}
@@ -151,7 +153,15 @@ const defaultConfig: Config = {
 }
 
 function normalizeLanguage(language: unknown): AppLanguage {
-  return language === 'en-US' ? 'en-US' : 'zh-CN'
+  return language === 'zh-CN' ? 'zh-CN' : 'en-US'
+}
+
+function normalizeLogLevel(level: unknown): 1 | 2 | 3 {
+  const parsed = Number(level)
+  if (parsed === 1 || parsed === 2 || parsed === 3) {
+    return parsed
+  }
+  return 2
 }
 
 function toNumber(value: unknown, fallback: number): number {
@@ -201,6 +211,7 @@ function mergeConfig(loaded: any): Config {
     storage_root: loaded.storage_root || defaultConfig.storage_root,
     upload_limit: toNumber(loaded.upload_limit, defaultConfig.upload_limit),
     max_concurrent_uploads: toNumber(loaded.max_concurrent_uploads, defaultConfig.max_concurrent_uploads),
+    log_level: normalizeLogLevel(loaded.log_level ?? process.env.LOG_LEVEL ?? defaultConfig.log_level),
     resumable_upload_cache_minutes: toNumber(
       loaded.resumable_upload_cache_minutes,
       defaultConfig.resumable_upload_cache_minutes

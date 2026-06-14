@@ -1,7 +1,9 @@
 import { Router, type Request, type Response } from 'express'
 import { flexibleAuth, type ApiKeyRequest } from '../middleware/apikey'
 import { getStorageByPoolId } from '../services/factory'
+import { Logger } from '../services/logger'
 import db from '../db'
+import { sendServerError } from './admin/shared'
 
 const router = Router()
 
@@ -83,6 +85,11 @@ function escapeXml(value: string) {
     .replace(/'/g, '&apos;')
 }
 
+async function getUsername(userId: number) {
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  return user?.username || `#${userId}`
+}
+
 function createPropResponse(
   baseUrl: string,
   item: { path: string; name: string; type: 'file' | 'folder'; size: number; modified: string },
@@ -148,6 +155,7 @@ router.all('/*', async (req: ApiKeyRequest, res: Response) => {
     const pathFromRoute = scope.storagePath
     const baseUrl = `${req.protocol}://${req.get('host')}${scope.basePath}`
     const sharedSearchParams = new URLSearchParams()
+    const username = await getUsername(req.userId!)
 
     for (const [key, value] of Object.entries(req.query)) {
       if (scope.usingPathPool && key === 'poolId') continue
@@ -201,6 +209,7 @@ router.all('/*', async (req: ApiKeyRequest, res: Response) => {
 ${responses.join('\n')}
 </D:multistatus>`
 
+      await Logger.info('webdav', 'webdav.ts', `User ${username} PROPFIND success in poolID:#${poolId} ${pathFromRoute || '/'}`)
       res.status(207).setHeader('Content-Type', 'application/xml; charset=utf-8').send(xml)
       return
     }
@@ -227,7 +236,7 @@ ${responses.join('\n')}
     if (req.method === 'GET') {
       applyDavHeaders(res)
       if (!pathFromRoute) {
-        const clientProfile = detectDavClient(req)
+        await Logger.info('webdav', 'webdav.ts', `User ${username} webdav login success.`)
         if (clientProfile === 'windows') {
           res.status(200)
             .setHeader('Content-Type', 'text/html; charset=utf-8')
@@ -241,6 +250,7 @@ ${responses.join('\n')}
       }
 
       const data = await storage.download(pathFromRoute)
+      await Logger.info('webdav', 'webdav.ts', `User ${username} downloaded a file in poolID:#${poolId} ${pathFromRoute}`)
       res.setHeader('Content-Length', data.length)
       res.send(data)
       return
@@ -253,6 +263,7 @@ ${responses.join('\n')}
         chunks.push(Buffer.from(chunk))
       }
       await storage.upload(pathFromRoute, Buffer.concat(chunks))
+      await Logger.info('webdav', 'webdav.ts', `User ${username} uploaded a file in poolID:#${poolId} ${pathFromRoute}`)
       res.status(201).end()
       return
     }
@@ -260,6 +271,7 @@ ${responses.join('\n')}
     if (req.method === 'DELETE') {
       applyDavHeaders(res)
       await storage.remove(pathFromRoute)
+      await Logger.info('webdav', 'webdav.ts', `User ${username} delete a file from poolID:#${poolId} ${pathFromRoute}`)
       res.status(204).end()
       return
     }
@@ -267,6 +279,7 @@ ${responses.join('\n')}
     if (req.method === 'MKCOL') {
       applyDavHeaders(res)
       await storage.mkdir(pathFromRoute)
+      await Logger.info('webdav', 'webdav.ts', `User ${username} created a directory in poolID:#${poolId} ${pathFromRoute}`)
       res.status(201).end()
       return
     }
@@ -288,6 +301,7 @@ ${responses.join('\n')}
       }
 
       await storage.move(pathFromRoute, targetScope.storagePath)
+      await Logger.info('webdav', 'webdav.ts', `User ${username} moved a file in poolID:#${poolId} ${pathFromRoute} -> ${targetScope.storagePath}`)
       res.status(201).end()
       return
     }
@@ -308,6 +322,7 @@ ${responses.join('\n')}
       }
 
       await storage.copy(pathFromRoute, targetScope.storagePath)
+      await Logger.info('webdav', 'webdav.ts', `User ${username} copied a file in poolID:#${poolId} ${pathFromRoute} -> ${targetScope.storagePath}`)
       res.status(201).end()
       return
     }
@@ -326,35 +341,20 @@ ${responses.join('\n')}
       return
     }
 
-    if (req.method === 'LOCK') {
-      res
-        .status(200)
-        .setHeader('Lock-Token', '<opaquelocktoken:vuefilemanager>')
-        .setHeader('Content-Type', 'application/xml; charset=utf-8')
-        .send(`<?xml version="1.0" encoding="utf-8"?>
-<D:prop xmlns:D="DAV:">
-  <D:lockdiscovery>
-    <D:activelock>
-      <D:locktype><D:write/></D:locktype>
-      <D:lockscope><D:exclusive/></D:lockscope>
-      <D:depth>Infinity</D:depth>
-      <D:owner><D:href>VueFileManager</D:href></D:owner>
-      <D:timeout>Second-3600</D:timeout>
-      <D:locktoken><D:href>opaquelocktoken:vuefilemanager</D:href></D:locktoken>
-    </D:activelock>
-  </D:lockdiscovery>
-</D:prop>`)
-      return
-    }
-
-    if (req.method === 'UNLOCK') {
-      res.status(204).end()
+    if (req.method === 'LOCK' || req.method === 'UNLOCK') {
+      applyDavHeaders(res)
+      res.status(200).end()
       return
     }
 
     res.status(405).end()
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'webdav',
+      fileName: 'webdav.ts',
+      message: 'WebDAV request failed',
+      context: { userId: req.userId, method: req.method, path: (req.params as any)[0], queryPoolId: req.query.poolId }
+    })
   }
 })
 

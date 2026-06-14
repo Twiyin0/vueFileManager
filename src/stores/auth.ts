@@ -76,10 +76,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function logout() {
-    user.value = null
-    token.value = null
-    localStorage.removeItem('token')
+  async function logout() {
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // ignore logout request failures and clear local auth state
+    } finally {
+      user.value = null
+      token.value = null
+      localStorage.removeItem('token')
+    }
   }
 
   function applyTheme(theme: string) {

@@ -1,14 +1,16 @@
-import { Router, Response } from 'express'
+import { Router, type Response } from 'express'
 import crypto from 'crypto'
 import db from '../db'
 import config, { type AppLanguage } from '../config'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, type AuthRequest } from '../middleware/auth'
+import { Logger } from '../services/logger'
 import { getUserQuota, formatBytes } from '../services/quota'
+import { sendServerError } from './admin/shared'
 
 const router = Router()
 
 function normalizeLanguage(language: unknown): AppLanguage {
-  return language === 'en-US' ? 'en-US' : 'zh-CN'
+  return language === 'zh-CN' ? 'zh-CN' : 'en-US'
 }
 
 function getDefaultLanguage(): AppLanguage {
@@ -19,6 +21,11 @@ async function ensureUserSettingsRow(userId: number) {
   const settings = await db.prepare('SELECT user_id FROM user_settings WHERE user_id = ?').get(userId)
   if (settings) return
   await db.prepare('INSERT INTO user_settings (user_id, language) VALUES (?, ?)').run(userId, getDefaultLanguage())
+}
+
+async function getUsername(userId: number) {
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  return user?.username || `#${userId}`
 }
 
 router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -91,8 +98,13 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
       }
     })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to load user info',
+      context: { userId: req.userId }
+    })
   }
 })
 
@@ -112,8 +124,13 @@ router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
         serverDefaultUploadConcurrency: Number(config.max_concurrent_uploads || 3)
       }
     })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to load user settings',
+      context: { userId: req.userId }
+    })
   }
 })
 
@@ -153,11 +170,18 @@ router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
     if (updates.length > 0) {
       values.push(req.userId!)
       await db.prepare(`UPDATE user_settings SET ${updates.join(', ')} WHERE user_id = ?`).run(...values)
+      const username = await getUsername(req.userId!)
+      await Logger.info('api', 'user.ts', `User ${username} updated settings`)
     }
 
     res.json({ message: '设置已更新' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to update user settings',
+      context: { userId: req.userId }
+    })
   }
 })
 
@@ -165,8 +189,13 @@ router.get('/apikeys', authMiddleware, async (req: AuthRequest, res: Response) =
   try {
     const keys = await db.prepare('SELECT id, name, key, permissions, created_at FROM api_keys WHERE user_id = ?').all(req.userId!)
     res.json({ keys })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to load API keys',
+      context: { userId: req.userId }
+    })
   }
 })
 
@@ -187,21 +216,37 @@ router.post('/apikeys', authMiddleware, async (req: AuthRequest, res: Response) 
       perms
     )
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'user.ts', `User ${username} generated API key "${name}" with permissions ${perms}`)
+
     res.json({ message: 'API Key 创建成功', key, name, permissions: perms })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to create API key',
+      context: { userId: req.userId, name: req.body?.name }
+    })
   }
 })
 
 router.delete('/apikeys/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const keyRecord = await db.prepare('SELECT name FROM api_keys WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
     const result = await db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
       return res.status(404).json({ error: 'API Key 不存在' })
     }
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'user.ts', `User ${username} deleted API key "${keyRecord?.name || req.params.id}"`)
     res.json({ message: 'API Key 已删除' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to delete API key',
+      context: { userId: req.userId, apiKeyId: req.params.id }
+    })
   }
 })
 
@@ -216,8 +261,13 @@ router.get('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respon
     `).all(req.userId!)
 
     res.json({ shares })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to load guest shares',
+      context: { userId: req.userId }
+    })
   }
 })
 
@@ -243,11 +293,14 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
     }
 
     const perms = permissions || 'read'
-    const nextLabel = label || folderPath.split('/').pop() || '根目录'
+    const nextLabel = label || folderPath.split('/').pop() || 'Guest Folder'
     const result = await db.prepare(`
       INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions)
       VALUES (?, ?, ?, ?, ?)
     `).run(req.userId!, folderPath, storagePoolId, nextLabel, perms)
+
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'user.ts', `User ${username} shared folder to guest mode in poolID:#${storagePoolId} ${folderPath}`)
 
     res.json({
       message: '已分享至访客模式',
@@ -259,15 +312,20 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
         permissions: perms
       }
     })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to create guest share',
+      context: { userId: req.userId, folderPath: req.body?.folderPath, storagePoolId: req.body?.storagePoolId }
+    })
   }
 })
 
 router.put('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { label, permissions } = req.body
-    const share = await db.prepare('SELECT id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
+    const share = await db.prepare('SELECT id, folder_path, storage_pool_id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
 
     if (!share) {
       return res.status(404).json({ error: '访客分享不存在' })
@@ -279,21 +337,37 @@ router.put('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Re
       WHERE id = ? AND user_id = ?
     `).run(label || '', permissions || 'read', req.params.id, req.userId!)
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'user.ts', `User ${username} updated guest share in poolID:#${share.storage_pool_id} ${share.folder_path}`)
+
     res.json({ message: '访客分享已更新' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to update guest share',
+      context: { userId: req.userId, shareId: req.params.id }
+    })
   }
 })
 
 router.delete('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const share = await db.prepare('SELECT folder_path, storage_pool_id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
     const result = await db.prepare('DELETE FROM guest_shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
       return res.status(404).json({ error: '访客分享不存在' })
     }
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'user.ts', `User ${username} removed guest share in poolID:#${share?.storage_pool_id || 'unknown'} ${share?.folder_path || ''}`.trim())
     res.json({ message: '访客分享已删除' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'user.ts',
+      message: 'Failed to delete guest share',
+      context: { userId: req.userId, shareId: req.params.id }
+    })
   }
 })
 

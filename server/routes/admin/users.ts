@@ -1,14 +1,14 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import db, { syncStoragePoolsFromConfig } from '../../db'
-import { authMiddleware, adminMiddleware, AuthRequest } from '../../middleware/auth'
+import { authMiddleware, adminMiddleware, type AuthRequest } from '../../middleware/auth'
 import { clearStorageCache } from '../../services/factory'
 import { getUserQuota } from '../../services/quota'
 import { sendServerError } from './shared'
 
 const router = Router()
 
-router.get('/users', authMiddleware, adminMiddleware, async (_req: AuthRequest, res) => {
+router.get('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
     const users = await db.prepare(`
       SELECT u.id, u.username, u.email, u.verified, u.role, u.banned, u.storage_quota, u.register_ip, u.last_login_ip, u.last_login_at, u.created_at,
@@ -25,7 +25,7 @@ router.get('/users', authMiddleware, adminMiddleware, async (_req: AuthRequest, 
 
     res.json({ users: usersWithUsage })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to load admin user list' })
   }
 })
 
@@ -95,7 +95,7 @@ router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReques
       }
     })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to load admin user detail' })
   }
 })
 
@@ -137,7 +137,7 @@ router.post('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, 
       user: { id: userId, username, role: role || 'user' }
     })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to create admin user' })
   }
 })
 
@@ -156,7 +156,7 @@ router.put('/users/:id/role', authMiddleware, adminMiddleware, async (req: AuthR
     await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId)
     res.json({ message: '角色已更新' })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to update user role' })
   }
 })
 
@@ -179,7 +179,7 @@ router.put('/users/:id/ban', authMiddleware, adminMiddleware, async (req: AuthRe
     await db.prepare('UPDATE users SET banned = ? WHERE id = ?').run(newBanned, userId)
     res.json({ message: newBanned ? '用户已封禁' : '用户已解封', banned: !!newBanned })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to update user ban status' })
   }
 })
 
@@ -201,7 +201,7 @@ router.put('/users/:id/password', authMiddleware, adminMiddleware, async (req: A
     await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, userId)
     res.json({ message: '密码已重置' })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to reset user password' })
   }
 })
 
@@ -216,7 +216,7 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReq
     clearStorageCache(userId)
     res.json({ message: '用户已删除' })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to delete user' })
   }
 })
 
@@ -237,7 +237,7 @@ router.put('/users/:id/quota', authMiddleware, adminMiddleware, async (req: Auth
     await db.prepare('UPDATE users SET storage_quota = ? WHERE id = ?').run(quota, userId)
     res.json({ message: '配额已更新', quota })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to update user quota' })
   }
 })
 
@@ -252,7 +252,7 @@ router.put('/users/:id/verify', authMiddleware, adminMiddleware, async (req: Aut
     await db.prepare('UPDATE users SET verified = 1 WHERE id = ?').run(userId)
     res.json({ message: '用户已验证' })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to verify user' })
   }
 })
 

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import db from '../../db'
-import { authMiddleware, adminMiddleware, AuthRequest } from '../../middleware/auth'
+import { authMiddleware, adminMiddleware, type AuthRequest } from '../../middleware/auth'
 import { sendServerError } from './shared'
 
 const router = Router()
@@ -31,7 +31,7 @@ async function getIpTableName() {
   return row?.mode === 'whitelist' ? 'ip_whitelist' : 'ip_blacklist'
 }
 
-router.get('/ip-blacklist', authMiddleware, adminMiddleware, async (_req: AuthRequest, res) => {
+router.get('/ip-blacklist', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
     const table = await getIpTableName()
     const entries = await db.prepare(`
@@ -42,7 +42,7 @@ router.get('/ip-blacklist', authMiddleware, adminMiddleware, async (_req: AuthRe
     `).all()
     res.json({ entries })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'ip-list.ts', message: 'Failed to load IP entries' })
   }
 })
 
@@ -71,7 +71,7 @@ router.post('/ip-blacklist', authMiddleware, adminMiddleware, async (req: AuthRe
       entry: { id: result.lastInsertRowid, ip_pattern: ip_pattern.trim(), reason: reason || '' }
     })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'ip-list.ts', message: 'Failed to create IP entry' })
   }
 })
 
@@ -93,16 +93,16 @@ router.delete('/ip-blacklist/:id', authMiddleware, adminMiddleware, async (req: 
     await db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id)
     res.json({ message: 'IP 条目已删除' })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'ip-list.ts', message: 'Failed to delete IP entry' })
   }
 })
 
-router.get('/ip-list/mode', authMiddleware, adminMiddleware, async (_req: AuthRequest, res) => {
+router.get('/ip-list/mode', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
     const row = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
     res.json({ mode: row?.mode || 'blacklist' })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'ip-list.ts', message: 'Failed to load IP list mode' })
   }
 })
 
@@ -122,9 +122,9 @@ router.put('/ip-list/mode', authMiddleware, adminMiddleware, async (req: AuthReq
 
     if (mode === 'whitelist') {
       const defaults = [
-        { ip: '127.0.0.1', reason: '本地回环地址' },
-        { ip: '::1', reason: 'IPv6 本地回环' },
-        { ip: 'localhost', reason: '本地主机名' }
+        { ip: '127.0.0.1', reason: 'Local loopback address' },
+        { ip: '::1', reason: 'IPv6 local loopback' },
+        { ip: 'localhost', reason: 'Local hostname' }
       ]
       const existing = new Set((await db.prepare('SELECT ip_pattern FROM ip_whitelist').all<{ ip_pattern: string }>()).map((row) => row.ip_pattern))
       const insert = db.prepare('INSERT INTO ip_whitelist (ip_pattern, reason, created_by) VALUES (?, ?, ?)')
@@ -135,9 +135,9 @@ router.put('/ip-list/mode', authMiddleware, adminMiddleware, async (req: AuthReq
       }
     }
 
-    res.json({ message: `已切换为 ${mode} 模式`, mode })
+    res.json({ message: `Switched to ${mode} mode`, mode })
   } catch (err) {
-    sendServerError(res, err)
+    await sendServerError(req, res, err, { source: 'api', fileName: 'ip-list.ts', message: 'Failed to update IP list mode' })
   }
 })
 

@@ -41,6 +41,7 @@ const themeLabelMap: Record<string, string> = {
       v-model:database-form="state.databaseForm"
       :upload-limit="state.uploadLimit"
       :max-concurrent-uploads="state.maxConcurrentUploads"
+      :log-level="state.logLevel"
       :database-saving="state.databaseSaving"
       :database-testing="state.databaseTesting"
       :database-message="state.databaseMessage"
@@ -330,6 +331,12 @@ const themeLabelMap: Record<string, string> = {
             <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.maxConcurrentUploads', 'Max concurrent uploads') }}</label>
             <input v-model="state.newMaxConcurrentUploads" type="number" min="1" max="16" class="input-field" placeholder="3" />
             <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">{{ t('admin.maxConcurrentUploadsHint', 'Enter an integer between 1 and 16') }}</p>
+          </div>
+
+          <div class="mb-4">
+            <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.logLevel', 'Log Level') }}</label>
+            <input v-model="state.newLogLevel" type="number" min="1" max="3" class="input-field" placeholder="2" />
+            <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">{{ t('admin.logLevelHint', '1 = error, 2 = info, 3 = debug') }}</p>
           </div>
 
           <div class="flex justify-end gap-3">

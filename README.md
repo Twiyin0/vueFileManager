@@ -4,14 +4,6 @@
 
 VueFileManager 是一个基于 Vue 3、Express 和 TypeScript 的文件管理系统，支持多存储池、访客分享、WebDAV、回收站、收藏、API Key、主题和插件扩展，以及可切换的运行时数据库适配层。
 
-## 当前状态
-
-- 版本：`2.0.0-beta.1`
-- 前端：Vue 3 + Vite
-- 后端：Express + TypeScript
-- 运行时数据库：`sqlite`、`mysql`、`postgres`
-- 存储后端：`local`、`upyun`、`ftp`、`s3`、`sftp`
-
 ## 核心功能
 
 - 用户注册、登录、JWT 鉴权、API Key
@@ -121,6 +113,12 @@ node dist-server/index.js
   - 单文件上传大小限制，单位 MB
 - `max_concurrent_uploads`
   - 默认最大同时上传文件数
+- `log_level`
+  - 日志级别
+  - `1 = error`
+  - `2 = info`
+  - `3 = debug`
+  - 默认值：`2`
 - `database`
   - 运行时数据库配置，支持 `sqlite`、`mysql`、`postgres`
 
@@ -128,7 +126,47 @@ node dist-server/index.js
 
 - 上传大小限制
 - 最大并发上传数
+- 日志级别
 - 数据库连接配置
+
+## 日志说明
+
+- 日志目录：`data/log/`
+- 日志文件按天写入
+- 文件名格式：`year-month-day_number.log`
+  - 示例：`2026-06-14_1.log`
+- 默认情况下，同一天持续追加到当天编号文件，不再按小时或分钟拆分
+- 日志级别由 `config.yml` 中的 `log_level` 控制
+  - `1`：仅记录 `error`
+  - `2`：记录 `error` 和 `info`
+  - `3`：记录 `error`、`info` 和 `debug`
+- 日志内容固定使用英文输出，不走 i18n
+
+当前日志来源标签：
+
+- `[api]`
+- `[web]`
+- `[webdav]`
+- `[system]`
+
+日志格式：
+
+```text
+[source][level]YYYY-MM-DD_HH:mm:ss.SSS(file.ts): message
+```
+
+示例：
+
+```text
+[web][info]2026-06-14_16:17:18.234(upload-routes.ts): User Admin uploaded a file in poolID:#1 /test/text/test.txt
+```
+
+错误日志会额外包含：
+
+- 错误名称
+- 错误消息
+- 堆栈信息
+- 可用的上下文信息
 
 ## 语言设置说明
 
@@ -162,6 +200,7 @@ DEFAULT_LANGUAGE=zh-CN
   - `public/i18n/zh-CN.yml`
   - `public/i18n/en-US.yml`
 - 页面中通过 `useI18n().t('key.path')` 调用
+- 后端i18n在文件`service/server-i18n.ts`暂未开放外部yml配置
 - 用户语言保存在账户设置中，而不是 `config.yml`
 
 新增文案时建议：

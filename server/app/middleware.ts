@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import config from '../config'
 import { ipBlacklistMiddleware } from '../middleware/auth'
+import { registerServerI18nMiddleware } from '../services/server-i18n'
 import type { AppContext } from './types'
 
 const SENSITIVE_FILES = ['.env', '.env.example', 'config.yml', 'package.json', 'tsconfig.json', '.gitignore']
@@ -57,6 +58,7 @@ export function registerAppMiddleware(app: express.Express, context: AppContext)
   })
   app.use(express.json({ limit: `${config.upload_limit}mb` }))
   app.use(express.urlencoded({ extended: true, limit: `${config.upload_limit}mb` }))
+  app.use(registerServerI18nMiddleware())
 
   app.use('/api', ipBlacklistMiddleware)
 

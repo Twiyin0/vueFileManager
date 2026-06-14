@@ -1,14 +1,14 @@
-import { Router, Response } from 'express'
-import fs from 'fs/promises'
+import { Router, type Response } from 'express'
 import fsSync from 'fs'
 import db from '../db'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
-import { flexibleAuth, ApiKeyRequest, requirePermission } from '../middleware/apikey'
+import { authMiddleware, type AuthRequest } from '../middleware/auth'
+import { flexibleAuth, type ApiKeyRequest, requirePermission } from '../middleware/apikey'
 import { getStorage, getStorageByPoolId } from '../services/factory'
+import { Logger } from '../services/logger'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
 import { buildTrashPath, moveToTrash } from '../services/trash'
+import { sendServerError } from './admin/shared'
 import {
-  buildDirectUrl,
   cleanupExpiredUploads,
   getStorageForRequest,
   isJunkFile,
@@ -24,6 +24,18 @@ const router = Router()
 
 registerUploadRoutes(router)
 registerOfflineTaskRoutes(router)
+
+async function getUsername(userId: number) {
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  return user?.username || `#${userId}`
+}
+
+function getPoolLabel(poolId: unknown) {
+  if (poolId === undefined || poolId === null || poolId === '') {
+    return 'default'
+  }
+  return String(poolId)
+}
 
 router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
   try {
@@ -75,8 +87,13 @@ router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
     }
 
     res.json({ files: filesWithPool, readme })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to list files',
+      context: { userId: req.userId, poolId: req.query.poolId, path: req.query.path }
+    })
   }
 })
 
@@ -92,8 +109,13 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
     const info = await storage.info(filePath)
     const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
     res.json({ info: withDirectUrl(req, { ...info, poolId: resolvedPoolId }, resolvedPoolId) })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to load file info',
+      context: { userId: req.userId, path: req.query.path, poolId: req.query.poolId }
+    })
   }
 })
 
@@ -106,11 +128,19 @@ router.get('/download', flexibleAuth, requirePermission('read'), async (req: Api
     }
     const data = await storage.download(filePath)
     const fileName = filePath.split('/').pop() || 'download'
+    const username = await getUsername(req.userId!)
+    const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
+    await Logger.info('api', 'files.ts', `User ${username} downloaded a file in poolID:#${resolvedPoolId || getPoolLabel(req.query.poolId)} ${filePath}`)
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
     res.setHeader('Content-Type', 'application/octet-stream')
     res.send(data)
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to download file',
+      context: { userId: req.userId, path: req.query.path, poolId: req.query.poolId }
+    })
   }
 })
 
@@ -123,39 +153,34 @@ const handleDelete = async (req: ApiKeyRequest, res: Response) => {
       return res.status(400).json({ error: '缺少路径' })
     }
 
+    const username = await getUsername(req.userId!)
+    const poolId = (req.body?.poolId as string) || (req.query.poolId as string)
+    const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
+
     if (permanent) {
       await storage.remove(filePath)
+      await Logger.info('api', 'files.ts', `User ${username} permanently deleted a file from poolID:#${resolvedPoolId || getPoolLabel(poolId)} ${filePath}`)
     } else {
       const fileName = filePath.split('/').pop() || ''
-      const poolId = (req.body?.poolId as string) || (req.query.poolId as string)
-      let storagePoolId: number
-      if (poolId) {
-        storagePoolId = parseInt(poolId)
-      } else {
-        const defaultPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any
-        storagePoolId = defaultPool?.id || 1
-      }
-
+      const storagePoolId = resolvedPoolId || 1
       const stat = await storage.info(filePath).catch(() => ({ type: 'file' as const }))
       const result = await db.prepare('INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id) VALUES (?, ?, ?, ?, ?)')
         .run(req.userId!, filePath, fileName, stat.type, storagePoolId)
 
       const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
       await moveToTrash(storage, filePath, trashPath, stat.type)
+      await Logger.info('api', 'files.ts', `User ${username} delete a file from poolID:#${storagePoolId} ${filePath}`)
       return res.json({ message: '删除成功' })
-      try {
-        const data = await storage.download(filePath)
-        await storage.upload(trashPath, data)
-      } catch {
-        // 文件夹不做实体备份
-      }
-
-      await storage.remove(filePath)
     }
 
     res.json({ message: '删除成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to delete file',
+      context: { userId: req.userId, path: req.body?.path || req.query.path, poolId: req.body?.poolId || req.query.poolId }
+    })
   }
 }
 
@@ -171,13 +196,10 @@ router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (r
 
     const storage = getStorageForRequest(req)
     const poolId = req.body.poolId as number
-    let storagePoolId = poolId
-    if (!storagePoolId) {
-      const defaultPool = await db.prepare('SELECT id FROM storage_pools WHERE user_id = ? AND is_default = 1').get(req.userId!) as any
-      storagePoolId = defaultPool?.id || 1
-    }
-
+    const storagePoolId = (await resolvePoolId(req.userId!, poolId)) || 1
+    const username = await getUsername(req.userId!)
     const errors: string[] = []
+
     for (const filePath of paths) {
       try {
         if (permanent) {
@@ -189,25 +211,21 @@ router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (r
             .run(req.userId!, filePath, fileName, stat.type, storagePoolId)
           const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
           await moveToTrash(storage, filePath, trashPath, stat.type)
-          continue
-
-          try {
-            const data = await storage.download(filePath)
-            await storage.upload(trashPath, data)
-          } catch {
-            // 文件夹不做实体备份
-          }
-
-          await storage.remove(filePath)
         }
       } catch (err: any) {
         errors.push(`${filePath}: ${err.message}`)
       }
     }
 
+    await Logger.info('api', 'files.ts', `User ${username} batch deleted ${paths.length} item(s) from poolID:#${storagePoolId}`)
     res.json({ message: '批量删除完成', errors })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to batch delete files',
+      context: { userId: req.userId, poolId: req.body?.poolId, count: Array.isArray(req.body?.paths) ? req.body.paths.length : 0 }
+    })
   }
 })
 
@@ -220,6 +238,8 @@ router.post('/batch-move', flexibleAuth, requirePermission('write'), async (req:
 
     const storage = getStorageForRequest(req)
     const errors: string[] = []
+    const username = await getUsername(req.userId!)
+    const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
 
     for (const srcPath of paths) {
       try {
@@ -231,9 +251,15 @@ router.post('/batch-move', flexibleAuth, requirePermission('write'), async (req:
       }
     }
 
+    await Logger.info('api', 'files.ts', `User ${username} batch moved ${paths.length} item(s) in poolID:#${poolId || getPoolLabel(req.body?.poolId)} to ${dest}`)
     res.json({ message: '批量移动完成', errors })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to batch move files',
+      context: { userId: req.userId, dest: req.body?.dest, count: Array.isArray(req.body?.paths) ? req.body.paths.length : 0 }
+    })
   }
 })
 
@@ -245,9 +271,17 @@ router.post('/mkdir', flexibleAuth, requirePermission('write'), async (req: ApiK
       return res.status(400).json({ error: '缺少文件夹路径' })
     }
     await storage.mkdir(dirPath)
+    const username = await getUsername(req.userId!)
+    const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
+    await Logger.info('api', 'files.ts', `User ${username} created a directory in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${dirPath}`)
     res.json({ message: '文件夹创建成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to create directory',
+      context: { userId: req.userId, path: req.body?.path, poolId: req.body?.poolId }
+    })
   }
 })
 
@@ -261,9 +295,17 @@ router.post('/rename', flexibleAuth, requirePermission('write'), async (req: Api
 
     const newName = rawNewName.normalize('NFC')
     await storage.rename(filePath, newName)
+    const username = await getUsername(req.userId!)
+    const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
+    await Logger.info('api', 'files.ts', `User ${username} renamed a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${filePath} -> ${newName}`)
     res.json({ message: '重命名成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to rename file',
+      context: { userId: req.userId, path: req.body?.path, newName: req.body?.newName, poolId: req.body?.poolId }
+    })
   }
 })
 
@@ -275,9 +317,17 @@ router.post('/move', flexibleAuth, requirePermission('write'), async (req: ApiKe
       return res.status(400).json({ error: '缺少参数' })
     }
     await storage.move(src, dest)
+    const username = await getUsername(req.userId!)
+    const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
+    await Logger.info('api', 'files.ts', `User ${username} moved a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${src} -> ${dest}`)
     res.json({ message: '移动成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to move file',
+      context: { userId: req.userId, src: req.body?.src, dest: req.body?.dest, poolId: req.body?.poolId }
+    })
   }
 })
 
@@ -289,9 +339,17 @@ router.post('/copy', flexibleAuth, requirePermission('write'), async (req: ApiKe
       return res.status(400).json({ error: '缺少参数' })
     }
     await storage.copy(src, dest)
+    const username = await getUsername(req.userId!)
+    const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
+    await Logger.info('api', 'files.ts', `User ${username} copied a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${src} -> ${dest}`)
     res.json({ message: '复制成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to copy file',
+      context: { userId: req.userId, src: req.body?.src, dest: req.body?.dest, poolId: req.body?.poolId }
+    })
   }
 })
 
@@ -312,9 +370,16 @@ router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req:
       await destStorage.upload(targetPath, data)
     })
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'files.ts', `User ${username} cross-copied ${srcPaths.length} item(s) from poolID:#${srcPoolId} to poolID:#${destPoolId}`)
     res.json({ message: '跨池复制完成', errors })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to cross-copy files',
+      context: { userId: req.userId, srcPoolId: req.body?.srcPoolId, destPoolId: req.body?.destPoolId, count: Array.isArray(req.body?.srcPaths) ? req.body.srcPaths.length : 0 }
+    })
   }
 })
 
@@ -336,9 +401,16 @@ router.post('/cross-move', flexibleAuth, requirePermission('write'), async (req:
       await srcStorage.remove(srcPath)
     })
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'files.ts', `User ${username} cross-moved ${srcPaths.length} item(s) from poolID:#${srcPoolId} to poolID:#${destPoolId}`)
     res.json({ message: '跨池移动完成', errors })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to cross-move files',
+      context: { userId: req.userId, srcPoolId: req.body?.srcPoolId, destPoolId: req.body?.destPoolId, count: Array.isArray(req.body?.srcPaths) ? req.body.srcPaths.length : 0 }
+    })
   }
 })
 
@@ -358,8 +430,13 @@ router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKe
       .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
       .map((file: any) => withDirectUrl(req, { ...file, poolId: resolvedPoolId }, resolvedPoolId))
     res.json({ files: normalized })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to search files',
+      context: { userId: req.userId, poolId: req.query.poolId, path: req.query.path, keyword: req.query.q }
+    })
   }
 })
 
@@ -441,7 +518,6 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
     }
 
     const etag = `"${data.length}"`
-
     if (req.headers['if-none-match'] === etag) {
       res.status(304).end()
       return
@@ -452,8 +528,13 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
     res.setHeader('ETag', etag)
     res.setHeader('Cache-Control', 'public, max-age=3600')
     res.send(data)
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to preview file',
+      context: { userId: req.userId, path: req.query.path, poolId: req.query.poolId }
+    })
   }
 })
 
@@ -474,17 +555,25 @@ router.post('/download-zip', flexibleAuth, requirePermission('read'), async (req
         const fileName = filePath.split('/').pop() || 'file'
         zip.file(fileName, data)
       } catch {
-        // 跳过无法下载的文件
+        // skip files that cannot be downloaded
       }
     }
 
     const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } })
+    const username = await getUsername(req.userId!)
+    const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
+    await Logger.info('api', 'files.ts', `User ${username} downloaded ZIP archive with ${paths.length} item(s) from poolID:#${poolId || getPoolLabel(req.body?.poolId)}`)
     res.setHeader('Content-Type', 'application/zip')
     res.setHeader('Content-Disposition', 'attachment; filename="download.zip"')
     res.setHeader('Content-Length', buffer.length)
     res.send(buffer)
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to download ZIP archive',
+      context: { userId: req.userId, count: Array.isArray(req.body?.paths) ? req.body.paths.length : 0, poolId: req.body?.poolId }
+    })
   }
 })
 
@@ -521,8 +610,13 @@ router.get('/storage-stats', authMiddleware, async (req: AuthRequest, res: Respo
 
     const stats = await calculateStats('')
     res.json(stats)
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'Failed to calculate storage stats',
+      context: { userId: req.userId, poolId: req.query.poolId }
+    })
   }
 })
 

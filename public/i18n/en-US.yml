@@ -294,6 +294,9 @@ admin:
   uploadLimitHint: Enter an integer between 1 and 10240
   maxConcurrentUploads: Max concurrent uploads
   maxConcurrentUploadsHint: Enter an integer between 1 and 16
+  logLevel: Log Level
+  logLevelHint: 1 = error, 2 = info, 3 = debug
+  logLevelSummary: 1 = error, 2 = info, 3 = debug
   database: Database Configuration
   testing: Testing...
   testConnection: Test Connection
@@ -339,6 +342,7 @@ admin:
   databaseSaved: Database configuration saved. Runtime connections switch only after a manual restart.
   uploadLimitValidation: Enter an upload limit between 1 and 10240
   concurrencyValidation: Enter a concurrency value between 1 and 16
+  logLevelValidation: Enter a log level between 1 and 3
   saving: Saving...
   users: User Management
   createUser: Create User

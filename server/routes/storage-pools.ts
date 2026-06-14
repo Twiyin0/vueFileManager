@@ -1,9 +1,11 @@
-import { Router, Response } from 'express'
+import { Router, type Response } from 'express'
 import path from 'path'
 import db from '../db'
 import config from '../config'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, type AuthRequest } from '../middleware/auth'
 import { clearStorageCache } from '../services/factory'
+import { Logger } from '../services/logger'
+import { sendServerError } from './admin/shared'
 
 const router = Router()
 
@@ -53,6 +55,11 @@ function validateStorageConfig(storageType: string, storageConfig: Record<string
   }
 }
 
+async function getUsername(userId: number) {
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  return user?.username || `#${userId}`
+}
+
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const pools = await db.prepare(`
@@ -88,8 +95,13 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     })
 
     res.json({ pools: safePools })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to list storage pools',
+      context: { userId: req.userId }
+    })
   }
 })
 
@@ -119,6 +131,9 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     clearStorageCache(req.userId!)
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'storage-pools.ts', `User ${username} created storage pool "${name}" type=${storageType}`)
+
     res.json({
       message: '存储池创建成功',
       pool: {
@@ -130,7 +145,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     })
   } catch (err: any) {
-    res.status(err.message === '不支持的存储类型' ? 400 : 500).json({ error: err.message })
+    if (err instanceof Error && err.message === '不支持的存储类型') {
+      return res.status(400).json({ error: err.message })
+    }
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to create storage pool',
+      context: { userId: req.userId, name: req.body?.name, storageType: req.body?.storageType }
+    })
   }
 })
 
@@ -144,26 +167,27 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: '存储池不存在' })
     }
 
-    const mergedConfig = nextConfig ? { ...JSON.parse(pool.config || '{}'), ...nextConfig } : undefined
+    const existingConfig = JSON.parse(pool.config || '{}')
+    const mergedConfig = nextConfig ? { ...existingConfig, ...nextConfig } : undefined
     if (storageType && mergedConfig) {
       validateStorageConfig(storageType, mergedConfig)
     }
 
     if (mergedConfig) {
       if (nextConfig.upyunPassword === '******' || !nextConfig.upyunPassword) {
-        mergedConfig.upyunPassword = JSON.parse(pool.config || '{}').upyunPassword
+        mergedConfig.upyunPassword = existingConfig.upyunPassword
       }
       if (nextConfig.ftpPassword === '******' || !nextConfig.ftpPassword) {
-        mergedConfig.ftpPassword = JSON.parse(pool.config || '{}').ftpPassword
+        mergedConfig.ftpPassword = existingConfig.ftpPassword
       }
       if (nextConfig.s3SecretAccessKey === '******' || !nextConfig.s3SecretAccessKey) {
-        mergedConfig.s3SecretAccessKey = JSON.parse(pool.config || '{}').s3SecretAccessKey
+        mergedConfig.s3SecretAccessKey = existingConfig.s3SecretAccessKey
       }
       if (nextConfig.sftpPassword === '******' || !nextConfig.sftpPassword) {
-        mergedConfig.sftpPassword = JSON.parse(pool.config || '{}').sftpPassword
+        mergedConfig.sftpPassword = existingConfig.sftpPassword
       }
       if (nextConfig.sftpPrivateKey === '*** hidden ***' || !nextConfig.sftpPrivateKey) {
-        mergedConfig.sftpPrivateKey = JSON.parse(pool.config || '{}').sftpPrivateKey
+        mergedConfig.sftpPrivateKey = existingConfig.sftpPrivateKey
       }
     }
 
@@ -189,9 +213,17 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       clearStorageCache(req.userId!)
     }
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'storage-pools.ts', `User ${username} updated storage pool #${id}`)
+
     res.json({ message: '存储池更新成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to update storage pool',
+      context: { userId: req.userId, poolId: req.params.id, name: req.body?.name, storageType: req.body?.storageType }
+    })
   }
 })
 
@@ -209,9 +241,17 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     await db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
     clearStorageCache(req.userId!)
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'storage-pools.ts', `User ${username} deleted storage pool #${id} "${pool.name}"`)
+
     res.json({ message: '存储池删除成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to delete storage pool',
+      context: { userId: req.userId, poolId: req.params.id }
+    })
   }
 })
 
@@ -248,6 +288,8 @@ router.post('/batch-delete', authMiddleware, async (req: AuthRequest, res: Respo
 
     if (deletedIds.length > 0) {
       clearStorageCache(req.userId!)
+      const username = await getUsername(req.userId!)
+      await Logger.info('api', 'storage-pools.ts', `User ${username} batch deleted ${deletedIds.length} storage pool(s)`)
     }
 
     res.json({
@@ -255,8 +297,13 @@ router.post('/batch-delete', authMiddleware, async (req: AuthRequest, res: Respo
       deletedIds,
       errors
     })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to batch delete storage pools',
+      context: { userId: req.userId, ids: req.body?.ids }
+    })
   }
 })
 
@@ -272,9 +319,17 @@ router.post('/:id/set-default', authMiddleware, async (req: AuthRequest, res: Re
     await db.prepare('UPDATE storage_pools SET is_default = 1 WHERE id = ? AND user_id = ?').run(id, req.userId!)
     clearStorageCache(req.userId!)
 
+    const username = await getUsername(req.userId!)
+    await Logger.info('api', 'storage-pools.ts', `User ${username} set storage pool #${id} as default`)
+
     res.json({ message: '默认存储池设置成功' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to set default storage pool',
+      context: { userId: req.userId, poolId: req.params.id }
+    })
   }
 })
 
@@ -294,9 +349,9 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
       const localPath = path.resolve(config.storage_root || './uploads', user?.username || '')
       try {
         await fs.access(localPath)
-        return res.json({ success: true, message: `本地路径可访问: ${localPath}` })
+        return res.json({ success: true, message: `Local path is accessible: ${localPath}` })
       } catch {
-        return res.json({ success: false, message: `本地路径不可访问: ${localPath}` })
+        return res.json({ success: false, message: `Local path is not accessible: ${localPath}` })
       }
     }
 
@@ -310,9 +365,9 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
           poolConfig.upyunEndpoint || 'v0.api.upyun.com'
         )
         await storage.list('/')
-        return res.json({ success: true, message: '又拍云连接成功' })
+        return res.json({ success: true, message: 'UpYun connection successful' })
       } catch (err: any) {
-        return res.json({ success: false, message: `又拍云连接失败: ${err.message}` })
+        return res.json({ success: false, message: `UpYun connection failed: ${err.message}` })
       }
     }
 
@@ -321,9 +376,9 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
       try {
         const storage = new FtpStorage(poolConfig)
         await storage.list('')
-        return res.json({ success: true, message: 'FTP 连接成功' })
+        return res.json({ success: true, message: 'FTP connection successful' })
       } catch (err: any) {
-        return res.json({ success: false, message: `FTP 连接失败: ${err.message}` })
+        return res.json({ success: false, message: `FTP connection failed: ${err.message}` })
       }
     }
 
@@ -332,9 +387,9 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
       try {
         const storage = new SftpStorage(poolConfig)
         await storage.list('')
-        return res.json({ success: true, message: 'SFTP 连接成功' })
+        return res.json({ success: true, message: 'SFTP connection successful' })
       } catch (err: any) {
-        return res.json({ success: false, message: `SFTP 连接失败: ${err.message}` })
+        return res.json({ success: false, message: `SFTP connection failed: ${err.message}` })
       }
     }
 
@@ -343,15 +398,20 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
       try {
         const storage = new S3Storage(poolConfig)
         await storage.list('')
-        return res.json({ success: true, message: 'S3/OSS 连接成功' })
+        return res.json({ success: true, message: 'S3/OSS connection successful' })
       } catch (err: any) {
-        return res.json({ success: false, message: `S3/OSS 连接失败: ${err.message}` })
+        return res.json({ success: false, message: `S3/OSS connection failed: ${err.message}` })
       }
     }
 
-    res.json({ success: false, message: '不支持的存储类型' })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+    res.json({ success: false, message: 'Unsupported storage type' })
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'storage-pools.ts',
+      message: 'Failed to test storage pool',
+      context: { userId: req.userId, poolId: req.params.id }
+    })
   }
 })
 

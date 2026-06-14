@@ -1,8 +1,10 @@
-import { NextFunction, Request, Response } from 'express'
+import type { NextFunction, Request, Response } from 'express'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import db from '../db'
 import config from '../config'
+import { Logger } from '../services/logger'
+import { getRequestTranslator } from '../services/server-i18n'
 
 const JWT_SECRET = config.server.jwt_secret
 
@@ -17,13 +19,15 @@ function isWebDavRequest(req: Request) {
 }
 
 function sendUnauthorized(req: Request, res: Response, error: string) {
+  const t = getRequestTranslator(req)
+  const translated = t(error)
   if (isWebDavRequest(req)) {
     res.setHeader('WWW-Authenticate', 'Basic realm="VueFileManager WebDAV"')
     res.setHeader('DAV', '1')
     res.setHeader('MS-Author-Via', 'DAV')
-    return res.status(401).type('text/plain; charset=utf-8').send(error)
+    return res.status(401).type('text/plain; charset=utf-8').send(translated)
   }
-  return res.status(401).json({ error })
+  return res.status(401).json({ error: translated })
 }
 
 async function authenticateWithBasicAuth(req: ApiKeyRequest) {
@@ -49,6 +53,7 @@ async function authenticateWithBasicAuth(req: ApiKeyRequest) {
       userId: user.id as number,
       userRole: user.role as string,
       permissions: ['read', 'write', 'delete'],
+      username
     }
   } catch {
     return null
@@ -58,12 +63,13 @@ async function authenticateWithBasicAuth(req: ApiKeyRequest) {
 export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFunction) {
   ;(async () => {
     const apiKey = req.headers['x-api-key'] as string
+    const t = getRequestTranslator(req)
     if (!apiKey) {
       return sendUnauthorized(req, res, '缺少 API Key')
     }
 
     const keyRecord = await db.prepare(`
-      SELECT ak.*, u.role, u.banned
+      SELECT ak.*, u.role, u.banned, u.username
       FROM api_keys ak
       JOIN users u ON ak.user_id = u.id
       WHERE ak.key = ?
@@ -74,22 +80,23 @@ export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFu
     }
 
     if (keyRecord.banned) {
-      return res.status(403).json({ error: '账号已被封禁' })
+      return res.status(403).json({ error: t('账号已被封禁') })
     }
 
     req.userId = keyRecord.user_id
     req.userRole = keyRecord.role
     req.apiKeyPermissions = keyRecord.permissions.split(',').map((p: string) => p.trim())
     return next()
-  })().catch((err: any) => {
-    res.status(500).json({ error: err.message || 'API Key 认证失败' })
+  })().catch(async (err: any) => {
+    await Logger.error('api', 'apikey.ts', 'API key authentication failed', err)
+    res.status(500).json({ error: getRequestTranslator(req)(err.message || 'API Key 认证失败') })
   })
 }
 
 export function requirePermission(permission: string) {
   return (req: ApiKeyRequest, res: Response, next: NextFunction) => {
     if (req.apiKeyPermissions && !req.apiKeyPermissions.includes(permission)) {
-      return res.status(403).json({ error: `API Key 缺少 ${permission} 权限` })
+      return res.status(403).json({ error: getRequestTranslator(req)(`API Key 缺少 ${permission} 权限`) })
     }
     next()
   }
@@ -120,7 +127,7 @@ export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFuncti
           return sendUnauthorized(req, res, '用户不存在')
         }
         if (user.banned) {
-          return res.status(403).json({ error: '账号已被封禁' })
+          return res.status(403).json({ error: getRequestTranslator(req)('账号已被封禁') })
         }
         req.userId = user.id
         req.userRole = user.role
@@ -132,7 +139,8 @@ export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFuncti
     }
 
     return sendUnauthorized(req, res, '未认证')
-  })().catch((err: any) => {
-    res.status(500).json({ error: err.message || '认证失败' })
+  })().catch(async (err: any) => {
+    await Logger.error('api', 'apikey.ts', 'Flexible authentication failed', err)
+    res.status(500).json({ error: getRequestTranslator(req)(err.message || '认证失败') })
   })
 }

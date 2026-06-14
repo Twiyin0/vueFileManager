@@ -294,6 +294,9 @@ admin:
   uploadLimitHint: 请输入 1 到 10240 之间的整数
   maxConcurrentUploads: 最大同时上传文件数
   maxConcurrentUploadsHint: 请输入 1 到 16 之间的整数
+  logLevel: 日志级别
+  logLevelHint: 1 = error，2 = info，3 = debug
+  logLevelSummary: 1 = error，2 = info，3 = debug
   database: 数据库配置
   testing: 测试中...
   testConnection: 测试连接
@@ -339,6 +342,7 @@ admin:
   databaseSaved: 数据库配置已保存。仅当你手动重启服务时，运行中的数据库连接才会切换。
   uploadLimitValidation: 请输入 1 到 10240 之间的上传限制
   concurrencyValidation: 请输入 1 到 16 之间的并发数
+  logLevelValidation: 请输入 1 到 3 之间的日志级别
   saving: 保存中...
   users: 用户管理
   createUser: 创建用户

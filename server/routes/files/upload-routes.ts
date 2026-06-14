@@ -2,8 +2,9 @@ import type { Router, Response } from 'express'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
-import { flexibleAuth, ApiKeyRequest, requirePermission } from '../../middleware/apikey'
+import { flexibleAuth, type ApiKeyRequest, requirePermission } from '../../middleware/apikey'
 import { getStorage, getStorageByPoolId } from '../../services/factory'
+import { Logger } from '../../services/logger'
 import {
   UPLOAD_TEMP_DIR,
   RESUMABLE_UPLOAD_TTL_MS,
@@ -22,6 +23,7 @@ import {
   writeUploadMeta,
 } from './shared'
 import db from '../../db'
+import { sendServerError } from '../admin/shared'
 
 async function checkLocalQuota(userId: number, resolvedPoolId: number | undefined, size: number) {
   const pool = await db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(resolvedPoolId) as any
@@ -32,6 +34,11 @@ async function checkLocalQuota(userId: number, resolvedPoolId: number | undefine
   const { checkQuota } = await import('../../services/quota')
   const quotaCheck = await checkQuota(userId, size)
   return { ...quotaCheck, pool }
+}
+
+async function getUsername(userId: number) {
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  return user?.username || `#${userId}`
 }
 
 export function registerUploadRoutes(router: Router) {
@@ -54,10 +61,18 @@ export function registerUploadRoutes(router: Router) {
       const filePath = dirPath ? `${dirPath}/${normalizedName}` : normalizedName
       await storage.upload(filePath, req.file.buffer)
 
+      const username = await getUsername(req.userId!)
+      await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
+
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
       res.json({ message: '上传成功', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to upload file',
+        context: { userId: req.userId, poolId: req.query.poolId || req.body?.poolId, path: req.query.path, fileName: req.file?.originalname }
+      })
     }
   })
 
@@ -80,10 +95,19 @@ export function registerUploadRoutes(router: Router) {
         storage.upload(filePath, buffer),
         new Promise((_, reject) => setTimeout(() => reject(new Error('保存超时')), 30000)),
       ])
+
+      const username = await getUsername(req.userId!)
+      const poolId = await resolvePoolId(req.userId!, req.body?.poolId || req.query.poolId)
+      await Logger.info('api', 'upload-routes.ts', `User ${username} updated file content in poolID:#${poolId || 'default'} ${filePath}`)
+
       res.json({ success: true, path: filePath })
-    } catch (err: any) {
-      console.error('Write error:', err.message)
-      res.status(500).json({ error: err.message || '保存失败' })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'api',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to write file content',
+        context: { userId: req.userId, path: req.body?.path, poolId: req.body?.poolId || req.query.poolId }
+      })
     }
   })
 
@@ -159,6 +183,9 @@ export function registerUploadRoutes(router: Router) {
           throw new Error('上传已取消')
         }
 
+        const username = await getUsername(req.userId!)
+        await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
+
         const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
         return res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
       }
@@ -214,13 +241,21 @@ export function registerUploadRoutes(router: Router) {
 
       await fs.unlink(tempPath).catch(() => {})
 
+      const username = await getUsername(req.userId!)
+      await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
+
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
       res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
     } catch (err: any) {
       if (err.message === '上传已取消') {
         return res.status(499).json({ error: err.message })
       }
-      res.status(500).json({ error: err.message })
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to stream upload file',
+        context: { userId: req.userId, fileName: req.headers['x-file-name'], poolId: req.headers['x-pool-id'], dirPath: req.headers['x-dir-path'] }
+      })
     } finally {
       if (fileHandle) await fileHandle.close().catch(() => {})
       if (tempPath) await fs.unlink(tempPath).catch(() => {})
@@ -256,8 +291,13 @@ export function registerUploadRoutes(router: Router) {
       }))
 
       res.json({ uploadId, message: '分片上传已初始化' })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to initialize chunk upload',
+        context: { userId: req.userId, fileName: req.body?.fileName, poolId: req.body?.poolId }
+      })
     }
   })
 
@@ -316,8 +356,13 @@ export function registerUploadRoutes(router: Router) {
       await writeUploadMeta(metaPath, meta)
 
       res.json({ message: '分片上传成功', partIndex, uploadedParts: meta.uploadedParts })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to upload chunk',
+        context: { userId: req.userId, uploadId: req.params.uploadId }
+      })
     }
   })
 
@@ -349,8 +394,13 @@ export function registerUploadRoutes(router: Router) {
         updatedAt: meta.updatedAt,
         expiresAt: (meta.updatedAt || meta.createdAt) + RESUMABLE_UPLOAD_TTL_MS
       })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to load upload status',
+        context: { userId: req.userId, uploadId: req.params.uploadId }
+      })
     }
   })
 
@@ -394,10 +444,18 @@ export function registerUploadRoutes(router: Router) {
 
       await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})
 
+      const username = await getUsername(req.userId!)
+      await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
+
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
       res.json({ message: '分片上传完成', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to complete chunk upload',
+        context: { userId: req.userId, uploadId: req.params.uploadId }
+      })
     }
   })
 
@@ -417,8 +475,13 @@ export function registerUploadRoutes(router: Router) {
 
       await removeUploadTask(uploadId)
       res.json({ message: '上传缓存已清理' })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+    } catch (err) {
+      await sendServerError(req, res, err, {
+        source: 'web',
+        fileName: 'upload-routes.ts',
+        message: 'Failed to clear upload cache',
+        context: { userId: req.userId, uploadId: req.params.uploadId }
+      })
     }
   })
 }

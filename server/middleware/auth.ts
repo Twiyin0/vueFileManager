@@ -1,7 +1,9 @@
-import { Request, Response, NextFunction } from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import db from '../db'
 import config from '../config'
+import { Logger } from '../services/logger'
+import { getRequestTranslator } from '../services/server-i18n'
 
 export function getClientIp(req: Request): string {
   const forwarded = req.headers['x-forwarded-for']
@@ -74,6 +76,7 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
       const cleanIp = clientIp.replace(/^::ffff:/, '')
       const configRow = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
       const mode = configRow?.mode || 'blacklist'
+      const t = getRequestTranslator(req)
 
       if (mode === 'whitelist') {
         if (cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost') {
@@ -89,7 +92,7 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
             return next()
           }
         }
-        return res.status(403).json({ error: 'IP 不在白名单中' })
+        return res.status(403).json({ error: t('IP 不在白名单中') })
       }
 
       if (!state.hasBlacklist) {
@@ -99,17 +102,17 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
       const entries = await db.prepare('SELECT ip_pattern FROM ip_blacklist').all<{ ip_pattern: string }>()
       for (const entry of entries) {
         if (matchIp(clientIp, entry.ip_pattern)) {
-          return res.status(403).json({ error: 'IP 已被封禁' })
+          return res.status(403).json({ error: t('IP 已被封禁') })
         }
       }
 
       return next()
     } catch (err: any) {
-      console.error('[ipBlacklistMiddleware] fallback to allow request:', err?.message || err)
+      await Logger.error('system', 'auth.ts', 'IP list middleware fallback to allow request', err)
       return next()
     }
-  })().catch((err: any) => {
-    console.error('[ipBlacklistMiddleware] unexpected failure:', err?.message || err)
+  })().catch(async (err: any) => {
+    await Logger.error('system', 'auth.ts', 'IP list middleware unexpected failure', err)
     return next()
   })
 }
@@ -123,8 +126,9 @@ export interface AuthRequest extends Request {
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '')
+  const t = getRequestTranslator(req)
   if (!token) {
-    return res.status(401).json({ error: '未登录' })
+    return res.status(401).json({ error: t('未登录') })
   }
 
   ;(async () => {
@@ -132,25 +136,27 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
       const user = await db.prepare('SELECT id, role, banned FROM users WHERE id = ?').get(decoded.userId) as any
       if (!user) {
-        return res.status(401).json({ error: '用户不存在' })
+        return res.status(401).json({ error: t('用户不存在') })
       }
       if (user.banned) {
-        return res.status(403).json({ error: '账号已被封禁' })
+        return res.status(403).json({ error: t('账号已被封禁') })
       }
       req.userId = user.id
       req.userRole = user.role
       return next()
     } catch {
-      return res.status(401).json({ error: 'Token 无效或已过期' })
+      return res.status(401).json({ error: t('Token 无效或已过期') })
     }
-  })().catch((err: any) => {
-    res.status(500).json({ error: err.message || '认证失败' })
+  })().catch(async (err: any) => {
+    await Logger.error('api', 'auth.ts', 'Authentication middleware failed', err)
+    res.status(500).json({ error: t(err.message || '认证失败') })
   })
 }
 
 export function adminMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+  const t = getRequestTranslator(req)
   if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: '需要管理员权限' })
+    return res.status(403).json({ error: t('需要管理员权限') })
   }
   next()
 }

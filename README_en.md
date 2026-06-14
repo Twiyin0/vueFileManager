@@ -116,23 +116,89 @@ Main config file: `config.yml`
 
 Important fields:
 
-- `language`
-  - Supported values: `zh-CN`, `en-US`
-  - Default: `zh-CN`
-  - Controls the default UI language
 - `upload_limit`
   - Single file upload limit in MB
 - `max_concurrent_uploads`
   - Default max number of concurrent uploads
+- `log_level`
+  - Log verbosity level
+  - `1 = error`
+  - `2 = info`
+  - `3 = debug`
+  - Default: `2`
 - `database`
   - Runtime database config for `sqlite`, `mysql`, and `postgres`
 
 Admins can also update these from the admin panel:
 
-- Default language
 - Upload limit
 - Max concurrent uploads
+- Log level
 - Database connection settings
+
+## Language Settings
+
+- `config.yml` no longer stores the UI language
+- `DEFAULT_LANGUAGE` in `.env` is only used when initializing `user_settings.language` for the first time
+- After a user is created, the active UI language is stored in `user_settings.language`
+- Later startup, login, and language switching always use the language saved in the current account
+- Changing language does not restart the frontend or backend service
+- Legacy `language` or `default_language` fields in `config.yml` are ignored and removed on later config saves
+
+Example `.env`:
+
+```env
+DEFAULT_LANGUAGE=zh-CN
+```
+
+Supported values:
+
+- `zh-CN`
+- `en-US`
+
+If you are upgrading an existing database:
+
+- the migration adds the `language` field to `user_settings`
+- existing users with an empty language field will receive the `.env` `DEFAULT_LANGUAGE` value during migration
+
+## Logging
+
+- Log directory: `data/log/`
+- Logs are written into daily files
+- File name format: `year-month-day_number.log`
+  - Example: `2026-06-14_1.log`
+- By default, logs keep appending to the same numbered file for that day instead of splitting by hour or minute
+- Log output is always English and does not use i18n
+- The active log level is controlled by `log_level` in `config.yml`
+  - `1`: `error` only
+  - `2`: `error` and `info`
+  - `3`: `error`, `info`, and `debug`
+
+Current log source tags:
+
+- `[api]`
+- `[web]`
+- `[webdav]`
+- `[system]`
+
+Log format:
+
+```text
+[source][level]YYYY-MM-DD_HH:mm:ss.SSS(file.ts): message
+```
+
+Example:
+
+```text
+[web][info]2026-06-14_16:17:18.234(upload-routes.ts): User Admin uploaded a file in poolID:#1 /test/text/test.txt
+```
+
+Error logs additionally include:
+
+- error name
+- error message
+- stack trace
+- available context details
 
 ## i18n Convention
 
@@ -140,10 +206,8 @@ Admins can also update these from the admin panel:
 - Built-in locales:
   - `public/i18n/zh-CN.yml`
   - `public/i18n/en-US.yml`
-- Default language source:
-  - The frontend reads `/api/site-config`
-  - The backend serves the value from `config.yml`
-- When admins change the language in the admin panel, the value is persisted back to `config.yml`
+- UI copy should use `useI18n().t('key.path')`
+- User language is stored in account settings instead of `config.yml`
 
 Suggested workflow for new copy:
 

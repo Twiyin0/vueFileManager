@@ -92,7 +92,7 @@ export function formatBytes(bytes: number): string {
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const date = new Date(dateStr.replace(' ', 'T') + 'Z')
-  return `${date.toLocaleDateString('zh-CN')} ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+  return `${date.toLocaleDateString('en-US')} ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
 }
 
 export function useAdminPage() {
@@ -120,7 +120,7 @@ export function useAdminPage() {
     show: false,
     title: '',
     message: '',
-    confirmText: i18n.t('common.confirm', '确认'),
+    confirmText: i18n.t('common.confirm', 'Confirm'),
     danger: false,
     onConfirm: () => {}
   })
@@ -129,9 +129,11 @@ export function useAdminPage() {
 
   const uploadLimit = ref(100)
   const maxConcurrentUploads = ref(3)
+  const logLevel = ref(2)
   const showUploadLimitDialog = ref(false)
   const newUploadLimit = ref('100')
   const newMaxConcurrentUploads = ref('3')
+  const newLogLevel = ref('2')
 
   const databaseSaving = ref(false)
   const databaseTesting = ref(false)
@@ -188,9 +190,10 @@ export function useAdminPage() {
 
   async function fetchSystemSettings() {
     try {
-      const res = await api.get<{ upload_limit: number; max_concurrent_uploads: number }>('/admin/upload-limit')
+      const res = await api.get<{ upload_limit: number; max_concurrent_uploads: number; log_level: number }>('/admin/upload-limit')
       uploadLimit.value = res.upload_limit
       maxConcurrentUploads.value = Number(res.max_concurrent_uploads || 3)
+      logLevel.value = Number(res.log_level || 2)
     } catch {}
   }
 
@@ -262,13 +265,13 @@ export function useAdminPage() {
   async function handleResetPwd() {
     if (!resetPwdUser.value) return
     if (resetPwdForm.value.password.length < 6) {
-      resetPwdError.value = t('admin.newPasswordPlaceholder', '新密码，至少 6 位')
+      resetPwdError.value = t('admin.newPasswordPlaceholder', 'New password, at least 6 characters')
       return
     }
     try {
       await api.put(`/admin/users/${resetPwdUser.value.id}/password`, resetPwdForm.value)
       showResetPwdDialog.value = false
-      alert(t('admin.passwordReset', '密码已重置'))
+      alert(t('admin.passwordReset', 'Password has been reset'))
     } catch (err: any) {
       resetPwdError.value = err.message
     }
@@ -299,12 +302,12 @@ export function useAdminPage() {
     const isPromote = user.role !== 'admin'
     confirmAction.value = {
       show: true,
-      title: t(isPromote ? 'admin.confirmRoleTitleAdmin' : 'admin.confirmRoleTitleUser', isPromote ? '升级为管理员' : '降级为普通用户'),
+      title: t(isPromote ? 'admin.confirmRoleTitleAdmin' : 'admin.confirmRoleTitleUser', isPromote ? 'Promote to Admin' : 'Demote to User'),
       message: interpolate(
-        t(isPromote ? 'admin.confirmRoleMessageAdmin' : 'admin.confirmRoleMessageUser', isPromote ? '确认将“{username}”升级为管理员吗？' : '确认将“{username}”降级为普通用户吗？'),
+        t(isPromote ? 'admin.confirmRoleMessageAdmin' : 'admin.confirmRoleMessageUser', isPromote ? 'Promote "{username}" to admin?' : 'Demote "{username}" to a regular user?'),
         { username: user.username }
       ),
-      confirmText: t('common.confirm', '确认'),
+      confirmText: t('common.confirm', 'Confirm'),
       danger: false,
       onConfirm: async () => {
         await api.put(`/admin/users/${user.id}/role`, { role: isPromote ? 'admin' : 'user' })
@@ -317,12 +320,12 @@ export function useAdminPage() {
     const isBan = !user.banned
     confirmAction.value = {
       show: true,
-      title: t(isBan ? 'admin.confirmBanTitle' : 'admin.confirmUnbanTitle', isBan ? '封禁用户' : '解封用户'),
+      title: t(isBan ? 'admin.confirmBanTitle' : 'admin.confirmUnbanTitle', isBan ? 'Ban User' : 'Unban User'),
       message: interpolate(
-        t(isBan ? 'admin.confirmBanMessage' : 'admin.confirmUnbanMessage', isBan ? '确认封禁“{username}”吗？该用户将无法继续登录。' : '确认解封“{username}”吗？'),
+        t(isBan ? 'admin.confirmBanMessage' : 'admin.confirmUnbanMessage', isBan ? 'Ban "{username}"? The user will no longer be able to sign in.' : 'Unban "{username}"?'),
         { username: user.username }
       ),
-      confirmText: t('common.confirm', '确认'),
+      confirmText: t('common.confirm', 'Confirm'),
       danger: isBan,
       onConfirm: async () => {
         await api.put(`/admin/users/${user.id}/ban`, { banned: isBan })
@@ -334,9 +337,9 @@ export function useAdminPage() {
   function confirmDelete(user: AdminUser) {
     confirmAction.value = {
       show: true,
-      title: t('common.delete', '删除'),
-      message: interpolate(t('admin.confirmDeleteUserMessage', '确认删除用户“{username}”吗？该用户相关数据将被永久删除。'), { username: user.username }),
-      confirmText: t('common.delete', '删除'),
+      title: t('common.delete', 'Delete'),
+      message: interpolate(t('admin.confirmDeleteUserMessage', 'Delete user "{username}"? Related user data will be removed permanently.'), { username: user.username }),
+      confirmText: t('common.delete', 'Delete'),
       danger: true,
       onConfirm: async () => {
         await api.delete(`/admin/users/${user.id}`)
@@ -348,9 +351,9 @@ export function useAdminPage() {
   function verifyUser(user: AdminUser) {
     confirmAction.value = {
       show: true,
-      title: t('admin.verifyUser', '手动验证'),
-      message: interpolate(t('admin.verifyUserMessage', '确认手动验证“{username}”吗？'), { username: user.username }),
-      confirmText: t('admin.verifyUser', '手动验证'),
+      title: t('admin.verifyUser', 'Verify User'),
+      message: interpolate(t('admin.verifyUserMessage', 'Verify "{username}" manually?'), { username: user.username }),
+      confirmText: t('admin.verifyUser', 'Verify User'),
       danger: false,
       onConfirm: async () => {
         await api.put(`/admin/users/${user.id}/verify`)
@@ -367,32 +370,41 @@ export function useAdminPage() {
   function openUploadLimitDialog() {
     newUploadLimit.value = String(uploadLimit.value)
     newMaxConcurrentUploads.value = String(maxConcurrentUploads.value)
+    newLogLevel.value = String(logLevel.value)
     showUploadLimitDialog.value = true
   }
 
   async function saveUploadLimit() {
     const limit = parseInt(newUploadLimit.value, 10)
     const concurrency = parseInt(newMaxConcurrentUploads.value, 10)
+    const nextLogLevel = parseInt(newLogLevel.value, 10)
 
     if (Number.isNaN(limit) || limit < 1 || limit > 10240) {
-      alert(t('admin.uploadLimitValidation', '请输入 1 到 10240 之间的上传限制'))
+      alert(t('admin.uploadLimitValidation', 'Enter an upload limit between 1 and 10240'))
       return
     }
 
     if (Number.isNaN(concurrency) || concurrency < 1 || concurrency > 16) {
-      alert(t('admin.concurrencyValidation', '请输入 1 到 16 之间的并发数'))
+      alert(t('admin.concurrencyValidation', 'Enter a concurrency value between 1 and 16'))
+      return
+    }
+
+    if (Number.isNaN(nextLogLevel) || ![1, 2, 3].includes(nextLogLevel)) {
+      alert(t('admin.logLevelValidation', 'Enter a log level between 1 and 3'))
       return
     }
 
     try {
       const res = await api.put<{ message: string }>('/admin/upload-limit', {
         upload_limit: limit,
-        max_concurrent_uploads: concurrency
+        max_concurrent_uploads: concurrency,
+        log_level: nextLogLevel
       })
       uploadLimit.value = limit
       maxConcurrentUploads.value = concurrency
+      logLevel.value = nextLogLevel
       showUploadLimitDialog.value = false
-      setDatabaseMessage(res.message || t('admin.settingsSaved', '系统设置已保存'), 'success')
+      setDatabaseMessage(res.message || t('admin.settingsSaved', 'Upload settings saved. The service will not restart automatically.'), 'success')
     } catch (err: any) {
       setDatabaseMessage(err.message, 'error')
     }
@@ -434,8 +446,8 @@ export function useAdminPage() {
       t(
         newMode === 'whitelist' ? 'admin.switchWhitelistWarning' : 'admin.switchBlacklistWarning',
         newMode === 'whitelist'
-          ? '切换为白名单模式后，只有白名单内的 IP 可以访问。确定继续吗？'
-          : '切换为黑名单模式后，只有列表中的 IP 会被拦截。确定继续吗？'
+          ? 'After switching to whitelist mode, only listed IPs can access the site. Continue?'
+          : 'After switching to blacklist mode, only listed IPs will be blocked. Continue?'
       )
     )
     if (!confirmed) return
@@ -469,9 +481,9 @@ export function useAdminPage() {
   function confirmDeleteIp(entry: IpBlacklistEntry) {
     confirmAction.value = {
       show: true,
-      title: t('common.delete', '删除'),
-      message: interpolate(t('admin.confirmDeleteIpMessage', '确认删除 IP 条目“{pattern}”吗？'), { pattern: entry.ip_pattern }),
-      confirmText: t('common.delete', '删除'),
+      title: t('common.delete', 'Delete'),
+      message: interpolate(t('admin.confirmDeleteIpMessage', 'Delete IP entry "{pattern}"?'), { pattern: entry.ip_pattern }),
+      confirmText: t('common.delete', 'Delete'),
       danger: true,
       onConfirm: async () => {
         await api.delete(`/admin/ip-blacklist/${entry.id}`)
@@ -511,9 +523,11 @@ export function useAdminPage() {
     quotaDialog,
     uploadLimit,
     maxConcurrentUploads,
+    logLevel,
     showUploadLimitDialog,
     newUploadLimit,
     newMaxConcurrentUploads,
+    newLogLevel,
     databaseSaving,
     databaseTesting,
     databaseMessage,
