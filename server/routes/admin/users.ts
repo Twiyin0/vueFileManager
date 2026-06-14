@@ -223,9 +223,10 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReq
 router.put('/users/:id/quota', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = Number(req.params.id)
-    const { quota } = req.body
+    const rawQuota = req.body?.quota ?? (typeof req.body?.quotaMB !== 'undefined' ? Number(req.body.quotaMB) * 1024 * 1024 : undefined)
+    const quota = typeof rawQuota === 'string' ? Number(rawQuota) : rawQuota
 
-    if (typeof quota !== 'number' || quota < 0) {
+    if (typeof quota !== 'number' || !Number.isFinite(quota) || quota < 0) {
       return res.status(400).json({ error: '配额值无效' })
     }
 

@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useI18n } from '@/composables/useI18n'
 import Icon from '@/components/Icon.vue'
+import { getCodeLanguageLabel, highlightMarkdownCode } from '@/utils/markdownSyntaxHighlight'
 
 const props = defineProps<{
   src: string
+  linkMap?: Record<string, string>
 }>()
 
 interface TocItem {
@@ -21,11 +23,23 @@ const html = ref('')
 const toc = ref<TocItem[]>([])
 const loading = ref(true)
 const error = ref('')
-const activeId = ref('')
-
-let observer: IntersectionObserver | null = null
 
 onMounted(async () => {
+  await loadMarkdown()
+})
+
+onUnmounted(() => {})
+
+watch(() => props.src, async () => {
+  await loadMarkdown()
+})
+
+async function loadMarkdown() {
+  loading.value = true
+  error.value = ''
+  toc.value = []
+  html.value = ''
+
   try {
     const res = await fetch(props.src)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -35,6 +49,13 @@ onMounted(async () => {
     const slugCount: Record<string, number> = {}
 
     const renderer = new marked.Renderer()
+    renderer.code = function ({ text, lang }: { text: string; lang?: string }) {
+      const language = (lang || '').trim()
+      const languageLabel = escapeHtml(getCodeLanguageLabel(language))
+      const highlightedCode = highlightMarkdownCode(text, language)
+      const normalizedLang = escapeHtml((language || 'text').trim().toLowerCase() || 'text')
+      return `<div class="md-code-block"><div class="md-code-header"><span class="md-code-language">${languageLabel}</span></div><pre><code class="language-${normalizedLang}">${highlightedCode}</code></pre></div>`
+    }
     renderer.heading = function ({ text, depth }: { text: string; depth: number }) {
       if (depth <= 2) {
         const rawText = text.replace(/<[^>]*>/g, '')
@@ -50,55 +71,51 @@ onMounted(async () => {
       }
       return `<h${depth}>${text}</h${depth}>`
     }
+    renderer.link = function ({ href, title, tokens }: { href: string; title?: string | null; tokens?: any[] }) {
+      const rawText = tokens?.map((token) => token.raw || token.text || '').join('') || href || ''
+      const mappedHref = mapDocLink(href)
+      const escapedHref = escapeHtml(mappedHref)
+      const escapedTitle = title ? ` title="${escapeHtml(title)}"` : ''
+      return `<a href="${escapedHref}"${escapedTitle}>${rawText}</a>`
+    }
 
     const rawHtml = await marked(md, { renderer })
     html.value = DOMPurify.sanitize(rawHtml)
     toc.value = headings
-
-    await nextTick()
-    observeHeadings()
   } catch (err: any) {
     error.value = err.message
   } finally {
     loading.value = false
   }
-})
+}
 
-onUnmounted(() => {
-  observer?.disconnect()
-})
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
-function observeHeadings() {
-  const main = document.querySelector('main.flex-1.overflow-auto')
-  if (!main) return
+function mapDocLink(href?: string | null) {
+  if (!href) return '#'
+  const trimmed = href.trim()
+  const directMatch = props.linkMap?.[trimmed]
+  if (directMatch) return directMatch
 
-  observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          activeId.value = entry.target.id
-        }
-      }
-    },
-    { root: main, rootMargin: '-80px 0px -70% 0px', threshold: 0 }
-  )
-
-  for (const item of toc.value) {
-    const el = document.getElementById(item.id)
-    if (el) observer.observe(el)
-  }
+  const normalized = trimmed.replace(/^\.\//, '/').replace(/^\/public\//, '/')
+  return props.linkMap?.[normalized] || trimmed
 }
 
 function scrollTo(id: string) {
   const el = document.getElementById(id)
-  const main = document.querySelector('main.flex-1.overflow-auto')
-  if (el && main) {
-    main.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' })
+  const mainEl = document.querySelector('main.flex-1.overflow-auto') as HTMLElement | null
+  if (el && mainEl) {
+    const mainRect = mainEl.getBoundingClientRect()
+    const targetTop = mainEl.scrollTop + el.getBoundingClientRect().top - mainRect.top - 80
+    mainEl.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
   }
-}
-
-function isScrolledIntoView(id: string) {
-  return activeId.value === id
 }
 </script>
 
@@ -125,7 +142,7 @@ function isScrolledIntoView(id: string) {
           <a
             v-for="item in toc"
             :key="item.id"
-            :class="['toc-link', `toc-level-${item.level}`, { 'toc-active': isScrolledIntoView(item.id) }]"
+            :class="['toc-link', `toc-level-${item.level}`]"
             :style="{ paddingLeft: (item.level - 1) * 0.75 + 'rem' }"
             @click.prevent="scrollTo(item.id)"
           >
@@ -205,12 +222,6 @@ function isScrolledIntoView(id: string) {
   background: var(--hover-color);
 }
 
-.toc-link.toc-active {
-  color: var(--accent-color);
-  border-left-color: var(--accent-color);
-  background: var(--accent-soft-color);
-}
-
 .toc-level-2 {
   font-size: 0.75rem;
 }
@@ -219,4 +230,67 @@ function isScrolledIntoView(id: string) {
 .prose :deep(h2) { font-size: 1.35rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--text-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; scroll-margin-top: 5rem; }
 .prose :deep(h3) { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--text-color); scroll-margin-top: 5rem; }
 .prose :deep(p) { margin-bottom: 0.75rem; line-height: 1.7; color: var(--text-color); }
+.prose :deep(ul), .prose :deep(ol) { margin: 0 0 1rem; padding-left: 1.5rem; color: var(--text-color); }
+.prose :deep(li) { margin-bottom: 0.35rem; line-height: 1.7; }
+.prose :deep(li)::marker { color: var(--accent-color); }
+.prose :deep(a) { color: var(--accent-color); text-decoration: underline; text-underline-offset: 0.16em; }
+.prose :deep(table) { width: 100%; margin: 1rem 0; border-collapse: collapse; overflow: hidden; border-radius: 0.9rem; box-shadow: 0 0 0 1px var(--border-color); }
+.prose :deep(th), .prose :deep(td) { padding: 0.7rem 0.85rem; border: 1px solid var(--border-color); text-align: left; color: var(--text-color); }
+.prose :deep(th) { background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-color) 90%); font-weight: 700; }
+.prose :deep(blockquote) { margin: 1rem 0; padding: 0.9rem 1rem; border-left: 4px solid var(--accent-color); border-radius: 0 0.8rem 0.8rem 0; background: color-mix(in srgb, var(--accent-color) 8%, transparent); color: var(--text-secondary-color); }
+.prose :deep(hr) { margin: 1.5rem 0; border: 0; border-top: 1px dashed color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%); }
+.prose :deep(code) { padding: 0.12rem 0.38rem; border-radius: 0.4rem; background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-color) 90%); color: color-mix(in srgb, var(--accent-color) 68%, var(--text-color) 32%); font-weight: 600; }
+.prose :deep(.md-code-block) { margin: 1rem 0 1.25rem; overflow: hidden; border-radius: 1rem; border: 1px solid color-mix(in srgb, var(--accent-color) 16%, var(--border-color) 84%); background: color-mix(in srgb, var(--accent-color) 5%, var(--surface-color) 95%); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06); }
+.prose :deep(.md-code-header) { display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.9rem; border-bottom: 1px solid color-mix(in srgb, var(--accent-color) 12%, var(--border-color) 88%); background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-color) 88%); }
+.prose :deep(.md-code-language) { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-color); }
+.prose :deep(.md-code-block pre) { margin: 0; overflow-x: auto; padding: 1rem 1.1rem 1.15rem; background: transparent; }
+.prose :deep(.md-code-block pre code) { display: block; min-width: max-content; padding: 0; background: transparent; color: var(--text-color); font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.9rem; font-weight: 500; line-height: 1.7; }
+.prose :deep(pre:not(.md-code-block pre)) { overflow-x: auto; margin: 1rem 0; padding: 1rem 1.1rem; border-radius: 0.9rem; background: color-mix(in srgb, var(--accent-color) 6%, var(--surface-color) 94%); border: 1px solid color-mix(in srgb, var(--accent-color) 18%, var(--border-color) 82%); }
+.prose :deep(.tok-keyword) { color: #b42318; font-weight: 700; }
+.prose :deep(.tok-type) { color: #7c3aed; }
+.prose :deep(.tok-preproc) { color: #c2410c; }
+.prose :deep(.tok-variable) { color: #0f172a; }
+.prose :deep(.tok-variable-def) { color: #1d4ed8; }
+.prose :deep(.tok-builtin) { color: #0369a1; }
+.prose :deep(.tok-property) { color: #1d4ed8; }
+.prose :deep(.tok-attribute) { color: #7c3aed; }
+.prose :deep(.tok-tag) { color: #047857; }
+.prose :deep(.tok-constant) { color: #0f766e; }
+.prose :deep(.tok-number) { color: #0ea5e9; }
+.prose :deep(.tok-string) { color: #166534; }
+.prose :deep(.tok-string-special) { color: #15803d; }
+.prose :deep(.tok-regexp) { color: #0891b2; }
+.prose :deep(.tok-escape) { color: #dc2626; }
+.prose :deep(.tok-comment) { color: #64748b; font-style: italic; }
+.prose :deep(.tok-comment-doc) { color: #0f766e; font-style: italic; }
+.prose :deep(.tok-meta) { color: #9333ea; }
+.prose :deep(.tok-annotation) { color: #c026d3; }
+.prose :deep(.tok-punctuation) { color: color-mix(in srgb, var(--text-color) 72%, transparent); }
+.prose :deep(.tok-bracket) { color: color-mix(in srgb, var(--accent-color) 55%, var(--text-color) 45%); }
+.prose :deep(.tok-separator) { color: #64748b; }
+.prose :deep(.tok-operator) { color: #c2410c; }
+
+:global(.dark) .prose :deep(.tok-keyword) { color: #f472b6; }
+:global(.dark) .prose :deep(.tok-type) { color: #a78bfa; }
+:global(.dark) .prose :deep(.tok-preproc) { color: #fb923c; }
+:global(.dark) .prose :deep(.tok-variable) { color: #e2e8f0; }
+:global(.dark) .prose :deep(.tok-variable-def) { color: #7dd3fc; }
+:global(.dark) .prose :deep(.tok-builtin) { color: #38bdf8; }
+:global(.dark) .prose :deep(.tok-property) { color: #93c5fd; }
+:global(.dark) .prose :deep(.tok-attribute) { color: #c4b5fd; }
+:global(.dark) .prose :deep(.tok-tag) { color: #34d399; }
+:global(.dark) .prose :deep(.tok-constant) { color: #2dd4bf; }
+:global(.dark) .prose :deep(.tok-number) { color: #7dd3fc; }
+:global(.dark) .prose :deep(.tok-string) { color: #86efac; }
+:global(.dark) .prose :deep(.tok-string-special) { color: #4ade80; }
+:global(.dark) .prose :deep(.tok-regexp) { color: #22d3ee; }
+:global(.dark) .prose :deep(.tok-escape) { color: #fda4af; }
+:global(.dark) .prose :deep(.tok-comment) { color: #94a3b8; }
+:global(.dark) .prose :deep(.tok-comment-doc) { color: #5eead4; }
+:global(.dark) .prose :deep(.tok-meta) { color: #d8b4fe; }
+:global(.dark) .prose :deep(.tok-annotation) { color: #f0abfc; }
+:global(.dark) .prose :deep(.tok-punctuation) { color: rgba(226, 232, 240, 0.72); }
+:global(.dark) .prose :deep(.tok-bracket) { color: #cbd5e1; }
+:global(.dark) .prose :deep(.tok-separator) { color: #94a3b8; }
+:global(.dark) .prose :deep(.tok-operator) { color: #fdba74; }
 </style>

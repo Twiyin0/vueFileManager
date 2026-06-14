@@ -346,5 +346,15 @@ const themeLabelMap: Record<string, string> = {
         </div>
       </div>
     </Teleport>
+
+    <ConfirmDialog
+      :show="state.confirmAction.show"
+      :title="state.confirmAction.title"
+      :message="state.confirmAction.message"
+      :confirm-text="state.confirmAction.confirmText"
+      :danger="state.confirmAction.danger"
+      @confirm="state.handleConfirm"
+      @cancel="state.confirmAction.show = false"
+    />
   </div>
 </template>

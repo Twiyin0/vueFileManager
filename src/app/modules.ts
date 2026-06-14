@@ -157,7 +157,7 @@ const appRouteModules: RouteRecordRaw[] = [
   { path: '/s/:code', name: 'Share', component: () => import('@/views/Share.vue'), meta: { noLayout: true } },
   { path: '/api-docs', name: 'ApiDocs', component: () => import('@/views/ApiDocs.vue'), meta: { pageTitle: 'API 文档', pageTitleKey: 'nav.apiDocs' } },
   { path: '/theme-docs', name: 'ThemeDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发', pageTitleKey: 'nav.themeDocs' } },
-  { path: '/plugin-docs', name: 'PluginDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发', pageTitleKey: 'nav.themeDocs' } }
+  { path: '/plugin-docs', name: 'PluginDocs', component: () => import('@/views/PluginDocs.vue'), meta: { pageTitle: '主题开发', pageTitleKey: 'nav.themeDocs' } }
 ]
 
 export const appRoutes: RouteRecordRaw[] = appRouteModules

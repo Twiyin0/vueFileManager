@@ -124,6 +124,7 @@ export function useAdminPage() {
     danger: false,
     onConfirm: () => {}
   })
+  const confirmLoading = ref(false)
 
   const quotaDialog = ref({ show: false, userId: 0, username: '', quotaMB: 0 })
 
@@ -288,7 +289,9 @@ export function useAdminPage() {
 
   async function saveQuota() {
     try {
+      const quotaBytes = Math.max(0, Math.round(Number(quotaDialog.value.quotaMB || 0) * 1024 * 1024))
       await api.put(`/admin/users/${quotaDialog.value.userId}/quota`, {
+        quota: quotaBytes,
         quotaMB: quotaDialog.value.quotaMB
       })
       quotaDialog.value.show = false
@@ -362,9 +365,17 @@ export function useAdminPage() {
     }
   }
 
-  function handleConfirm() {
-    void confirmAction.value.onConfirm()
-    confirmAction.value.show = false
+  async function handleConfirm() {
+    if (confirmLoading.value) return
+    confirmLoading.value = true
+    try {
+      await confirmAction.value.onConfirm()
+      confirmAction.value.show = false
+    } catch (err: any) {
+      alert(err?.message || t('common.operationFailed', 'Operation failed'))
+    } finally {
+      confirmLoading.value = false
+    }
   }
 
   function openUploadLimitDialog() {
@@ -520,6 +531,7 @@ export function useAdminPage() {
     resetPwdForm,
     resetPwdError,
     confirmAction,
+    confirmLoading,
     quotaDialog,
     uploadLimit,
     maxConcurrentUploads,

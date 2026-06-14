@@ -7,6 +7,7 @@ const router = Router()
 
 const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/
 const CIDR_RE = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost'])
 
 function isValidIpv4(ip: string): boolean {
   if (!IPV4_RE.test(ip)) return false
@@ -18,6 +19,7 @@ function isValidIpv4(ip: string): boolean {
 
 function isValidIpPattern(pattern: string): boolean {
   const value = pattern.trim()
+  if (LOOPBACK_HOSTS.has(value)) return true
   if (CIDR_RE.test(value)) {
     const [ip, mask] = value.split('/')
     const maskNum = Number(mask)
@@ -86,7 +88,7 @@ router.delete('/ip-blacklist/:id', authMiddleware, adminMiddleware, async (req: 
     }
 
     const configRow = await db.prepare('SELECT mode FROM ip_list_config WHERE id = 1').get<{ mode: string }>()
-    if (configRow?.mode === 'whitelist' && entry.ip_pattern === '127.0.0.1') {
+    if (configRow?.mode === 'whitelist' && LOOPBACK_HOSTS.has(entry.ip_pattern)) {
       return res.status(400).json({ error: '白名单模式下不能删除 127.0.0.1' })
     }
 

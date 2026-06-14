@@ -70,9 +70,9 @@ const { t } = useI18n()
           <div class="col-span-2 hidden text-xs text-gray-500 dark:text-dark-text-secondary md:block">{{ formatDate(entry.created_at) }}</div>
           <div class="col-span-1 flex justify-end">
             <button
-              v-if="ipListMode === 'whitelist' && entry.ip_pattern === '127.0.0.1'"
+              v-if="ipListMode === 'whitelist' && ['127.0.0.1', '::1', 'localhost'].includes(entry.ip_pattern)"
               class="cursor-not-allowed p-1.5"
-              :title="t('admin.whitelistProtected', '127.0.0.1 cannot be removed in whitelist mode')"
+              :title="t('admin.whitelistProtected', 'Default local addresses cannot be removed in whitelist mode')"
             >
               <Icon name="lock" class="h-4 w-4 text-gray-400" />
             </button>

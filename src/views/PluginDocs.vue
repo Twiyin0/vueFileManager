@@ -6,12 +6,12 @@ import MarkdownDoc from '@/components/MarkdownDoc.vue'
 const route = useRoute()
 
 const isEnglish = computed(() => route.query.lang === 'en')
-const docSrc = computed(() => isEnglish.value ? '/API_en.md' : '/API.md')
+const docSrc = computed(() => isEnglish.value ? '/Themes_en.md' : '/Themes.md')
 const linkMap = computed(() => ({
-  './API.md': '/api-docs',
-  './API_en.md': '/api-docs?lang=en',
-  '/API.md': '/api-docs',
-  '/API_en.md': '/api-docs?lang=en'
+  './Themes.md': '/plugin-docs',
+  './Themes_en.md': '/plugin-docs?lang=en',
+  '/Themes.md': '/plugin-docs',
+  '/Themes_en.md': '/plugin-docs?lang=en'
 }))
 </script>
 
