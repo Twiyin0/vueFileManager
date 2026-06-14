@@ -61,7 +61,7 @@ theme:
   system: Follow System
 search:
   shortcutHint: Ctrl+K Search
-  resultsCount: Search results: {count} items
+  resultsCount: "Search results: {count} items"
 spotlight:
   placeholder: Search files and folders... (Ctrl+K)
   loading: Searching...
@@ -96,7 +96,7 @@ file:
   remoteUploadOfflineHint: The server will download in the background and write into the current directory.
   selectAll: Select All
   unselectAll: Unselect All
-  selectedItems: {count} items selected
+  selectedItems: "{count} items selected"
   batchActions: Batch Actions
   batchCopy: Batch Copy
   batchMove: Batch Move
@@ -105,11 +105,11 @@ file:
   clearSelection: Clear Selection
   clear: Clear
   paste: Paste
-  pasteCount: Paste ({count})
+  pasteCount: "Paste ({count})"
   items: items
   details: Details
   confirmDeleteTitle: Confirm Delete
-  confirmDeleteMessage: Delete "{name}"?
+  confirmDeleteMessage: 'Delete "{name}"?'
   empty: No files yet
   name: Name
   size: Size
@@ -117,7 +117,7 @@ file:
 upload:
   shortTitle: Upload
   title: Upload Files
-  targetPath: Upload to: {path}
+  targetPath: "Upload to: {path}"
   rootPath: Root Directory
   targetPool: Target Storage Pool
   currentPool: Current Storage Pool
@@ -127,15 +127,15 @@ upload:
   limitHint: Single file size is controlled by the server upload limit
   queue: Upload Queue
   pendingFiles: Pending Files
-  skippedFiles: Skipped {count} system files automatically: {files}
+  skippedFiles: "Skipped {count} system files automatically: {files}"
   start: Start Upload
   cancel: Cancel Upload
   hideWindow: Hide Window
   uploading: Uploading...
   progressTitle: Upload Progress
-  summaryCollapsed: Total {total}, completed {completed}, failed {failed}, active {active}
-  summaryExpanded: Total {total}, completed {completed}, failed {failed}, cancelled {cancelled}
-  concurrentCount: Active {count}
+  summaryCollapsed: "Total {total}, completed {completed}, failed {failed}, active {active}"
+  summaryExpanded: "Total {total}, completed {completed}, failed {failed}, cancelled {cancelled}"
+  concurrentCount: "Active {count}"
   statusCompleted: Completed
   statusProcessing: Processing
   statusCancelled: Cancelled
@@ -165,7 +165,7 @@ move:
   targetPool: Target Storage Pool
   goUp: Go Up
   noSubfolders: No subfolders in the current directory
-  targetSummary: Target: {pool} / {path}
+  targetSummary: "Target: {pool} / {path}"
   selectCurrent: Select Current Directory
   confirmHere: Move Here
 share:
@@ -175,10 +175,10 @@ share:
   copied: Copied
   createdTitle: Share Link Created
   createTitle: Create Share Link
-  fileLabel: File: {name}
+  fileLabel: "File: {name}"
   signedLink: Share link (signed access required)
   signKey: Signature key (signKey)
-  signKeyHint: Used to generate temporary signed access. Formula: MD5(username + signKey).slice(4,12) + timestamp
+  signKeyHint: "Used to generate temporary signed access. Formula: MD5(username + signKey).slice(4,12) + timestamp"
   accessPassword: Access Password
   copyLink: Copy Link
   copySignedLink: Copy Signed Link
@@ -193,7 +193,7 @@ sharePage:
   errorTitle: Access Failed
   passwordRequiredTitle: Password Required
   passwordRequiredDescription: This share link requires a password to access.
-  owner: Shared by: {owner}
+  owner: "Shared by: {owner}"
   passwordPlaceholder: Enter access password
   verifying: Verifying...
   verify: Verify
@@ -204,7 +204,7 @@ sharePage:
 guestShare:
   createTitle: Share to Guest Mode
   editTitle: Edit Guest Share
-  createDescription: Share folder {name} to guest mode.
+  createDescription: "Share folder {name} to guest mode."
   editDescription: Update guest share permissions and display name.
   displayName: Display Name
   displayNamePlaceholder: Folder name shown to guests
@@ -226,25 +226,25 @@ myShares:
   expired: Expired
   maxedOut: Limit Reached
   active: Active
-  downloadCount: Downloads: {count}
+  downloadCount: "Downloads: {count}"
   hasPassword: Password Protected
-  expireAt: Expires: {time}
-  createdAt: Created: {time}
+  expireAt: "Expires: {time}"
+  createdAt: "Created: {time}"
   deleteTitle: Delete Share
-  deleteMessage: Delete the share link for "{name}"?
+  deleteMessage: 'Delete the share link for "{name}"?'
 trash:
   loadFailed: Failed to load trash
   restored: Restored
   restoreFailed: Restore failed
-  deleteConfirm: Permanently delete "{name}"? This action cannot be undone.
+  deleteConfirm: 'Permanently delete "{name}"? This action cannot be undone.'
   deleted: Permanently deleted
   deleteFailed: Delete failed
   emptyConfirm: Empty the trash? This action cannot be undone.
   emptied: Trash emptied
   emptyFailed: Failed to empty trash
   emptyAction: Empty Trash
-  originalPath: Original path: {path}
-  metaLine: Pool: {pool} · Deleted at: {time}
+  originalPath: "Original path: {path}"
+  metaLine: "Pool: {pool} · Deleted at: {time}"
   restore: Restore
   deletePermanent: Delete Permanently
   emptyTitle: Trash is Empty
@@ -279,7 +279,7 @@ webdav:
   tip3: Desktop clients should prefer /dav/pool/ID. Without a pool ID, the default storage pool is used.
 apiKeys:
   create: Create Key
-  description: API Keys are used for programmatic access to the file management API. Add this request header:
+  description: "API Keys are used for programmatic access to the file management API. Add this request header:"
   emptyTitle: No API Keys Yet
   copy: Copy
   createdTitle: API Key Created
@@ -287,11 +287,11 @@ apiKeys:
   copyAndClose: Copy and Close
   createTitle: Create API Key
   name: Name
-  namePlaceholder: Example: My App
+  namePlaceholder: "Example: My App"
   permissions: Permissions
   creating: Creating...
   deleteTitle: Delete API Key
-  deleteMessage: Delete "{name}"? Applications using this key will no longer be able to access the service.
+  deleteMessage: 'Delete "{name}"? Applications using this key will no longer be able to access the service.'
   readDesc: View file list, preview, and download files
   writeDesc: Upload files, create directories, and edit content
   deleteDesc: Delete files or directories
@@ -345,7 +345,7 @@ admin:
   noStoragePools: No storage pools
   localStorage: Local Storage
   remoteStorage: Remote Storage
-  setNewPasswordFor: Set a new password for {username}
+  setNewPasswordFor: "Set a new password for {username}"
   newPasswordPlaceholder: New password, at least 6 characters
   editQuota: Adjust Storage Quota
   quotaMb: Quota (MB)
@@ -369,15 +369,15 @@ admin:
   whitelistProtected: 127.0.0.1 cannot be removed in whitelist mode
   confirmRoleTitleAdmin: Promote to Admin
   confirmRoleTitleUser: Demote to User
-  confirmRoleMessageAdmin: Promote "{username}" to admin?
-  confirmRoleMessageUser: Demote "{username}" to a regular user?
+  confirmRoleMessageAdmin: 'Promote "{username}" to admin?'
+  confirmRoleMessageUser: 'Demote "{username}" to a regular user?'
   confirmBanTitle: Ban User
   confirmUnbanTitle: Unban User
-  confirmBanMessage: Ban "{username}"? The user will no longer be able to sign in.
-  confirmUnbanMessage: Unban "{username}"?
-  confirmDeleteUserMessage: Delete user "{username}"? Related user data will be removed permanently.
-  confirmDeleteIpMessage: Delete IP entry "{pattern}"?
-  verifyUserMessage: Verify "{username}" manually?
+  confirmBanMessage: 'Ban "{username}"? The user will no longer be able to sign in.'
+  confirmUnbanMessage: 'Unban "{username}"?'
+  confirmDeleteUserMessage: 'Delete user "{username}"? Related user data will be removed permanently.'
+  confirmDeleteIpMessage: 'Delete IP entry "{pattern}"?'
+  verifyUserMessage: 'Verify "{username}" manually?'
   switchWhitelistWarning: After switching to whitelist mode, only listed IPs can access the site. Continue?
   switchBlacklistWarning: After switching to blacklist mode, only listed IPs will be blocked. Continue?
   userCreated: User created successfully
