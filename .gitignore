@@ -21,3 +21,4 @@ yarn.lock
 *__MACOSX*
 __MACOSX
 examples/
+dist-server/
