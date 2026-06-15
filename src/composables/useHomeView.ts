@@ -669,7 +669,77 @@ export function useHomeView() {
     }
   }
 
-  async function handleRemoteUpload() {
+  const normalizedUploadStatusLabel = computed(() => {
+    if (uploadStatus.value === 'cancelled') return t('upload.statusCancelled', 'Cancelled')
+    if (uploadStatus.value === 'processing') return t('upload.statusProcessing', 'Processing')
+    if (uploadStatus.value === 'completed') return t('upload.statusCompleted', 'Completed')
+    return ''
+  })
+
+  function parseRemoteUrls(value: string) {
+    return Array.from(new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    ))
+  }
+
+  function getRemoteUploadDestinationLabel() {
+    const poolLabel = currentPoolName.value || t('upload.currentPool', 'Current Storage Pool')
+    const pathLabel = currentPath.value || t('upload.rootPath', 'Root Directory')
+    return `${poolLabel} / ${pathLabel}`
+  }
+
+  const handleRemoteUpload = async () => {
+    const urls = parseRemoteUrls(remoteUrl.value)
+    if (urls.length === 0) {
+      showToast(t('file.remoteUploadEmpty', 'Please enter at least one remote URL'), 'info')
+      return
+    }
+
+    remoteUploading.value = true
+    try {
+      if (remoteUploadMode.value === 'offline') {
+        const res = await api.post<{ count: number }>('/files/offline-download', {
+          urls,
+          dirPath: currentPath.value,
+          poolId: currentPoolId.value
+        })
+        showOfflineTasksPanel()
+        await loadOfflineTasks()
+        const destination = getRemoteUploadDestinationLabel()
+        const count = res.count || urls.length
+        const message = count > 1
+          ? format('file.remoteUploadOfflineBatchCreated', 'Created {count} offline download tasks. Files will be saved to {destination}', { count, destination })
+          : format('file.remoteUploadOfflineCreated', 'Offline download task created. The file will be saved to {destination}', { destination })
+        showToast(message, 'success')
+      } else {
+        const res = await api.post<{ count: number; errors?: Array<{ url: string; error: string }> }>('/files/remote-upload', {
+          urls,
+          dirPath: currentPath.value,
+          poolId: currentPoolId.value
+        })
+        await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
+        const uploadedCount = res.count || urls.length
+        const failedCount = res.errors?.length || 0
+        const message = failedCount > 0
+          ? format('file.remoteUploadPartialSuccess', 'Uploaded {count} files, {failed} failed', { count: uploadedCount, failed: failedCount })
+          : uploadedCount > 1
+            ? format('file.remoteUploadBatchSuccess', 'Uploaded {count} remote files', { count: uploadedCount })
+            : t('file.remoteUploadSuccess', 'Remote upload completed')
+        showToast(message, failedCount > 0 ? 'info' : 'success')
+      }
+      showRemoteUpload.value = false
+      remoteUrl.value = ''
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      remoteUploading.value = false
+    }
+  }
+
+  async function legacyHandleRemoteUpload() {
     if (!remoteUrl.value.trim()) return
     remoteUploading.value = true
     try {
@@ -1176,7 +1246,7 @@ export function useHomeView() {
     pendingUploadFiles,
     uploadError,
     isUploadBusy,
-    uploadStatusLabel,
+    uploadStatusLabel: normalizedUploadStatusLabel,
     uploadActiveCount,
     uploadSummary,
     currentPoolId,

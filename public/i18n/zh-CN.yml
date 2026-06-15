@@ -99,6 +99,14 @@ file:
   remoteUploadOffline: 离线下载
   remoteUploadInstantHint: 当前会直接请求远程资源并立即写入存储池。
   remoteUploadOfflineHint: 服务器会在后台下载并写入当前目录。
+  remoteUploadPlaceholder: "https://example.com/file-a.zip, https://example.com/file-b.zip"
+  remoteUploadUrlHint: 输入一个或多个远程链接，使用逗号分隔。
+  remoteUploadEmpty: 请至少输入一个远程链接
+  remoteUploadSuccess: 远程上传已完成
+  remoteUploadBatchSuccess: 已上传 {count} 个远程文件
+  remoteUploadPartialSuccess: 已上传 {count} 个文件，失败 {failed} 个
+  remoteUploadOfflineCreated: 离线下载任务已创建，文件将保存到 {destination}
+  remoteUploadOfflineBatchCreated: 已创建 {count} 个离线下载任务，文件将保存到 {destination}
   selectAll: 全选
   unselectAll: 取消全选
   selectedItems: 已选择 {count} 项

@@ -285,7 +285,15 @@ const { t } = useI18n()
       <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRemoteUpload = false" />
       <div class="card relative max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
         <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.remoteUploadTitle', 'Remote URL Upload') }}</h3>
-        <input v-model="state.remoteUrl" type="url" class="input-field mb-4" placeholder="https://example.com/file.zip" />
+        <textarea
+          v-model="state.remoteUrl"
+          class="input-field mb-2 min-h-[120px] resize-y"
+          :placeholder="t('file.remoteUploadPlaceholder', 'https://example.com/file-a.zip, https://example.com/file-b.zip')"
+          spellcheck="false"
+        />
+        <p class="mb-4 text-xs" style="color: var(--text-secondary-color)">
+          {{ t('file.remoteUploadUrlHint', 'Enter one or more remote URLs separated by commas.') }}
+        </p>
         <div class="mb-4">
           <label class="mb-1.5 block text-sm" style="color: var(--text-secondary-color)">{{ t('file.remoteUploadMode', 'Upload Mode') }}</label>
           <div class="grid grid-cols-2 gap-2">
