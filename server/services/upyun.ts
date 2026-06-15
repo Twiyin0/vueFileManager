@@ -135,13 +135,27 @@ export class UpyunStorage implements StorageProvider {
 
   async info(filePath: string): Promise<FileInfo> {
     const remotePath = this.normalizePath(filePath)
-    const stat = await withRetry(() => this.client.headFile(remotePath))
-    return {
-      name: filePath.split('/').pop() || '',
-      type: 'file',
-      size: (stat as any)?.size || 0,
-      modified: (stat as any)?.lastModified || new Date().toISOString(),
-      path: filePath,
+    try {
+      const stat = await withRetry(() => this.client.headFile(remotePath))
+      return {
+        name: filePath.split('/').pop() || '',
+        type: 'file',
+        size: (stat as any)?.size || 0,
+        modified: (stat as any)?.lastModified || new Date().toISOString(),
+        path: filePath,
+      }
+    } catch (err: any) {
+      const files = await this.list(filePath)
+      if (Array.isArray(files)) {
+        return {
+          name: filePath.split('/').pop() || '',
+          type: 'folder',
+          size: 0,
+          modified: new Date().toISOString(),
+          path: filePath,
+        }
+      }
+      throw err
     }
   }
 
