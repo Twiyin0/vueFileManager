@@ -12,6 +12,8 @@ export interface PreviewFileListItem {
   path: string
   name: string
   poolId?: number
+  directUrl?: string
+  fileUrl?: string
 }
 
 export interface FilePreviewProps {
@@ -46,7 +48,10 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
   })
 
   function getImagePreviewUrl(file: PreviewFileListItem) {
+    if (file.directUrl) return file.directUrl
+    if (file.fileUrl) return file.fileUrl
     if (file.path.startsWith('/api/')) return file.path
+    if (file.path.startsWith('/share')) return file.path
     if (props.guestBaseUrl) {
       return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
     }
