@@ -9,6 +9,7 @@ import trashRoutes from '../routes/trash'
 import favouritesRoutes from '../routes/favourites'
 import publicRoutes from '../routes/public'
 import webdavRoutes from '../routes/webdav'
+import shareMountRoutes, { publicShareMountRouter } from '../routes/share-mounts'
 import type { RouteModule } from './types'
 
 export const protectedRouteModules: RouteModule[] = [
@@ -21,9 +22,11 @@ export const protectedRouteModules: RouteModule[] = [
   { path: '/api/storage-pools', router: storagePoolsRoutes },
   { path: '/api/trash', router: trashRoutes },
   { path: '/api/favourites', router: favouritesRoutes },
+  { path: '/api/share-mounts', router: shareMountRoutes },
   { path: '/dav', router: webdavRoutes }
 ]
 
 export const publicRouteModules: RouteModule[] = [
-  { path: '/f', router: publicRoutes }
+  { path: '/f', router: publicRoutes },
+  { path: '/share', router: publicShareMountRouter }
 ]

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Icon from '@/components/Icon.vue'
 import { useI18n } from '@/composables/useI18n'
 
@@ -13,6 +13,7 @@ const props = defineProps<{
   readOnly?: boolean
   allowedActions?: string[]
   showRemoteUploadAction?: boolean
+  showUnmountAction?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -151,7 +152,25 @@ onUnmounted(() => {
             <Icon name="globe" class="h-4 w-4" />
             {{ t('file.shareToGuest', 'Share to Guest') }}
           </button>
+
+          <button
+            v-if="item.type === 'folder' && isAllowed('share-mount')"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('share-mount')"
+          >
+            <Icon name="hard-drive" class="h-4 w-4" />
+            {{ t('shareMount.menu', 'Cross-Pool Mount') }}
+          </button>
         </template>
+
+        <button
+          v-if="props.showUnmountAction && item.type === 'folder' && isAllowed('unmount')"
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+          @click="handleAction('unmount')"
+        >
+          <Icon name="hard-drive" class="h-4 w-4" />
+          {{ t('shareMount.unmount', 'Unmount') }}
+        </button>
 
         <div class="my-1 border-t border-light-border dark:border-dark-border"></div>
 
@@ -192,6 +211,14 @@ onUnmounted(() => {
           >
             <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
             {{ t('file.batchMove', 'Batch Move') }}
+          </button>
+
+          <button
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+            @click="handleAction('batch-share-mount')"
+          >
+            <Icon name="hard-drive" class="h-4 w-4" />
+            {{ t('shareMount.batchMenu', 'Batch Cross-Pool Mount') }}
           </button>
 
           <button
@@ -272,6 +299,14 @@ onUnmounted(() => {
         >
           <Icon name="arrow-narrow-right-move" class="h-4 w-4" />
           {{ t('file.batchMove', 'Batch Move') }}
+        </button>
+
+        <button
+          class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-light-text hover:bg-gray-100 dark:text-dark-text dark:hover:bg-dark-hover"
+          @click="handleAction('batch-share-mount')"
+        >
+          <Icon name="hard-drive" class="h-4 w-4" />
+          {{ t('shareMount.batchMenu', 'Batch Cross-Pool Mount') }}
         </button>
 
         <div class="my-1 border-t border-light-border dark:border-dark-border"></div>

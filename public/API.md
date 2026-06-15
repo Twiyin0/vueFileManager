@@ -171,6 +171,145 @@ API Key 的通用权限模型：
 { "path": "/note.txt", "content": "hello", "poolId": 1 }
 ```
 
+## 跨池共享挂载接口
+
+除非特别说明，所有 `/api/share-mounts/*` 接口都要求 JWT 或 API Key，且 API Key 需要 `read` 或对应写权限。
+
+### `GET /api/share-mounts/list`
+
+查询参数：
+
+- `path`
+- `showAll`
+
+说明：
+
+- 默认返回当前跨池挂载路径下的文件/文件夹列表
+- `path` 使用相对 `/share` 的路径
+- 当 `showAll=true` 时，返回扁平化后的全部文件列表
+
+默认返回示例：
+
+```json
+{
+  "files": [
+    {
+      "name": "test_2",
+      "type": "folder",
+      "path": "abc/test_2",
+      "mountId": 3
+    }
+  ]
+}
+```
+
+`showAll=true` 返回示例：
+
+```json
+{
+  "file": [
+    {
+      "fileName": "demo.txt",
+      "filePath": "abc/test_2/demo.txt",
+      "fileDirect": "/share/abc/test_2/demo.txt?apiKey=***"
+    }
+  ]
+}
+```
+
+### `GET /api/share-mounts/directories`
+
+返回当前用户已创建的挂载目录列表。
+
+返回示例：
+
+```json
+{ "directories": ["", "abc", "abc/nested"] }
+```
+
+说明：
+
+- 空字符串 `""` 表示 `/share` 根目录
+
+### `POST /api/share-mounts/directories`
+
+创建挂载目录。
+
+请求体：
+
+```json
+{ "path": "abc" }
+```
+
+说明：
+
+- 上例会创建 `/share/abc`
+
+### `POST /api/share-mounts/mount`
+
+将一个或多个来源文件夹挂载到目标目录。
+
+请求体：
+
+```json
+{
+  "targetPath": "abc",
+  "items": [
+    { "sourcePoolId": 1, "sourcePath": "/alist/test" },
+    { "sourcePoolId": 2, "sourcePath": "/alist/test" }
+  ]
+}
+```
+
+说明：
+
+- `targetPath` 使用相对 `/share` 的路径
+- 仅支持挂载文件夹
+- 如果同一目标目录下发生名称冲突，系统会自动改名为 `<源文件夹名称>_<存储池ID>`
+
+### `POST /api/share-mounts/unmount`
+
+取消挂载。
+
+支持两种请求体：
+
+1. 按具体挂载项取消：
+
+```json
+{ "mountId": 3 }
+```
+
+2. 按虚拟挂载目录取消：
+
+```json
+{ "path": "abc" }
+```
+
+说明：
+
+- 传 `mountId` 时只移除单个挂载项
+- 传 `path` 时会递归移除该挂载目录及其子目录下的挂载项和虚拟目录
+
+## 跨池共享直链访问
+
+### `GET /share`
+
+### `GET /share/*`
+
+说明：
+
+- 用于直接访问跨池共享挂载目录和文件
+- 需要 JWT 或 API Key 认证
+- 浏览器测试时可使用 `?token=` 或 `?apiKey=` 查询参数
+- 当路径指向目录时，返回 `{ files, path }`
+- 当路径指向文件时，默认以内联预览方式返回文件内容
+- 追加 `?download=true` 时返回下载
+
+示例：
+
+- `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>`
+- `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>&download=true`
+
 ## 用户设置接口
 
 ### `GET /api/user/settings`

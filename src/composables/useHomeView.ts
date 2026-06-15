@@ -31,6 +31,8 @@ export function useHomeView() {
   const fileToShare = ref<FileItem | null>(null)
   const showGuestShare = ref(false)
   const fileToGuestShare = ref<FileItem | null>(null)
+  const showShareMount = ref(false)
+  const filesToShareMount = ref<Array<{ path: string; name: string; poolId?: number; type?: string }>>([])
 
   const searchQuery = ref('')
   const searchResults = ref<FileItem[]>([])
@@ -825,6 +827,16 @@ export function useHomeView() {
     showMoveDialog.value = true
   }
 
+  function handleShareMount(files: { path: string; name?: string; poolId?: number; type?: string }[]) {
+    filesToShareMount.value = files.map((file) => ({
+      path: file.path,
+      name: file.name || file.path.split('/').filter(Boolean).pop() || file.path,
+      poolId: file.poolId,
+      type: file.type
+    }))
+    showShareMount.value = true
+  }
+
   async function handlePaste() {
     if (clipboardFiles.value.length === 0) return
     const srcPoolId = clipboardFiles.value[0].poolId || currentPoolId.value
@@ -1011,6 +1023,11 @@ export function useHomeView() {
           showGuestShare.value = true
         }
         break
+      case 'share-mount':
+        if (item) {
+          handleShareMount([{ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value, type: item.type }])
+        }
+        break
       case 'info':
         if (item) showDetail(item)
         break
@@ -1055,6 +1072,19 @@ export function useHomeView() {
           const file = allFiles.find((item) => item.path === path)
           return { path, name: file?.name, poolId: currentPoolId.value }
         }))
+        break
+      }
+      case 'batch-share-mount': {
+        const allFiles = showSearch.value ? searchResults.value : filesStore.files
+        const folders = Array.from(selectedFiles.value)
+          .map((path) => allFiles.find((item) => item.path === path))
+          .filter((item): item is FileItem => !!item && item.type === 'folder')
+          .map((item) => ({ path: item.path, name: item.name, poolId: item.poolId || currentPoolId.value, type: item.type }))
+        if (folders.length > 0) {
+          handleShareMount(folders)
+        } else {
+          showToast(t('shareMount.onlyFolders', 'Only folders can be mounted'), 'info')
+        }
         break
       }
       case 'new-folder':
@@ -1106,6 +1136,8 @@ export function useHomeView() {
     fileToShare,
     showGuestShare,
     fileToGuestShare,
+    showShareMount,
+    filesToShareMount,
     searchQuery,
     searchResults,
     isSearching,
@@ -1184,6 +1216,7 @@ export function useHomeView() {
     showToast,
     handleCopy,
     handleMove,
+    handleShareMount,
     handlePaste,
     handleMoveConfirm,
     handleCreateFolder,

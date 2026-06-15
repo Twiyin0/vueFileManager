@@ -38,6 +38,8 @@ const INSERT_ID_TABLES = new Set([
   'trash',
   'favourites',
   'guest_shares',
+  'share_mount_dirs',
+  'share_mounts',
   'ip_blacklist',
   'ip_whitelist',
   'verification_codes',

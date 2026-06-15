@@ -35,9 +35,20 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/Home.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '文件管理',
+      pageTitle: 'File Manager',
       pageTitleKey: 'nav.fileManager',
-      nav: nav('nav.fileManager', '文件管理', 'folder', 'main', 10)
+      nav: nav('nav.fileManager', 'File Manager', 'folder', 'main', 10)
+    }
+  },
+  {
+    path: '/share-mounts',
+    name: 'ShareMounts',
+    component: () => import('@/views/ShareMounts.vue'),
+    meta: {
+      requiresAuth: true,
+      pageTitle: 'Cross-Pool Shared Mounts',
+      pageTitleKey: 'nav.shareMounts',
+      nav: nav('nav.shareMounts', 'Cross-Pool Shared Mounts', 'hard-drive', 'main', 15)
     }
   },
   {
@@ -46,9 +57,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/OfflineTasks.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '离线任务',
+      pageTitle: 'Offline Tasks',
       pageTitleKey: 'nav.offlineTasks',
-      nav: nav('nav.offlineTasks', '离线任务', 'download', 'main', 20)
+      nav: nav('nav.offlineTasks', 'Offline Tasks', 'download', 'main', 20)
     }
   },
   { path: '/guest', name: 'GuestList', component: () => import('@/views/GuestList.vue'), meta: { noLayout: true } },
@@ -60,9 +71,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/Favourites.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '我的收藏',
+      pageTitle: 'Favourites',
       pageTitleKey: 'nav.favourites',
-      nav: nav('nav.favourites', '我的收藏', 'star-sharp', 'main', 30)
+      nav: nav('nav.favourites', 'Favourites', 'star-sharp', 'main', 30)
     }
   },
   {
@@ -71,9 +82,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/MyShares.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '我的分享',
+      pageTitle: 'My Shares',
       pageTitleKey: 'nav.myShares',
-      nav: nav('nav.myShares', '我的分享', 'link', 'main', 40)
+      nav: nav('nav.myShares', 'My Shares', 'link', 'main', 40)
     }
   },
   {
@@ -82,9 +93,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/Trash.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '回收站',
+      pageTitle: 'Trash',
       pageTitleKey: 'nav.trash',
-      nav: nav('nav.trash', '回收站', 'trash', 'main', 50)
+      nav: nav('nav.trash', 'Trash', 'trash', 'main', 50)
     }
   },
   {
@@ -93,9 +104,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/StoragePools.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '存储池',
+      pageTitle: 'Storage Pools',
       pageTitleKey: 'nav.storagePools',
-      nav: nav('nav.storagePools', '存储池', 'server', 'main', 60)
+      nav: nav('nav.storagePools', 'Storage Pools', 'server', 'main', 60)
     }
   },
   {
@@ -115,9 +126,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/UserSettings.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '设置',
+      pageTitle: 'Settings',
       pageTitleKey: 'nav.settings',
-      nav: nav('nav.settings', '设置', 'gear', 'main', 80)
+      nav: nav('nav.settings', 'Settings', 'gear', 'main', 80)
     }
   },
   {
@@ -137,9 +148,9 @@ const appRouteModules: RouteRecordRaw[] = [
     component: () => import('@/views/Themes.vue'),
     meta: {
       requiresAuth: true,
-      pageTitle: '插件',
+      pageTitle: 'Plugins',
       pageTitleKey: 'nav.plugins',
-      nav: nav('nav.plugins', '插件', 'palette', 'main', 100)
+      nav: nav('nav.plugins', 'Plugins', 'palette', 'main', 100)
     }
   },
   {
@@ -149,22 +160,22 @@ const appRouteModules: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      pageTitle: '管理面板',
+      pageTitle: 'Admin Panel',
       pageTitleKey: 'nav.admin',
-      nav: nav('nav.admin', '管理面板', 'users', 'admin', 10)
+      nav: nav('nav.admin', 'Admin Panel', 'users', 'admin', 10)
     }
   },
   { path: '/s/:code', name: 'Share', component: () => import('@/views/Share.vue'), meta: { noLayout: true } },
-  { path: '/api-docs', name: 'ApiDocs', component: () => import('@/views/ApiDocs.vue'), meta: { pageTitle: 'API 文档', pageTitleKey: 'nav.apiDocs' } },
-  { path: '/theme-docs', name: 'ThemeDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: '插件开发', pageTitleKey: 'nav.themeDocs' } },
-  { path: '/plugin-docs', name: 'PluginDocs', component: () => import('@/views/PluginDocs.vue'), meta: { pageTitle: '主题开发', pageTitleKey: 'nav.themeDocs' } }
+  { path: '/api-docs', name: 'ApiDocs', component: () => import('@/views/ApiDocs.vue'), meta: { pageTitle: 'API Docs', pageTitleKey: 'nav.apiDocs' } },
+  { path: '/theme-docs', name: 'ThemeDocs', component: () => import('@/views/ThemeDocs.vue'), meta: { pageTitle: 'Plugin Development', pageTitleKey: 'nav.themeDocs' } },
+  { path: '/plugin-docs', name: 'PluginDocs', component: () => import('@/views/PluginDocs.vue'), meta: { pageTitle: 'Plugin Development', pageTitleKey: 'nav.themeDocs' } }
 ]
 
 export const appRoutes: RouteRecordRaw[] = appRouteModules
 
 export const headerLinks: HeaderLink[] = [
-  { label: 'API 文档', labelKey: 'nav.apiDocs', icon: 'book-open', to: '/api-docs', order: 10 },
-  { label: '插件开发', labelKey: 'nav.themeDocs', icon: 'palette', to: '/theme-docs', order: 20 }
+  { label: 'API Docs', labelKey: 'nav.apiDocs', icon: 'book-open', to: '/api-docs', order: 10 },
+  { label: 'Plugin Development', labelKey: 'nav.themeDocs', icon: 'palette', to: '/theme-docs', order: 20 }
 ]
 
 export function getSidebarSections(isAdmin: boolean): SidebarSection[] {
@@ -190,7 +201,7 @@ export function getSidebarSections(isAdmin: boolean): SidebarSection[] {
     },
     {
       id: 'admin',
-      title: '管理',
+      title: 'Admin',
       titleKey: 'nav.admin',
       items: items
         .filter((item) => item.section === 'admin')

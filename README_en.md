@@ -6,7 +6,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 
 ## Current Status
 
-- Version: `2.0.0-beta.1`
+- Version: `2.0.0-beta.7`
 - Frontend: Vue 3 + Vite
 - Backend: Express + TypeScript
 - Runtime databases: `sqlite`, `mysql`, `postgres`
@@ -19,12 +19,22 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - Multi-storage pool management per user
 - File list, upload, stream upload, resumable upload, download, preview
 - Cross-pool copy and move
+- Cross-pool shared mounts that unify folders from different storage pools under `/share`
 - Remote upload and offline download tasks
 - Recycle bin and favourites
 - Share links and guest folder shares
 - WebDAV with JWT, API key, and basic auth
 - Theme and plugin discovery from `plugins/`
 - UI translations loaded from `public/i18n/`
+
+## Cross-Pool Shared Mounts
+
+- A dedicated sidebar page exposes the cross-pool shared mount workspace, rooted at `/share`
+- In File Manager, folders can be mounted into `/share` individually or in batches
+- Mount targets are relative to `/share`; for example, `abc` maps to `/share/abc`
+- When multiple mounted source folders collide inside the same target, the mounted folder name is rewritten as `<sourceFolderName>_<storagePoolId>`
+- Virtual mount directories can be created and removed, and full mount directories can be unmounted from the shared mounts page
+- The feature also exposes dedicated listing APIs and authenticated direct access through `/share/<path>`
 
 ## Runtime Requirements
 

@@ -8,6 +8,7 @@ app:
   loading: Loading...
 nav:
   fileManager: File Manager
+  shareMounts: Cross-Pool Shared Mounts
   offlineTasks: Offline Tasks
   favourites: Favourites
   myShares: My Shares
@@ -124,6 +125,27 @@ file:
   name: Name
   size: Size
   modified: Modified
+shareMount:
+  menu: Cross-Pool Mount
+  batchMenu: Batch Cross-Pool Mount
+  title: Cross-Pool Mount
+  desc: Mount the selected folders into the shared cross-pool directory under /share.
+  selectFolder: Choose Mount Folder
+  createFolder: Create Mount Folder
+  targetDir: Target Mount Directory
+  newDirName: New Mount Directory Name
+  newDirPlaceholder: "For example: abc"
+  selectedFolders: Folders to Mount
+  confirmMount: Confirm Mount
+  success: Cross-pool mount created
+  onlyFolders: Only folders can be mounted
+  mountFailed: Mount failed
+  loadFailed: Failed to load share mounts
+  unmount: Unmount
+  unmountTitle: Unmount Share Mount
+  unmountMessage: Are you sure you want to unmount {name}?
+  unmountConfirm: Unmount
+  unmountFailed: Failed to unmount share mount
 upload:
   shortTitle: Upload
   title: Upload Files

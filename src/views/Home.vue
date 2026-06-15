@@ -10,6 +10,7 @@ import ContextMenu from '@/components/ContextMenu.vue'
 import FileDetailPanel from '@/components/FileDetailPanel.vue'
 import SpotlightSearch from '@/components/SpotlightSearch.vue'
 import GuestShareDialog from '@/components/GuestShareDialog.vue'
+import ShareMountDialog from '@/components/ShareMountDialog.vue'
 import Toast from '@/components/Toast.vue'
 import MoveDialog from '@/components/MoveDialog.vue'
 import Icon from '@/components/Icon.vue'
@@ -392,6 +393,13 @@ const { t } = useI18n()
     :pool-id="state.fileToGuestShare.poolId || state.currentPoolId"
     @close="state.showGuestShare = false"
     @done="state.filesStore.fetchFiles(state.currentPath, state.currentPoolId)"
+  />
+
+  <ShareMountDialog
+    :show="state.showShareMount"
+    :items="state.filesToShareMount"
+    @close="state.showShareMount = false"
+    @done="state.showToast(t('shareMount.success', 'Cross-pool mount created'), 'success')"
   />
 
   <MoveDialog

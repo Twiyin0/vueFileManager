@@ -171,6 +171,145 @@ Request body:
 { "path": "/note.txt", "content": "hello", "poolId": 1 }
 ```
 
+## Cross-Pool Shared Mount Endpoints
+
+Unless noted otherwise, all `/api/share-mounts/*` endpoints require JWT or API Key auth, and API Keys need `read` or the corresponding write permission.
+
+### `GET /api/share-mounts/list`
+
+Query params:
+
+- `path`
+- `showAll`
+
+Notes:
+
+- By default, this returns the file and folder list for the current shared mount path
+- `path` is relative to `/share`
+- When `showAll=true`, the endpoint returns a flattened file list
+
+Default response example:
+
+```json
+{
+  "files": [
+    {
+      "name": "test_2",
+      "type": "folder",
+      "path": "abc/test_2",
+      "mountId": 3
+    }
+  ]
+}
+```
+
+`showAll=true` response example:
+
+```json
+{
+  "file": [
+    {
+      "fileName": "demo.txt",
+      "filePath": "abc/test_2/demo.txt",
+      "fileDirect": "/share/abc/test_2/demo.txt?apiKey=***"
+    }
+  ]
+}
+```
+
+### `GET /api/share-mounts/directories`
+
+Returns the mount directory list created by the current user.
+
+Response example:
+
+```json
+{ "directories": ["", "abc", "abc/nested"] }
+```
+
+Notes:
+
+- The empty string `""` represents the `/share` root
+
+### `POST /api/share-mounts/directories`
+
+Creates a mount directory.
+
+Request body:
+
+```json
+{ "path": "abc" }
+```
+
+Notes:
+
+- The example above creates `/share/abc`
+
+### `POST /api/share-mounts/mount`
+
+Mounts one or more source folders into a target directory.
+
+Request body:
+
+```json
+{
+  "targetPath": "abc",
+  "items": [
+    { "sourcePoolId": 1, "sourcePath": "/alist/test" },
+    { "sourcePoolId": 2, "sourcePath": "/alist/test" }
+  ]
+}
+```
+
+Notes:
+
+- `targetPath` is relative to `/share`
+- Only folders can be mounted
+- If names collide under the same target directory, the mounted folder name is rewritten as `<sourceFolderName>_<storagePoolId>`
+
+### `POST /api/share-mounts/unmount`
+
+Unmounts an item.
+
+Two request modes are supported:
+
+1. Unmount a specific mounted item:
+
+```json
+{ "mountId": 3 }
+```
+
+2. Remove a virtual mount directory:
+
+```json
+{ "path": "abc" }
+```
+
+Notes:
+
+- Passing `mountId` removes only one mounted item
+- Passing `path` recursively removes mounted items and virtual directories under that shared mount directory
+
+## Direct Shared Mount Access
+
+### `GET /share`
+
+### `GET /share/*`
+
+Notes:
+
+- These endpoints provide direct access to cross-pool shared mount folders and files
+- JWT or API Key auth is required
+- For browser testing, `?token=` and `?apiKey=` query parameters are supported
+- When the path resolves to a directory, the response is `{ files, path }`
+- When the path resolves to a file, the response is returned inline for preview by default
+- Append `?download=true` to force download
+
+Examples:
+
+- `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>`
+- `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>&download=true`
+
 ## User Settings Endpoints
 
 ### `GET /api/user/settings`

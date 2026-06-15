@@ -107,6 +107,27 @@ export async function createBaseTables(database: DatabaseAdapter) {
         FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS share_mount_dirs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(user_id, path)
+      );
+
+      CREATE TABLE IF NOT EXISTS share_mounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        target_path TEXT NOT NULL,
+        source_pool_id INTEGER NOT NULL,
+        source_path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (source_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE,
+        UNIQUE(user_id, target_path, source_pool_id, source_path)
+      );
+
       CREATE TABLE IF NOT EXISTS offline_download_tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -222,6 +243,27 @@ export async function createBaseTables(database: DatabaseAdapter) {
         CONSTRAINT fk_guest_shares_pool FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS share_mount_dirs (
+        id BIGINT PRIMARY KEY AUTO_INCREMENT,
+        user_id BIGINT NOT NULL,
+        path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_share_mount_dirs_user_path (user_id, path(255)),
+        CONSTRAINT fk_share_mount_dirs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS share_mounts (
+        id BIGINT PRIMARY KEY AUTO_INCREMENT,
+        user_id BIGINT NOT NULL,
+        target_path TEXT NOT NULL,
+        source_pool_id BIGINT NOT NULL,
+        source_path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_share_mounts_user_target_source (user_id, target_path(255), source_pool_id, source_path(255)),
+        CONSTRAINT fk_share_mounts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_share_mounts_pool FOREIGN KEY (source_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
+      );
+
       CREATE TABLE IF NOT EXISTS offline_download_tasks (
         id BIGINT PRIMARY KEY AUTO_INCREMENT,
         user_id BIGINT NOT NULL,
@@ -324,6 +366,24 @@ export async function createBaseTables(database: DatabaseAdapter) {
       storage_pool_id BIGINT NOT NULL REFERENCES storage_pools(id) ON DELETE CASCADE,
       label TEXT DEFAULT '',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS share_mount_dirs (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      path TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id, path)
+    );
+
+    CREATE TABLE IF NOT EXISTS share_mounts (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_path TEXT NOT NULL,
+      source_pool_id BIGINT NOT NULL REFERENCES storage_pools(id) ON DELETE CASCADE,
+      source_path TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id, target_path, source_pool_id, source_path)
     );
 
     CREATE TABLE IF NOT EXISTS offline_download_tasks (

@@ -12,6 +12,10 @@ export interface FileItem {
   isPool?: boolean
   directUrl?: string
   fileUrl?: string
+  isVirtual?: boolean
+  mountId?: number
+  sourcePath?: string
+  sourcePoolId?: number
 }
 
 export interface DirectoryReadme {

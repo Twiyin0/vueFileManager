@@ -39,6 +39,7 @@ const props = withDefaults(defineProps<{
   files: FileItem[]
   loading: boolean
   showActions?: boolean
+  readOnlyActions?: boolean
   selectMode?: boolean
   selectedFiles?: Set<string>
   viewMode?: 'list' | 'grid'
@@ -237,30 +238,31 @@ function getPreviewUrl(file: FileItem): string {
           {{ formatDate(file.modified) }}
         </div>
 
-        <div v-if="showActions" class="col-span-4 flex items-center justify-end gap-0.5 sm:col-span-2 sm:gap-1" @click.stop>
-          <button
-            class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-            :title="t('common.details', 'Details')"
-            @click="emit('detail', file)"
-          >
-            <Icon name="circle-information" class="h-4 w-4" style="color: var(--text-secondary-color)" />
-          </button>
+          <div v-if="showActions" class="col-span-4 flex items-center justify-end gap-0.5 sm:col-span-2 sm:gap-1" @click.stop>
+            <button
+              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+              :title="t('common.details', 'Details')"
+              @click="emit('detail', file)"
+            >
+              <Icon name="circle-information" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+            </button>
 
-          <button
-            v-if="file.type === 'file'"
+            <button
+              v-if="file.type === 'file'"
             class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
             :title="t('file.download', 'Download')"
-            @click="emit('download', file)"
-          >
-            <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
-          </button>
+              @click="emit('download', file)"
+            >
+              <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+            </button>
 
-          <button
-            class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-            :title="t('common.delete', 'Delete')"
-            @click="emit('delete', file)"
-          >
-            <Icon name="trash" class="h-4 w-4 text-red-500" />
+            <button
+              v-if="!readOnlyActions"
+              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+              :title="t('common.delete', 'Delete')"
+              @click="emit('delete', file)"
+            >
+              <Icon name="trash" class="h-4 w-4 text-red-500" />
           </button>
         </div>
       </div>

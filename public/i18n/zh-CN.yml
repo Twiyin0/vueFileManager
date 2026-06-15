@@ -8,6 +8,7 @@ app:
   loading: 加载中...
 nav:
   fileManager: 文件管理
+  shareMounts: 跨池共享挂载
   offlineTasks: 离线任务
   favourites: 我的收藏
   myShares: 我的分享
@@ -124,6 +125,27 @@ file:
   name: 名称
   size: 大小
   modified: 修改时间
+shareMount:
+  menu: 跨池挂载
+  batchMenu: 批量跨池挂载
+  title: 跨池挂载
+  desc: 将选中的文件夹挂载到跨池共享目录 /share 下。
+  selectFolder: 选择挂载文件夹
+  createFolder: 新建挂载文件夹
+  targetDir: 目标挂载目录
+  newDirName: 新挂载目录名称
+  newDirPlaceholder: "例如：abc"
+  selectedFolders: 待挂载文件夹
+  confirmMount: 确认挂载
+  success: 跨池挂载已创建
+  onlyFolders: 仅支持挂载文件夹
+  mountFailed: 挂载失败
+  loadFailed: 加载共享挂载失败
+  unmount: 取消挂载
+  unmountTitle: 取消挂载
+  unmountMessage: 确认取消挂载 {name} 吗？
+  unmountConfirm: 取消挂载
+  unmountFailed: 取消挂载失败
 upload:
   shortTitle: 上传
   title: 上传文件

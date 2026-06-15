@@ -8,6 +8,7 @@ const route = useRoute()
 const needsLayout = computed(() => !route.meta.noLayout)
 const keepAliveRouteNames = [
   'Home',
+  'ShareMounts',
   'OfflineTasks',
   'Favourites',
   'MyShares',
