@@ -7,6 +7,16 @@ Base URL examples:
 - Development backend: `http://localhost:3000`
 - API base path: `http://localhost:3000/api`
 
+## Response Language
+
+- Backend responses use runtime i18n
+- The server resolves language in this order:
+  1. current account language
+  2. `Accept-Language` request header
+  3. English fallback
+- Frontend locale files live in `public/i18n/`
+- Backend runtime locale files live in `server/i18n/`
+
 ## Authentication
 
 ### JWT
@@ -21,6 +31,13 @@ Authorization: Bearer <token>
 X-API-Key: <key>
 ```
 
+### Query Auth Helpers
+
+For browser testing on share-style routes:
+
+- `?token=<jwt>`
+- `?apiKey=<key>`
+
 ### WebDAV Auth
 
 For `/dav`:
@@ -28,15 +45,13 @@ For `/dav`:
 - Basic Auth
 - JWT Bearer Token
 - API Key
-- You can also test with `?token=` or `?apiKey=` query parameters
 
 ## Public Endpoints
 
 ### `GET /api/site-config`
 
-Returns basic site config:
+Returns public site config:
 
-- `language`
 - `icp_beian`
 - `police_beian`
 - `smtp_enabled`
@@ -80,6 +95,7 @@ Notes:
 
 - `email` and `code` are only required when SMTP-backed registration is enabled
 - Passwords are still stored with MD5 in the current implementation
+- New users receive the current default language from `.env` on first initialization
 
 ### `POST /api/auth/login`
 
@@ -88,6 +104,10 @@ Request body:
 ```json
 { "username": "admin", "password": "admin" }
 ```
+
+### `POST /api/auth/logout`
+
+Logs out the current user.
 
 ### `GET /api/auth/me`
 
@@ -112,58 +132,47 @@ Query params:
 - `path`
 - `poolId`
 
-Lists directory contents.
+Notes:
+
+- When neither `path` nor `poolId` is provided, the endpoint returns virtual storage-pool folders
+- Regular file rows include direct access fields such as `directUrl` and `fileUrl`
+
+### `GET /api/files/info`
+
+Returns file or folder metadata for one path.
 
 ### `POST /api/files/upload`
 
 Multipart upload endpoint used by regular and concurrent uploads.
 
-Common params:
+Common form fields:
 
 - `path`
 - `poolId`
 
-### `POST /api/files/mkdir`
+### `POST /api/files/upload-stream`
 
-Creates a directory.
+Stream upload endpoint for large files.
 
-Request body:
+### `POST /api/files/upload/init`
 
-```json
-{ "path": "/example", "poolId": 1 }
-```
+Initializes a resumable upload.
 
-### `POST /api/files/rename`
+### `GET /api/files/upload/:uploadId/status`
 
-Renames a file or directory.
+Returns resumable upload status.
 
-### `POST /api/files/move`
+### `POST /api/files/upload/:uploadId/complete`
 
-Moves a file or directory.
+Finalizes a resumable upload.
 
-### `POST /api/files/copy`
+### `DELETE /api/files/upload/:uploadId`
 
-Copies a file or directory, including cross-pool copies.
-
-### `DELETE /api/files/delete`
-
-Deletes a single file or directory.
-
-### `POST /api/files/batch-delete`
-
-Batch delete.
-
-### `GET /api/files/download`
-
-Downloads a file.
-
-### `GET /api/files/preview`
-
-Previews file content. Text, image, audio, and video previews depend on this endpoint.
+Cancels and removes a resumable upload session.
 
 ### `POST /api/files/write`
 
-Writes text content back to the file, used by text preview editing.
+Writes text content back to a file.
 
 Request body:
 
@@ -171,9 +180,136 @@ Request body:
 { "path": "/note.txt", "content": "hello", "poolId": 1 }
 ```
 
+### `POST /api/files/mkdir`
+
+Creates a directory.
+
+### `POST /api/files/rename`
+
+Renames a file or directory.
+
+### `POST /api/files/move`
+
+Moves a file or directory within the same pool.
+
+### `POST /api/files/copy`
+
+Copies a file or directory within the same pool.
+
+### `POST /api/files/batch-move`
+
+Moves multiple items into a destination directory.
+
+### `POST /api/files/cross-copy`
+
+Copies items across storage pools.
+
+### `POST /api/files/cross-move`
+
+Moves items across storage pools.
+
+### `DELETE /api/files/delete`
+
+Deletes one file or directory.
+
+### `POST /api/files/delete`
+
+Alternative delete endpoint for clients that cannot send `DELETE` with a body.
+
+### `POST /api/files/batch-delete`
+
+Deletes multiple items.
+
+### `GET /api/files/search`
+
+Query params:
+
+- `q`
+- `path`
+- `poolId`
+
+### `GET /api/files/download`
+
+Downloads a single file.
+
+### `POST /api/files/download-zip`
+
+Downloads multiple files as a ZIP archive.
+
+Request body:
+
+```json
+{ "paths": ["/a.txt", "/b.txt"], "poolId": 1 }
+```
+
+### `GET /api/files/preview`
+
+Previews file content.
+
+Notes:
+
+- Text responses are returned without cache
+- Binary preview responses use `ETag`
+- Audio and video preview responses support `Range`
+- Media preview uses server-side cache files when available
+
+### `GET /api/files/storage-stats`
+
+Returns recursive storage statistics for the selected pool.
+
+## Remote Upload and Offline Download
+
+All endpoints below require JWT or API Key with `write` permission.
+
+### `POST /api/files/remote-upload`
+
+Uploads one or more remote files directly into the current directory.
+
+Request body examples:
+
+```json
+{ "url": "https://example.com/file-a.zip", "dirPath": "demo", "poolId": 1 }
+```
+
+```json
+{ "urls": ["https://example.com/a.zip", "https://example.com/b.zip"], "dirPath": "demo", "poolId": 1 }
+```
+
+```json
+{ "url": "https://example.com/a.zip, https://example.com/b.zip", "dirPath": "demo", "poolId": 1 }
+```
+
+Response notes:
+
+- `count` is the number of successful uploads
+- `files` contains uploaded file metadata and direct URLs
+- `errors` contains per-URL failures if only part of the batch succeeds
+
+### `POST /api/files/offline-download`
+
+Creates one or more background offline download tasks.
+
+Request body accepts the same `url` / `urls` / comma-separated formats as remote upload.
+
+### `GET /api/files/offline-download/tasks`
+
+Returns current offline tasks for the signed-in user.
+
+### `POST /api/files/offline-download/tasks/:id/cancel`
+
+Cancels one offline task.
+
+### `POST /api/files/offline-download/tasks/:id/retry`
+
+Re-queues one failed or cancelled task.
+
+### `POST /api/files/offline-download/tasks/clear-finished`
+
+Clears finished tasks for the current user.
+
 ## Cross-Pool Shared Mount Endpoints
 
-Unless noted otherwise, all `/api/share-mounts/*` endpoints require JWT or API Key auth, and API Keys need `read` or the corresponding write permission.
+Unless noted otherwise, all `/api/share-mounts/*` endpoints require JWT or API Key auth. Listing endpoints accept API Keys, while mount and unmount management endpoints require a signed-in user session.
 
 ### `GET /api/share-mounts/list`
 
@@ -186,7 +322,7 @@ Notes:
 
 - By default, this returns the file and folder list for the current shared mount path
 - `path` is relative to `/share`
-- When `showAll=true`, the endpoint returns a flattened file list
+- When `showAll=true`, the endpoint returns a flattened file list in the format required by automation clients
 
 Default response example:
 
@@ -233,17 +369,13 @@ Notes:
 
 ### `POST /api/share-mounts/directories`
 
-Creates a mount directory.
+Creates a virtual mount directory.
 
 Request body:
 
 ```json
 { "path": "abc" }
 ```
-
-Notes:
-
-- The example above creates `/share/abc`
 
 ### `POST /api/share-mounts/mount`
 
@@ -268,8 +400,6 @@ Notes:
 - If names collide under the same target directory, the mounted folder name is rewritten as `<sourceFolderName>_<storagePoolId>`
 
 ### `POST /api/share-mounts/unmount`
-
-Unmounts an item.
 
 Two request modes are supported:
 
@@ -304,13 +434,18 @@ Notes:
 - When the path resolves to a directory, the response is `{ files, path }`
 - When the path resolves to a file, the response is returned inline for preview by default
 - Append `?download=true` to force download
+- Audio and video files support preview cache and `Range` requests
 
 Examples:
 
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>`
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>&download=true`
 
-## User Settings Endpoints
+## User Endpoints
+
+### `GET /api/user/info`
+
+Returns the current user profile, pool list, storage stats, and dashboard counts.
 
 ### `GET /api/user/settings`
 
@@ -319,11 +454,41 @@ Returns current user settings, including:
 - `guestEnabled`
 - `guestPath`
 - `theme`
+- `language`
 - `uploadConcurrency`
+- `serverDefaultUploadConcurrency`
 
 ### `PUT /api/user/settings`
 
 Updates current user settings.
+
+### `GET /api/user/apikeys`
+
+Returns current user API keys.
+
+### `POST /api/user/apikeys`
+
+Creates one API key.
+
+### `DELETE /api/user/apikeys/:id`
+
+Deletes one API key.
+
+### `GET /api/user/guest-shares`
+
+Returns guest folder shares owned by the current user.
+
+### `POST /api/user/guest-shares`
+
+Creates one guest folder share.
+
+### `PUT /api/user/guest-shares/:id`
+
+Updates one guest folder share.
+
+### `DELETE /api/user/guest-shares/:id`
+
+Deletes one guest folder share.
 
 ## Admin Endpoints
 
@@ -335,7 +500,7 @@ Returns system settings:
 
 - `upload_limit`
 - `max_concurrent_uploads`
-- `language`
+- `log_level`
 
 ### `PUT /api/admin/upload-limit`
 
@@ -345,7 +510,7 @@ Updates system settings:
 {
   "upload_limit": 100,
   "max_concurrent_uploads": 3,
-  "language": "zh-CN"
+  "log_level": 2
 }
 ```
 
@@ -353,13 +518,17 @@ Updates system settings:
 
 Returns database config and current runtime status.
 
+Notes:
+
+- MySQL and PostgreSQL passwords are masked as `******` when already configured
+
 ### `PUT /api/admin/database`
 
-Saves database config.
+Saves database config into `config.yml`.
 
 ### `POST /api/admin/database/test`
 
-Tests database connectivity.
+Tests database connectivity without forcing a runtime switch.
 
 ### `GET /api/admin/users`
 
@@ -407,14 +576,6 @@ Deletes a user.
 
 Returns current IP entries.
 
-### `GET /api/admin/ip-list/mode`
-
-Returns the current IP control mode: `blacklist` or `whitelist`.
-
-### `PUT /api/admin/ip-list/mode`
-
-Switches the IP control mode.
-
 ### `POST /api/admin/ip-blacklist`
 
 Adds an IP entry.
@@ -422,6 +583,14 @@ Adds an IP entry.
 ### `DELETE /api/admin/ip-blacklist/:id`
 
 Deletes an IP entry.
+
+### `GET /api/admin/ip-list/mode`
+
+Returns the current IP control mode: `blacklist` or `whitelist`.
+
+### `PUT /api/admin/ip-list/mode`
+
+Switches the IP control mode.
 
 ## WebDAV
 

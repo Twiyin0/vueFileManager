@@ -2,11 +2,11 @@
 
 # VueFileManager
 
-VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It supports multi-storage pools, guest sharing, WebDAV, recycle bin, favourites, API keys, theme and plugin extension, runtime-switchable database adapters, and a built-in i18n layer.
+VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It supports multi-storage pools, guest sharing, WebDAV, recycle bin, favourites, API keys, theme and plugin discovery, cross-pool shared mounts, background offline downloads, remote uploads, and a runtime i18n layer for both frontend and backend responses.
 
 ## Current Status
 
-- Version: `2.0.0-beta.7`
+- Version: `2.0.0-beta.9`
 - Frontend: Vue 3 + Vite
 - Backend: Express + TypeScript
 - Runtime databases: `sqlite`, `mysql`, `postgres`
@@ -14,27 +14,36 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 
 ## Core Features
 
-- User registration, login, JWT auth, API keys
-- Admin user management, quota control, ban or unban, manual verification
-- Multi-storage pool management per user
-- File list, upload, stream upload, resumable upload, download, preview
+- User registration, login, JWT auth, and API keys
+- Admin user management, quota control, ban or unban, and manual verification
+- Per-user multi-storage-pool management
+- File listing, upload, stream upload, resumable upload, download, preview, search, and ZIP download
 - Cross-pool copy and move
-- Cross-pool shared mounts that unify folders from different storage pools under `/share`
-- Remote upload and offline download tasks
-- Recycle bin and favourites
-- Share links and guest folder shares
-- WebDAV with JWT, API key, and basic auth
+- Cross-pool shared mounts under `/share`
+- Remote upload and background offline download tasks, including comma-separated batch URLs
+- Recycle bin, favourites, guest folder shares, and public shares
+- WebDAV with basic auth, JWT, and API key support
 - Theme and plugin discovery from `plugins/`
-- UI translations loaded from `public/i18n/`
+- Frontend i18n from `public/i18n/`
+- Backend runtime i18n from `server/i18n/` with English fallback
 
 ## Cross-Pool Shared Mounts
 
-- A dedicated sidebar page exposes the cross-pool shared mount workspace, rooted at `/share`
+- The sidebar exposes a dedicated shared mount workspace rooted at `/share`
 - In File Manager, folders can be mounted into `/share` individually or in batches
 - Mount targets are relative to `/share`; for example, `abc` maps to `/share/abc`
-- When multiple mounted source folders collide inside the same target, the mounted folder name is rewritten as `<sourceFolderName>_<storagePoolId>`
-- Virtual mount directories can be created and removed, and full mount directories can be unmounted from the shared mounts page
-- The feature also exposes dedicated listing APIs and authenticated direct access through `/share/<path>`
+- If mounted source folders collide inside the same target directory, the folder name is rewritten as `<sourceFolderName>_<storagePoolId>`
+- Virtual mount directories can be created and removed
+- Shared mount files and folders can be listed through `/api/share-mounts/*`
+- Authenticated direct access is available through `/share/<path>`
+- Shared mount file preview now uses the same media cache strategy as regular file preview
+
+## Remote Upload and Offline Tasks
+
+- File Manager supports direct remote upload and server-side offline download
+- The input accepts one or more URLs separated by commas
+- Immediate mode downloads the remote resource and writes it into the selected storage pool right away
+- Offline mode creates background tasks that can be viewed and retried from the Offline Tasks page
 
 ## Runtime Requirements
 
@@ -50,7 +59,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 yarn install
 ```
 
-## Development Deployment
+## Development
 
 Run full development mode:
 
@@ -91,6 +100,7 @@ Artifacts to deploy:
 - `dist/`
 - `dist-server/`
 - `config.yml`
+- `.env`
 - `package.json`
 - `yarn.lock`
 - `.yarn/`
@@ -138,22 +148,31 @@ Important fields:
   - Default: `2`
 - `database`
   - Runtime database config for `sqlite`, `mysql`, and `postgres`
+- `storage_pools`
+  - Preconfigured storage pools inherited by newly created users
 
-Admins can also update these from the admin panel:
+Admins can update these from the admin panel:
 
 - Upload limit
 - Max concurrent uploads
 - Log level
 - Database connection settings
 
-## Language Settings
+## Language and i18n
 
 - `config.yml` no longer stores the UI language
 - `DEFAULT_LANGUAGE` in `.env` is only used when initializing `user_settings.language` for the first time
 - After a user is created, the active UI language is stored in `user_settings.language`
-- Later startup, login, and language switching always use the language saved in the current account
+- Future startup, login, and language switching always use the language saved in the current account
 - Changing language does not restart the frontend or backend service
 - Legacy `language` or `default_language` fields in `config.yml` are ignored and removed on later config saves
+- Frontend locale files live in:
+  - `public/i18n/zh-CN.yml`
+  - `public/i18n/en-US.yml`
+- Backend runtime locale files live in:
+  - `server/i18n/zh-cn.json`
+  - `server/i18n/en-us.json`
+- Backend API responses resolve by account language first, then request headers, and finally fall back to English
 
 Example `.env`:
 
@@ -166,10 +185,12 @@ Supported values:
 - `zh-CN`
 - `en-US`
 
-If you are upgrading an existing database:
+Suggested workflow for new copy:
 
-- the migration adds the `language` field to `user_settings`
-- existing users with an empty language field will receive the `.env` `DEFAULT_LANGUAGE` value during migration
+1. Add the Chinese key to `public/i18n/zh-CN.yml`.
+2. Add the matching English key to `public/i18n/en-US.yml`.
+3. Add backend response keys to `server/i18n/zh-cn.json` and `server/i18n/en-us.json` when needed.
+4. Use English as the fallback string in `ts` and `vue` source files.
 
 ## Logging
 
@@ -197,34 +218,6 @@ Log format:
 [source][level]YYYY-MM-DD_HH:mm:ss.SSS(file.ts): message
 ```
 
-Example:
-
-```text
-[web][info]2026-06-14_16:17:18.234(upload-routes.ts): User Admin uploaded a file in poolID:#1 /test/text/test.txt
-```
-
-Error logs additionally include:
-
-- error name
-- error message
-- stack trace
-- available context details
-
-## i18n Convention
-
-- Locale directory: `public/i18n/`
-- Built-in locales:
-  - `public/i18n/zh-CN.yml`
-  - `public/i18n/en-US.yml`
-- UI copy should use `useI18n().t('key.path')`
-- User language is stored in account settings instead of `config.yml`
-
-Suggested workflow for new copy:
-
-1. Add the Chinese key to `zh-CN.yml`.
-2. Add the matching English key to `en-US.yml`.
-3. Read the value in the UI with `useI18n().t('key.path')`.
-
 ## Database Support
 
 The backend uses a unified adapter layer for:
@@ -239,7 +232,7 @@ Business data is stored directly in the configured runtime database.
 
 1. Update `config.yml`
 2. Migrate data first if switching across database types
-3. Restart the service
+3. Restart the service when you want runtime connections to switch
 
 Admin APIs:
 
@@ -301,29 +294,6 @@ Options:
 - `--target mysql|postgres`
 - `--truncate`
 
-Migrated tables:
-
-- `users`
-- `user_settings`
-- `storage_pools`
-- `api_keys`
-- `shares`
-- `trash`
-- `favourites`
-- `guest_shares`
-- `ip_blacklist`
-- `ip_whitelist`
-- `ip_list_config`
-- `verification_codes`
-- `offline_download_tasks`
-
-Notes:
-
-- Primary keys are preserved where possible
-- Target schema is created automatically before import
-- Uploaded files are not stored in the database
-- Keep `uploads/` and external storage configuration unchanged during cutover
-
 ## Scripts
 
 - `yarn dev`
@@ -341,10 +311,11 @@ Notes:
 
 ```text
 server/               Express backend
+server/i18n/          Backend runtime locale files
 src/                  Vue frontend
 plugins/              Theme and feature plugins
 public/               Public docs and static assets
-public/i18n/          Locale files
+public/i18n/          Frontend locale files
 scripts/              Build and migration helpers
 dist/                 Built frontend
 dist-server/          Built backend bundles

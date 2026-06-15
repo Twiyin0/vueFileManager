@@ -1,22 +1,83 @@
+# VueFileManager 配置文件
+
+# ============================================================
+# 默认管理员账户
+# ============================================================
 admin:
   username: admin
+  # 密码的 MD5 值，默认为 MD5("admin") = 21232f297a57a5a743894a0e4a801fc3
+  # 计算方式示例:
+  #   echo -n "your-password" | md5
   password: 21232f297a57a5a743894a0e4a801fc3
+
+# ============================================================
+# 服务器配置
+# ============================================================
 server:
+  # 服务监听端口
   port: 3000
+  # 监听地址：
+  #   localhost  仅本机访问
+  #   0.0.0.0    允许局域网或反向代理访问
   host: 0.0.0.0
+  # JWT 密钥，用于 Token 签名，生产环境请务必修改
   jwt_secret: vue-file-manager-secret-key-2024
+
+# ============================================================
+# 本地存储根目录
+# ============================================================
+# 所有本地存储池默认基于此目录
+# 例如设为 ./uploads，则本地文件会写入该目录下
 storage_root: ./uploads
+
+# ============================================================
+# 上传限制
+# ============================================================
+# 单文件上传大小限制，单位 MB
 upload_limit: 100
+
+# 同时上传任务数限制
 max_concurrent_uploads: 3
+
+# 断点续传缓存保留时间，单位分钟
+# 超时未完成的上传缓存会被自动清理
 resumable_upload_cache_minutes: 120
+
+# ============================================================
+# IP 访问控制
+# ============================================================
+# 可选值：
+#   blacklist  黑名单模式，拦截列表中的 IP
+#   whitelist  白名单模式，仅允许列表中的 IP
 ip_list_mode: blacklist
+
+# ============================================================
+# 站点信息
+# ============================================================
 site:
+  # ICP 备案号，留空则不显示
+  # 示例: 粤ICP备12345678号-1
   icp_beian: ''
+  # 公安备案号，留空则不显示
+  # 示例: 粤公网安备12345678901234号
   police_beian: ''
+
+# ============================================================
+# 运行时数据库配置
+# ============================================================
+# 可选值：
+#   sqlite
+#   mysql
+#   postgres
 database:
   type: sqlite
+
+  # SQLite 配置
   sqlite:
+    # SQLite 文件路径
     path: ./data/filemanager.db
+
+  # MySQL 配置示例
   mysql:
     host: 127.0.0.1
     port: 3306
@@ -24,6 +85,8 @@ database:
     password: ''
     database: vue_file_manager
     ssl: false
+
+  # PostgreSQL 配置示例
   postgres:
     host: 127.0.0.1
     port: 5432
@@ -31,12 +94,66 @@ database:
     password: ''
     database: vue_file_manager
     ssl: false
+
+# ============================================================
+# 存储池配置
+# ============================================================
+# 在这里预配置存储池，新注册用户会自动继承这些配置
+# 也可以在前端“存储池”页面中继续管理
+#
+# 字段说明：
+#   name: 存储池名称
+#   type: 存储类型
+#   default: 是否为默认存储池
+#   config: 对应存储类型的配置
+#
+# 当前已支持示例类型：
+#   local / upyun / ftp / s3
 storage_pools:
   - name: 本地存储
     type: local
     default: true
     config:
+      # 本地目录路径
       localPath: ./uploads
+
+  # 又拍云示例
+  # - name: 又拍云存储
+  #   type: upyun
+  #   default: false
+  #   config:
+  #     upyunOperator: your-operator
+  #     upyunPassword: your-password
+  #     upyunBucket: your-bucket
+  #     upyunEndpoint: v0.api.upyun.com
+
+  # FTP 示例
+  # - name: FTP 存储
+  #   type: ftp
+  #   default: false
+  #   config:
+  #     ftpHost: ftp.example.com
+  #     ftpPort: 21
+  #     ftpUser: admin
+  #     ftpPassword: your-password
+  #     ftpRemotePath: /uploads
+
+  # S3 / OSS 示例
+  # - name: S3 存储
+  #   type: s3
+  #   default: false
+  #   config:
+  #     s3Endpoint: https://s3.amazonaws.com
+  #     s3Region: us-east-1
+  #     s3AccessKeyId: your-access-key
+  #     s3SecretAccessKey: your-secret-key
+  #     s3Bucket: your-bucket
+  #     s3Prefix: uploads/
+
+# ============================================================
+# SMTP 邮箱配置
+# ============================================================
+# 用于注册验证码、邮件通知等场景
 smtp:
   enabled: false
   host: smtp.example.com
@@ -44,7 +161,13 @@ smtp:
   secure: true
   user: noreply@example.com
   pass: your-password
+  # 发件人示例
   from: VueFileManager <noreply@example.com>
+
+# ============================================================
+# 插件系统
+# ============================================================
 plugins:
   enabled: true
+  # 插件目录，系统会从这里加载主题和插件
   dir: ./plugins

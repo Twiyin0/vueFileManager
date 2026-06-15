@@ -7,6 +7,16 @@
 - 开发后端：`http://localhost:3000`
 - API 基础路径：`http://localhost:3000/api`
 
+## 返回语言
+
+- 后端接口返回使用运行时 i18n
+- 服务端解析语言顺序为：
+  1. 当前账户保存的语言
+  2. 请求头 `Accept-Language`
+  3. 英文兜底
+- 前端语言文件位于 `public/i18n/`
+- 后端运行时语言文件位于 `server/i18n/`
+
 ## 认证方式
 
 ### JWT
@@ -21,6 +31,13 @@ Authorization: Bearer <token>
 X-API-Key: <key>
 ```
 
+### 查询参数辅助认证
+
+适合浏览器测试共享访问类接口：
+
+- `?token=<jwt>`
+- `?apiKey=<key>`
+
 ### WebDAV 认证
 
 适用于 `/dav`：
@@ -28,15 +45,13 @@ X-API-Key: <key>
 - Basic Auth
 - JWT Bearer Token
 - API Key
-- 也支持通过 `?token=` 或 `?apiKey=` 查询参数测试
 
 ## 公开接口
 
 ### `GET /api/site-config`
 
-返回站点基础配置：
+返回公开站点配置：
 
-- `language`
 - `icp_beian`
 - `police_beian`
 - `smtp_enabled`
@@ -80,6 +95,7 @@ X-API-Key: <key>
 
 - 只有在启用 SMTP 注册时才要求 `email` 和 `code`
 - 当前实现中的密码仍以 MD5 存储
+- 新用户首次初始化时会继承 `.env` 中的默认语言
 
 ### `POST /api/auth/login`
 
@@ -88,6 +104,10 @@ X-API-Key: <key>
 ```json
 { "username": "admin", "password": "admin" }
 ```
+
+### `POST /api/auth/logout`
+
+退出当前登录会话。
 
 ### `GET /api/auth/me`
 
@@ -112,58 +132,47 @@ API Key 的通用权限模型：
 - `path`
 - `poolId`
 
-用于列出目录内容。
+说明：
+
+- 当 `path` 和 `poolId` 都不传时，会返回虚拟存储池目录列表
+- 常规文件项会附带 `directUrl`、`fileUrl` 等直链字段
+
+### `GET /api/files/info`
+
+返回单个文件或目录的元数据。
 
 ### `POST /api/files/upload`
 
-表单上传接口，支持普通上传和前端并发上传。
+普通表单上传接口。
 
-常用参数：
+常用表单字段：
 
 - `path`
 - `poolId`
 
-### `POST /api/files/mkdir`
+### `POST /api/files/upload-stream`
 
-创建目录。
+大文件流式上传接口。
 
-请求体：
+### `POST /api/files/upload/init`
 
-```json
-{ "path": "/example", "poolId": 1 }
-```
+初始化断点续传任务。
 
-### `POST /api/files/rename`
+### `GET /api/files/upload/:uploadId/status`
 
-重命名文件或目录。
+获取断点续传状态。
 
-### `POST /api/files/move`
+### `POST /api/files/upload/:uploadId/complete`
 
-移动文件或目录。
+完成断点续传任务。
 
-### `POST /api/files/copy`
+### `DELETE /api/files/upload/:uploadId`
 
-复制文件或目录，支持跨存储池。
-
-### `DELETE /api/files/delete`
-
-删除单个文件或目录。
-
-### `POST /api/files/batch-delete`
-
-批量删除。
-
-### `GET /api/files/download`
-
-下载文件。
-
-### `GET /api/files/preview`
-
-预览文件内容，文本、图片、音频、视频等前端预览都会依赖这个接口。
+取消并清理断点续传任务。
 
 ### `POST /api/files/write`
 
-写回文本文件内容，用于文本预览编辑保存。
+写回文本文件内容。
 
 请求体：
 
@@ -171,9 +180,136 @@ API Key 的通用权限模型：
 { "path": "/note.txt", "content": "hello", "poolId": 1 }
 ```
 
+### `POST /api/files/mkdir`
+
+创建目录。
+
+### `POST /api/files/rename`
+
+重命名文件或目录。
+
+### `POST /api/files/move`
+
+在同一存储池内移动文件或目录。
+
+### `POST /api/files/copy`
+
+在同一存储池内复制文件或目录。
+
+### `POST /api/files/batch-move`
+
+批量移动多个项目到目标目录。
+
+### `POST /api/files/cross-copy`
+
+跨存储池复制文件或目录。
+
+### `POST /api/files/cross-move`
+
+跨存储池移动文件或目录。
+
+### `DELETE /api/files/delete`
+
+删除单个文件或目录。
+
+### `POST /api/files/delete`
+
+为不方便发送 `DELETE Body` 的客户端提供的删除等价接口。
+
+### `POST /api/files/batch-delete`
+
+批量删除多个项目。
+
+### `GET /api/files/search`
+
+查询参数：
+
+- `q`
+- `path`
+- `poolId`
+
+### `GET /api/files/download`
+
+下载单个文件。
+
+### `POST /api/files/download-zip`
+
+将多个文件打包为 ZIP 下载。
+
+请求体：
+
+```json
+{ "paths": ["/a.txt", "/b.txt"], "poolId": 1 }
+```
+
+### `GET /api/files/preview`
+
+预览文件内容。
+
+说明：
+
+- 文本响应不做缓存
+- 二进制预览响应带 `ETag`
+- 音视频预览支持 `Range`
+- 可命中的音视频预览会使用服务端缓存文件
+
+### `GET /api/files/storage-stats`
+
+返回所选存储池的递归统计信息。
+
+## 远程上传与离线下载
+
+以下接口都要求 JWT 或具备 `write` 权限的 API Key。
+
+### `POST /api/files/remote-upload`
+
+将一个或多个远程文件直接写入当前目录。
+
+请求体示例：
+
+```json
+{ "url": "https://example.com/file-a.zip", "dirPath": "demo", "poolId": 1 }
+```
+
+```json
+{ "urls": ["https://example.com/a.zip", "https://example.com/b.zip"], "dirPath": "demo", "poolId": 1 }
+```
+
+```json
+{ "url": "https://example.com/a.zip, https://example.com/b.zip", "dirPath": "demo", "poolId": 1 }
+```
+
+返回说明：
+
+- `count` 表示成功上传数量
+- `files` 返回成功文件的元数据和直链
+- 如果批量任务部分成功，`errors` 会返回逐链接失败信息
+
+### `POST /api/files/offline-download`
+
+创建一个或多个后台离线下载任务。
+
+请求体支持与远程上传相同的 `url` / `urls` / 逗号分隔格式。
+
+### `GET /api/files/offline-download/tasks`
+
+返回当前用户的离线下载任务列表。
+
+### `POST /api/files/offline-download/tasks/:id/cancel`
+
+取消单个离线任务。
+
+### `POST /api/files/offline-download/tasks/:id/retry`
+
+重试单个失败或已取消任务。
+
+### `POST /api/files/offline-download/tasks/clear-finished`
+
+清理当前用户已完成任务。
+
 ## 跨池共享挂载接口
 
-除非特别说明，所有 `/api/share-mounts/*` 接口都要求 JWT 或 API Key，且 API Key 需要 `read` 或对应写权限。
+除非特别说明，所有 `/api/share-mounts/*` 接口都要求 JWT 或 API Key。列表接口支持 API Key，挂载和取消挂载管理接口要求登录用户会话。
 
 ### `GET /api/share-mounts/list`
 
@@ -186,7 +322,7 @@ API Key 的通用权限模型：
 
 - 默认返回当前跨池挂载路径下的文件/文件夹列表
 - `path` 使用相对 `/share` 的路径
-- 当 `showAll=true` 时，返回扁平化后的全部文件列表
+- 当 `showAll=true` 时，接口返回自动化场景所需的扁平文件列表格式
 
 默认返回示例：
 
@@ -233,17 +369,13 @@ API Key 的通用权限模型：
 
 ### `POST /api/share-mounts/directories`
 
-创建挂载目录。
+创建虚拟挂载目录。
 
 请求体：
 
 ```json
 { "path": "abc" }
 ```
-
-说明：
-
-- 上例会创建 `/share/abc`
 
 ### `POST /api/share-mounts/mount`
 
@@ -269,17 +401,15 @@ API Key 的通用权限模型：
 
 ### `POST /api/share-mounts/unmount`
 
-取消挂载。
+支持两种请求方式：
 
-支持两种请求体：
-
-1. 按具体挂载项取消：
+1. 取消单个挂载项：
 
 ```json
 { "mountId": 3 }
 ```
 
-2. 按虚拟挂载目录取消：
+2. 删除虚拟挂载目录：
 
 ```json
 { "path": "abc" }
@@ -304,13 +434,18 @@ API Key 的通用权限模型：
 - 当路径指向目录时，返回 `{ files, path }`
 - 当路径指向文件时，默认以内联预览方式返回文件内容
 - 追加 `?download=true` 时返回下载
+- 音视频预览支持缓存和 `Range` 请求
 
 示例：
 
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>`
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>&download=true`
 
-## 用户设置接口
+## 用户接口
+
+### `GET /api/user/info`
+
+返回当前用户资料、存储池列表、空间统计和面板计数。
 
 ### `GET /api/user/settings`
 
@@ -319,11 +454,41 @@ API Key 的通用权限模型：
 - `guestEnabled`
 - `guestPath`
 - `theme`
+- `language`
 - `uploadConcurrency`
+- `serverDefaultUploadConcurrency`
 
 ### `PUT /api/user/settings`
 
 更新当前用户设置。
+
+### `GET /api/user/apikeys`
+
+返回当前用户的 API Key 列表。
+
+### `POST /api/user/apikeys`
+
+创建一个 API Key。
+
+### `DELETE /api/user/apikeys/:id`
+
+删除一个 API Key。
+
+### `GET /api/user/guest-shares`
+
+返回当前用户创建的访客文件夹分享列表。
+
+### `POST /api/user/guest-shares`
+
+创建一个访客文件夹分享。
+
+### `PUT /api/user/guest-shares/:id`
+
+更新一个访客文件夹分享。
+
+### `DELETE /api/user/guest-shares/:id`
+
+删除一个访客文件夹分享。
 
 ## 管理接口
 
@@ -335,7 +500,7 @@ API Key 的通用权限模型：
 
 - `upload_limit`
 - `max_concurrent_uploads`
-- `language`
+- `log_level`
 
 ### `PUT /api/admin/upload-limit`
 
@@ -345,7 +510,7 @@ API Key 的通用权限模型：
 {
   "upload_limit": 100,
   "max_concurrent_uploads": 3,
-  "language": "zh-CN"
+  "log_level": 2
 }
 ```
 
@@ -353,13 +518,17 @@ API Key 的通用权限模型：
 
 返回数据库配置和当前运行状态。
 
+说明：
+
+- MySQL 和 PostgreSQL 的已配置密码会以 `******` 掩码返回
+
 ### `PUT /api/admin/database`
 
-保存数据库配置。
+将数据库配置写回 `config.yml`。
 
 ### `POST /api/admin/database/test`
 
-测试数据库连接。
+测试数据库连接，不会强制切换当前运行时连接。
 
 ### `GET /api/admin/users`
 
@@ -407,14 +576,6 @@ API Key 的通用权限模型：
 
 返回当前 IP 条目列表。
 
-### `GET /api/admin/ip-list/mode`
-
-返回当前 IP 控制模式：`blacklist` 或 `whitelist`。
-
-### `PUT /api/admin/ip-list/mode`
-
-切换 IP 控制模式。
-
 ### `POST /api/admin/ip-blacklist`
 
 添加 IP 条目。
@@ -422,6 +583,14 @@ API Key 的通用权限模型：
 ### `DELETE /api/admin/ip-blacklist/:id`
 
 删除 IP 条目。
+
+### `GET /api/admin/ip-list/mode`
+
+返回当前 IP 控制模式：`blacklist` 或 `whitelist`。
+
+### `PUT /api/admin/ip-list/mode`
+
+切换 IP 控制模式。
 
 ## WebDAV
 
