@@ -1,7 +1,9 @@
 import { Router, type Request, type Response } from 'express'
+import fsSync from 'fs'
 import { authMiddleware, type AuthRequest } from '../middleware/auth'
 import { flexibleAuth, type ApiKeyRequest, requirePermission } from '../middleware/apikey'
 import { Logger } from '../services/logger'
+import { resolvePreviewCacheFile } from '../services/preview-cache'
 import { getUsernameByIdSafe } from './share-mounts-utils'
 import {
   addShareMounts,
@@ -51,6 +53,10 @@ const previewMimeTypes: Record<string, string> = {
 function getMimeType(fileName: string) {
   const ext = fileName.split('.').pop()?.toLowerCase() || ''
   return previewMimeTypes[ext] || 'application/octet-stream'
+}
+
+function getShareMountCacheScope(userId: number, poolId: number, sourcePath: string) {
+  return `share-mount:user:${userId}:pool:${poolId}:source:${sourcePath}`
 }
 
 function buildDirectUrl(req: ApiKeyRequest, virtualPath: string) {
@@ -193,9 +199,59 @@ async function handleShareAccess(req: Request, res: Response, mode: 'download' |
       return res.status(400).json({ error: 'Only files can be opened directly' })
     }
 
-    const data = await storage.download(resolved.sourceFullPath)
     const fileName = info.name || normalized.split('/').pop() || 'file'
     const contentType = getMimeType(fileName)
+    const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
+    const cachedMedia = isMedia
+      ? await resolvePreviewCacheFile(
+          getShareMountCacheScope(apiReq.userId!, resolved.mount.source_pool_id, resolved.mount.source_path),
+          storage,
+          resolved.sourceFullPath
+        )
+      : null
+
+    if (cachedMedia) {
+      const fileOnDisk = cachedMedia.path
+      const stat = cachedMedia.stat
+      const fileSize = stat.size
+      const etag = `"${fileSize}-${stat.mtimeMs}"`
+      const range = req.headers.range
+
+      if (mode === 'download') {
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
+        res.setHeader('Content-Type', 'application/octet-stream')
+        res.setHeader('Content-Length', fileSize)
+        return fsSync.createReadStream(fileOnDisk).pipe(res)
+      }
+
+      if (!range && req.headers['if-none-match'] === etag) {
+        return res.status(304).end()
+      }
+
+      res.setHeader('Accept-Ranges', 'bytes')
+      res.setHeader('Content-Type', contentType)
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
+      res.setHeader('ETag', etag)
+      res.setHeader('Cache-Control', 'public, max-age=3600')
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-')
+        const start = parseInt(parts[0], 10)
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+        const chunkSize = end - start + 1
+
+        res.status(206)
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+        res.setHeader('Content-Length', chunkSize)
+
+        return fsSync.createReadStream(fileOnDisk, { start, end }).pipe(res)
+      }
+
+      res.setHeader('Content-Length', fileSize)
+      return fsSync.createReadStream(fileOnDisk).pipe(res)
+    }
+
+    const data = await storage.download(resolved.sourceFullPath)
 
     if (mode === 'download') {
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
