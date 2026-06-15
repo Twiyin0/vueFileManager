@@ -1,4 +1,4 @@
-// 存储抽象层接口
+// Storage abstraction interface.
 
 export interface FileInfo {
   name: string
@@ -9,29 +9,29 @@ export interface FileInfo {
 }
 
 export interface StorageProvider {
-  // 文件列表
+  // List files.
   list(prefix: string): Promise<FileInfo[]>
-  // 上传文件
+  // Upload a file.
   upload(filePath: string, data: Buffer): Promise<void>
-  // 流式上传文件（可选，用于减少大文件二次落盘/读回）
+  // Upload a stream when supported to avoid extra temp writes for large files.
   uploadStream?(filePath: string, stream: NodeJS.ReadableStream, size?: number): Promise<void>
-  // 下载文件
+  // Download a file.
   download(filePath: string): Promise<Buffer>
-  // 删除文件/文件夹
+  // Remove a file or folder.
   remove(filePath: string): Promise<void>
-  // 创建文件夹
+  // Create a folder.
   mkdir(dirPath: string): Promise<void>
-  // 获取文件信息
+  // Read file metadata.
   info(filePath: string): Promise<FileInfo>
-  // 检查路径是否存在
+  // Check whether a path exists.
   exists(filePath: string): Promise<boolean>
-  // 重命名
+  // Rename an item.
   rename(oldPath: string, newName: string): Promise<void>
-  // 移动
+  // Move an item.
   move(srcPath: string, destPath: string): Promise<void>
-  // 复制
+  // Copy an item.
   copy(srcPath: string, destPath: string): Promise<void>
-  // 搜索（递归）
+  // Search recursively.
   search(prefix: string, keyword: string): Promise<FileInfo[]>
   resolveLocalPath?(filePath: string): Promise<string | null>
 }

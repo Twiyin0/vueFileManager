@@ -103,7 +103,7 @@ router.get('/info', flexibleAuth, requirePermission('read'), async (req: ApiKeyR
     const storage = getStorageForRequest(req)
     const filePath = req.query.path as string
     if (!filePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     const info = await storage.info(filePath)
@@ -124,7 +124,7 @@ router.get('/download', flexibleAuth, requirePermission('read'), async (req: Api
     const storage = getStorageForRequest(req)
     const filePath = req.query.path as string
     if (!filePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
     const data = await storage.download(filePath)
     const fileName = filePath.split('/').pop() || 'download'
@@ -150,7 +150,7 @@ const handleDelete = async (req: ApiKeyRequest, res: Response) => {
     const filePath = (req.body?.path as string) || (req.query.path as string)
     const permanent = req.query.permanent === 'true' || req.body?.permanent === true
     if (!filePath) {
-      return res.status(400).json({ error: '缺少路径' })
+      return res.status(400).json({ error: 'common.missingPath' })
     }
 
     const username = await getUsername(req.userId!)
@@ -170,10 +170,10 @@ const handleDelete = async (req: ApiKeyRequest, res: Response) => {
       const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
       await moveToTrash(storage, filePath, trashPath, stat.type)
       await Logger.info('api', 'files.ts', `User ${username} delete a file from poolID:#${storagePoolId} ${filePath}`)
-      return res.json({ message: '删除成功' })
+      return res.json({ message: 'file.deleted' })
     }
 
-    res.json({ message: '删除成功' })
+    res.json({ message: 'file.deleted' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -191,7 +191,7 @@ router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (r
   try {
     const { paths, permanent } = req.body
     if (!paths || !Array.isArray(paths)) {
-      return res.status(400).json({ error: '缺少路径列表' })
+      return res.status(400).json({ error: 'common.missingPathList' })
     }
 
     const storage = getStorageForRequest(req)
@@ -218,7 +218,7 @@ router.post('/batch-delete', flexibleAuth, requirePermission('delete'), async (r
     }
 
     await Logger.info('api', 'files.ts', `User ${username} batch deleted ${paths.length} item(s) from poolID:#${storagePoolId}`)
-    res.json({ message: '批量删除完成', errors })
+    res.json({ message: 'file.batchDeleteCompleted', errors })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -233,7 +233,7 @@ router.post('/batch-move', flexibleAuth, requirePermission('write'), async (req:
   try {
     const { paths, dest } = req.body
     if (!paths || !Array.isArray(paths) || !dest) {
-      return res.status(400).json({ error: '缺少参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
 
     const storage = getStorageForRequest(req)
@@ -252,7 +252,7 @@ router.post('/batch-move', flexibleAuth, requirePermission('write'), async (req:
     }
 
     await Logger.info('api', 'files.ts', `User ${username} batch moved ${paths.length} item(s) in poolID:#${poolId || getPoolLabel(req.body?.poolId)} to ${dest}`)
-    res.json({ message: '批量移动完成', errors })
+    res.json({ message: 'file.batchMoveCompleted', errors })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -268,13 +268,13 @@ router.post('/mkdir', flexibleAuth, requirePermission('write'), async (req: ApiK
     const storage = getStorageForRequest(req)
     const dirPath = req.body.path as string
     if (!dirPath) {
-      return res.status(400).json({ error: '缺少文件夹路径' })
+      return res.status(400).json({ error: 'common.missingFolderPath' })
     }
     await storage.mkdir(dirPath)
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} created a directory in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${dirPath}`)
-    res.json({ message: '文件夹创建成功' })
+    res.json({ message: 'file.folderCreated' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -290,7 +290,7 @@ router.post('/rename', flexibleAuth, requirePermission('write'), async (req: Api
     const storage = getStorageForRequest(req)
     const { path: filePath, newName: rawNewName } = req.body
     if (!filePath || !rawNewName) {
-      return res.status(400).json({ error: '缺少参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
 
     const newName = rawNewName.normalize('NFC')
@@ -298,7 +298,7 @@ router.post('/rename', flexibleAuth, requirePermission('write'), async (req: Api
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} renamed a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${filePath} -> ${newName}`)
-    res.json({ message: '重命名成功' })
+    res.json({ message: 'file.renamed' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -314,13 +314,13 @@ router.post('/move', flexibleAuth, requirePermission('write'), async (req: ApiKe
     const storage = getStorageForRequest(req)
     const { src, dest } = req.body
     if (!src || !dest) {
-      return res.status(400).json({ error: '缺少参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
     await storage.move(src, dest)
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} moved a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${src} -> ${dest}`)
-    res.json({ message: '移动成功' })
+    res.json({ message: 'file.moved' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -336,13 +336,13 @@ router.post('/copy', flexibleAuth, requirePermission('write'), async (req: ApiKe
     const storage = getStorageForRequest(req)
     const { src, dest } = req.body
     if (!src || !dest) {
-      return res.status(400).json({ error: '缺少参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
     await storage.copy(src, dest)
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} copied a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${src} -> ${dest}`)
-    res.json({ message: '复制成功' })
+    res.json({ message: 'file.copied' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -357,7 +357,7 @@ router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req:
   try {
     const { srcPaths, names, srcPoolId, destPoolId, destPath } = req.body
     if (!srcPaths || !Array.isArray(srcPaths) || !srcPoolId || !destPoolId) {
-      return res.status(400).json({ error: '缺少参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
 
     const srcStorage = getStorageByPoolId(req.userId!, srcPoolId)
@@ -372,7 +372,7 @@ router.post('/cross-copy', flexibleAuth, requirePermission('write'), async (req:
 
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'files.ts', `User ${username} cross-copied ${srcPaths.length} item(s) from poolID:#${srcPoolId} to poolID:#${destPoolId}`)
-    res.json({ message: '跨池复制完成', errors })
+    res.json({ message: 'file.crossPoolCopyCompleted', errors })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -387,7 +387,7 @@ router.post('/cross-move', flexibleAuth, requirePermission('write'), async (req:
   try {
     const { srcPaths, names, srcPoolId, destPoolId, destPath } = req.body
     if (!srcPaths || !Array.isArray(srcPaths) || !srcPoolId || !destPoolId) {
-      return res.status(400).json({ error: '缺少参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
 
     const srcStorage = getStorageByPoolId(req.userId!, srcPoolId)
@@ -403,7 +403,7 @@ router.post('/cross-move', flexibleAuth, requirePermission('write'), async (req:
 
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'files.ts', `User ${username} cross-moved ${srcPaths.length} item(s) from poolID:#${srcPoolId} to poolID:#${destPoolId}`)
-    res.json({ message: '跨池移动完成', errors })
+    res.json({ message: 'file.crossPoolMoveCompleted', errors })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -421,7 +421,7 @@ router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKe
     const keyword = req.query.q as string
     const prefix = (req.query.path as string) || ''
     if (!keyword) {
-      return res.status(400).json({ error: '缺少搜索关键词' })
+      return res.status(400).json({ error: 'common.missingSearchKeyword' })
     }
 
     const files = await storage.search(prefix, keyword)
@@ -445,7 +445,7 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
     const storage = getStorageForRequest(req)
     const filePath = req.query.path as string
     if (!filePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     const ext = filePath.split('.').pop()?.toLowerCase() || ''
@@ -542,7 +542,7 @@ router.post('/download-zip', flexibleAuth, requirePermission('read'), async (req
   try {
     const { paths } = req.body
     if (!paths || !Array.isArray(paths) || paths.length === 0) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     const storage = getStorageForRequest(req)

@@ -92,7 +92,7 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
             return next()
           }
         }
-        return res.status(403).json({ error: t('IP 不在白名单中') })
+        return res.status(403).json({ error: t('auth.ipNotInWhitelist', 'IP address is not in the whitelist') })
       }
 
       if (!state.hasBlacklist) {
@@ -102,7 +102,7 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
       const entries = await db.prepare('SELECT ip_pattern FROM ip_blacklist').all<{ ip_pattern: string }>()
       for (const entry of entries) {
         if (matchIp(clientIp, entry.ip_pattern)) {
-          return res.status(403).json({ error: t('IP 已被封禁') })
+          return res.status(403).json({ error: t('auth.ipBanned', 'IP address has been banned') })
         }
       }
 
@@ -128,7 +128,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '')
   const t = getRequestTranslator(req)
   if (!token) {
-    return res.status(401).json({ error: t('未登录') })
+    return res.status(401).json({ error: t('auth.notSignedIn', 'Not signed in') })
   }
 
   ;(async () => {
@@ -136,27 +136,27 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
       const user = await db.prepare('SELECT id, role, banned FROM users WHERE id = ?').get(decoded.userId) as any
       if (!user) {
-        return res.status(401).json({ error: t('用户不存在') })
+        return res.status(401).json({ error: t('auth.userNotFound', 'User not found') })
       }
       if (user.banned) {
-        return res.status(403).json({ error: t('账号已被封禁') })
+        return res.status(403).json({ error: t('auth.accountBanned', 'Account has been banned') })
       }
       req.userId = user.id
       req.userRole = user.role
       return next()
     } catch {
-      return res.status(401).json({ error: t('Token 无效或已过期') })
+      return res.status(401).json({ error: t('auth.invalidOrExpiredToken', 'Invalid or expired token') })
     }
   })().catch(async (err: any) => {
     await Logger.error('api', 'auth.ts', 'Authentication middleware failed', err)
-    res.status(500).json({ error: t(err.message || '认证失败') })
+    res.status(500).json({ error: t(err.message || 'auth.authFailed', 'Authentication failed') })
   })
 }
 
 export function adminMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const t = getRequestTranslator(req)
   if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: t('需要管理员权限') })
+    return res.status(403).json({ error: t('auth.adminRequired', 'Administrator permission required') })
   }
   next()
 }

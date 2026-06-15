@@ -148,7 +148,7 @@ router.all('/*', async (req: ApiKeyRequest, res: Response) => {
     const scope = await extractPoolScope(req.userId!, rawRoutePath, req.query.poolId as string | undefined)
     const poolId = scope.poolId
     if (!poolId) {
-      return res.status(400).json({ error: '存储池不存在' })
+      return res.status(400).json({ error: 'storagePool.notFound' })
     }
 
     const storage = getStorageByPoolId(req.userId!, poolId)
@@ -290,14 +290,14 @@ ${responses.join('\n')}
         ? req.headers.destination[0]
         : req.headers.destination
       if (!destination) {
-        return res.status(400).json({ error: '缺少 Destination' })
+        return res.status(400).json({ error: 'webdav.missingDestinationHeader' })
       }
 
       const targetUrl = new URL(destination)
       const targetRawPath = normalizeDavPath(targetUrl.pathname.replace(/^\/dav\/?/, ''))
       const targetScope = await extractPoolScope(req.userId!, targetRawPath)
       if (targetScope.poolId !== poolId) {
-        return res.status(400).json({ error: '暂不支持跨存储池移动' })
+        return res.status(400).json({ error: 'webdav.crossPoolMoveUnsupported' })
       }
 
       await storage.move(pathFromRoute, targetScope.storagePath)
@@ -311,14 +311,14 @@ ${responses.join('\n')}
         ? req.headers.destination[0]
         : req.headers.destination
       if (!destination) {
-        return res.status(400).json({ error: '缺少 Destination' })
+        return res.status(400).json({ error: 'webdav.missingDestinationHeader' })
       }
 
       const targetUrl = new URL(destination)
       const targetRawPath = normalizeDavPath(targetUrl.pathname.replace(/^\/dav\/?/, ''))
       const targetScope = await extractPoolScope(req.userId!, targetRawPath)
       if (targetScope.poolId !== poolId) {
-        return res.status(400).json({ error: '暂不支持跨存储池复制' })
+        return res.status(400).json({ error: 'webdav.crossPoolCopyUnsupported' })
       }
 
       await storage.copy(pathFromRoute, targetScope.storagePath)

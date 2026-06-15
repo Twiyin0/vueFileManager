@@ -220,7 +220,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         win.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs'
         resolve(win.pdfjsLib)
       }
-      script.onerror = () => reject(new Error(t('preview.pdfLoadFailed', 'PDF 预览组件加载失败')))
+      script.onerror = () => reject(new Error(t('preview.pdfLoadFailed', 'Failed to load the PDF preview runtime')))
       document.head.appendChild(script)
     })
   }
@@ -280,7 +280,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
     isSaving.value = true
     saveState.value = ''
-    saveMsg.value = t('preview.saving', '保存中...')
+    saveMsg.value = t('preview.saving', 'Saving...')
 
     try {
       if (props.guestSaveUrl) {
@@ -292,7 +292,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
 
         if (!response.ok) {
           const data = await response.json().catch(() => ({}))
-          throw new Error(data.error || t('preview.saveFailed', '保存失败'))
+          throw new Error(data.error || t('preview.saveFailed', 'Save failed'))
         }
       } else {
         await api.post('/files/write', {
@@ -305,10 +305,10 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       textReloadVersion.value = Date.now()
       await loadTextContent({ preserveLoadingState: true, reinitializeEditor: false })
       saveState.value = 'success'
-      saveMsg.value = t('preview.saved', '已保存')
+      saveMsg.value = t('preview.saved', 'Saved')
     } catch (err: any) {
       saveState.value = 'error'
-      saveMsg.value = err?.message || t('preview.saveFailed', '保存失败')
+      saveMsg.value = err?.message || t('preview.saveFailed', 'Save failed')
       console.error('Save error:', err)
     } finally {
       isSaving.value = false
@@ -546,7 +546,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       textContent.value = await response.text()
     } catch {
-      textContent.value = `// ${t('preview.loadContentFailed', '文件内容加载失败')}`
+      textContent.value = `// ${t('preview.loadContentFailed', 'Failed to load file content')}`
     }
 
     if (!preserveLoadingState) {
@@ -819,7 +819,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         if (rows.length === 0) {
           return {
             name: worksheet.name,
-            html: `<p class="text-sm p-4" style="color:var(--text-secondary-color)">${t('preview.emptySheet', '空工作表')}</p>`
+            html: `<p class="text-sm p-4" style="color:var(--text-secondary-color)">${t('preview.emptySheet', 'Empty worksheet')}</p>`
           }
         }
 

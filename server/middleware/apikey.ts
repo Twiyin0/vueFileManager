@@ -18,9 +18,9 @@ function isWebDavRequest(req: Request) {
   return req.baseUrl === '/dav' || req.originalUrl.startsWith('/dav')
 }
 
-function sendUnauthorized(req: Request, res: Response, error: string) {
+function sendUnauthorized(req: Request, res: Response, error: string, fallback?: string) {
   const t = getRequestTranslator(req)
-  const translated = t(error)
+  const translated = t(error, fallback)
   if (isWebDavRequest(req)) {
     res.setHeader('WWW-Authenticate', 'Basic realm="VueFileManager WebDAV"')
     res.setHeader('DAV', '1')
@@ -65,7 +65,7 @@ export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFu
     const apiKey = req.headers['x-api-key'] as string
     const t = getRequestTranslator(req)
     if (!apiKey) {
-      return sendUnauthorized(req, res, '缺少 API Key')
+      return sendUnauthorized(req, res, 'auth.missingApiKey', 'Missing API key')
     }
 
     const keyRecord = await db.prepare(`
@@ -76,11 +76,11 @@ export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFu
     `).get(apiKey) as any
 
     if (!keyRecord) {
-      return sendUnauthorized(req, res, 'API Key 无效')
+      return sendUnauthorized(req, res, 'auth.invalidApiKey', 'Invalid API key')
     }
 
     if (keyRecord.banned) {
-      return res.status(403).json({ error: t('账号已被封禁') })
+      return res.status(403).json({ error: t('auth.accountBanned', 'Account has been banned') })
     }
 
     req.userId = keyRecord.user_id
@@ -89,14 +89,16 @@ export function apiKeyMiddleware(req: ApiKeyRequest, res: Response, next: NextFu
     return next()
   })().catch(async (err: any) => {
     await Logger.error('api', 'apikey.ts', 'API key authentication failed', err)
-    res.status(500).json({ error: getRequestTranslator(req)(err.message || 'API Key 认证失败') })
+    res.status(500).json({ error: getRequestTranslator(req)(err.message || 'auth.apiKeyAuthFailed', 'API key authentication failed') })
   })
 }
 
 export function requirePermission(permission: string) {
   return (req: ApiKeyRequest, res: Response, next: NextFunction) => {
     if (req.apiKeyPermissions && !req.apiKeyPermissions.includes(permission)) {
-      return res.status(403).json({ error: getRequestTranslator(req)(`API Key 缺少 ${permission} 权限`) })
+      return res.status(403).json({
+        error: getRequestTranslator(req)('auth.apiKeyMissingPermission', 'API key is missing {permission} permission', { permission })
+      })
     }
     next()
   }
@@ -124,23 +126,23 @@ export function flexibleAuth(req: ApiKeyRequest, res: Response, next: NextFuncti
         const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
         const user = await db.prepare('SELECT id, role, banned FROM users WHERE id = ?').get(decoded.userId) as any
         if (!user) {
-          return sendUnauthorized(req, res, '用户不存在')
+          return sendUnauthorized(req, res, 'auth.userNotFound', 'User not found')
         }
         if (user.banned) {
-          return res.status(403).json({ error: getRequestTranslator(req)('账号已被封禁') })
+          return res.status(403).json({ error: getRequestTranslator(req)('auth.accountBanned', 'Account has been banned') })
         }
         req.userId = user.id
         req.userRole = user.role
         req.apiKeyPermissions = ['read', 'write', 'delete']
         return next()
       } catch {
-        return sendUnauthorized(req, res, 'Token 无效')
+        return sendUnauthorized(req, res, 'auth.invalidToken', 'Invalid token')
       }
     }
 
-    return sendUnauthorized(req, res, '未认证')
+    return sendUnauthorized(req, res, 'auth.unauthenticated', 'Unauthenticated')
   })().catch(async (err: any) => {
     await Logger.error('api', 'apikey.ts', 'Flexible authentication failed', err)
-    res.status(500).json({ error: getRequestTranslator(req)(err.message || '认证失败') })
+    res.status(500).json({ error: getRequestTranslator(req)(err.message || 'auth.authFailed', 'Authentication failed') })
   })
 }

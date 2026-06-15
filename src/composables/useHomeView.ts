@@ -96,9 +96,9 @@ export function useHomeView() {
   })
   const uploadActiveCount = computed(() => activeUploadMap.value.size)
   const uploadStatusLabel = computed(() => {
-    if (uploadStatus.value === 'cancelled') return '已取消'
-    if (uploadStatus.value === 'processing') return '服务器处理中'
-    if (uploadStatus.value === 'completed') return '已完成'
+    if (uploadStatus.value === 'cancelled') return t('upload.statusCancelled', 'Cancelled')
+    if (uploadStatus.value === 'processing') return t('guest.processingOnServer', 'Processing on server')
+    if (uploadStatus.value === 'completed') return t('upload.statusCompleted', 'Completed')
     return ''
   })
 
@@ -194,13 +194,15 @@ export function useHomeView() {
   })
 
   watch([currentPath, currentPoolId], () => {
-    if (showAplayer.value) {
-      nextTick(() => {
-        refreshAplayerList().catch((err: any) => {
-          showToast(`音频加载失败：${err.message || '无法刷新播放列表'}`, 'error')
+      if (showAplayer.value) {
+        nextTick(() => {
+          refreshAplayerList().catch((err: any) => {
+            showToast(format('file.audioLoadFailed', 'Audio load failed: {message}', {
+              message: err.message || t('file.audioRefreshFailed', 'Unable to refresh the playlist')
+            }), 'error')
+          })
         })
-      })
-    }
+      }
   })
 
   function handlePoolDropdownOutside(event: MouseEvent) {
@@ -316,7 +318,9 @@ export function useHomeView() {
         targetIndex = audioList.findIndex((item) => item.url === targetUrl)
       }
     } catch (err: any) {
-      showToast(`音频加载失败：${err.message || '无法读取音频文件'}`, 'error')
+      showToast(format('file.audioLoadFailed', 'Audio load failed: {message}', {
+        message: err.message || t('file.audioReadFailed', 'Unable to read the audio file')
+      }), 'error')
       return
     }
 
@@ -410,7 +414,7 @@ export function useHomeView() {
               uploadProgress.value[i].percent = 100
               resolve()
             } else {
-              let message = xhr.statusText || '上传失败'
+              let message = xhr.statusText || t('file.uploadFailed', 'Upload failed')
               try {
                 const data = JSON.parse(xhr.responseText || '{}')
                 message = data.error || data.message || message
@@ -418,8 +422,8 @@ export function useHomeView() {
               reject(new Error(message))
             }
           }
-          xhr.onerror = () => reject(new Error('上传失败'))
-          xhr.onabort = () => reject(new Error('上传已取消'))
+          xhr.onerror = () => reject(new Error(t('file.uploadFailed', 'Upload failed')))
+          xhr.onabort = () => reject(new Error(t('guest.uploadCancelled', 'Upload cancelled')))
 
           const dirPath = currentPath.value || ''
           const params = new URLSearchParams()
@@ -438,14 +442,14 @@ export function useHomeView() {
           xhr.send(file)
         })
       } catch (err: any) {
-        if (err.message === '上传已取消') {
+        if (err.message === t('guest.uploadCancelled', 'Upload cancelled')) {
           uploadStatus.value = 'cancelled'
           break
         }
         uploadStatus.value = 'error'
-        uploadError.value = `${file.name}: ${err.message || '上传失败'}`
+        uploadError.value = `${file.name}: ${err.message || t('file.uploadFailed', 'Upload failed')}`
         showToast(uploadError.value, 'error')
-        console.error(`上传失败: ${file.name}`, err)
+        console.error(`Upload failed: ${file.name}`, err)
         return
       }
     }
@@ -548,7 +552,7 @@ export function useHomeView() {
           return
         }
 
-        let message = xhr.statusText || '上传失败'
+        let message = xhr.statusText || t('file.uploadFailed', 'Upload failed')
         try {
           const data = JSON.parse(xhr.responseText || '{}')
           message = data.error || data.message || message
@@ -564,9 +568,9 @@ export function useHomeView() {
         activeUploads.value = activeUploads.value.filter((item) => item !== xhr)
         uploadSummary.value.uploading = activeUploadMap.value.size
         uploadProgress.value[index].status = 'error'
-        uploadProgress.value[index].error = '上传失败'
+        uploadProgress.value[index].error = t('file.uploadFailed', 'Upload failed')
         uploadSummary.value.failed += 1
-        reject(new Error('上传失败'))
+        reject(new Error(t('file.uploadFailed', 'Upload failed')))
       }
 
       xhr.onabort = () => {
@@ -596,7 +600,7 @@ export function useHomeView() {
           await runSingle(arr[index], index)
         } catch (err: any) {
           if (err.message !== 'UPLOAD_CANCELLED') {
-            uploadError.value = `${arr[index].name}: ${err.message || '上传失败'}`
+            uploadError.value = `${arr[index].name}: ${err.message || t('file.uploadFailed', 'Upload failed')}`
           }
         }
       }
@@ -751,12 +755,12 @@ export function useHomeView() {
         })
         showOfflineTasksPanel()
         await loadOfflineTasks()
-        const destination = `${currentPoolName.value || '当前存储池'}${currentPath.value ? ` / ${currentPath.value}` : ' / 根目录'}`
-        showToast(`离线任务已创建，完成后会保存到 ${destination}`, 'success')
+        const destination = `${currentPoolName.value || t('common.currentStoragePool', 'Current storage pool')}${currentPath.value ? ` / ${currentPath.value}` : ` / ${t('common.rootDirectory', 'Root directory')}`}`
+        showToast(format('file.remoteUploadOfflineCreated', 'Offline download task created. The file will be saved to {destination}', { destination }), 'success')
       } else {
         await api.post('/files/remote-upload', { url: remoteUrl.value, dirPath: currentPath.value, poolId: currentPoolId.value })
         await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
-        showToast('远程上传已完成', 'success')
+        showToast(t('file.remoteUploadSuccess', 'Remote upload completed'), 'success')
       }
       showRemoteUpload.value = false
       remoteUrl.value = ''
@@ -791,7 +795,7 @@ export function useHomeView() {
 
   async function handleBatchDelete() {
     if (selectedFiles.value.size === 0) return
-    if (!confirm(`确定要删除选中的 ${selectedFiles.value.size} 个项目吗？`)) return
+    if (!confirm(format('common.selectedItemsCount', 'Are you sure you want to delete {count} selected items?', { count: selectedFiles.value.size }))) return
     try {
       await api.post('/files/batch-delete', { paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
       selectedFiles.value.clear()
@@ -813,7 +817,7 @@ export function useHomeView() {
       const folderCount = selectedItems.length - filesOnly.length
 
       if (filesOnly.length === 0) {
-        showToast(t('file.batchDirectDownloadNoFiles', '所选内容中没有可直接下载的文件'), 'info')
+        showToast(t('file.batchDirectDownloadNoFiles', 'No directly downloadable files in the current selection'), 'info')
         return
       }
 
@@ -823,8 +827,8 @@ export function useHomeView() {
       )
 
       const message = folderCount > 0
-        ? format('file.batchDirectDownloadStartedWithFolders', '已开始下载 {count} 个文件，文件夹请使用打包下载', { count: filesOnly.length })
-        : format('file.batchDirectDownloadStarted', '已开始下载 {count} 个文件', { count: filesOnly.length })
+        ? format('file.batchDirectDownloadStartedWithFolders', 'Started downloading {count} files. Use ZIP download for folders', { count: filesOnly.length })
+        : format('file.batchDirectDownloadStarted', 'Started downloading {count} files', { count: filesOnly.length })
       showToast(message, 'success')
     } catch (err: any) {
       alert(err.message)
@@ -843,7 +847,7 @@ export function useHomeView() {
         body: JSON.stringify({ paths: Array.from(selectedFiles.value), poolId: currentPoolId.value })
       })
 
-      if (!response.ok) throw new Error('下载失败')
+      if (!response.ok) throw new Error(t('common.downloadFailed', 'Download failed'))
 
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
@@ -852,7 +856,7 @@ export function useHomeView() {
       link.download = 'download.zip'
       link.click()
       URL.revokeObjectURL(url)
-      showToast(t('file.batchZipDownloadStarted', '已开始打包下载所选内容'), 'success')
+      showToast(t('file.batchZipDownloadStarted', 'Started packaging the selected items for download'), 'success')
     } catch (err: any) {
       alert(err.message)
     }
@@ -885,7 +889,7 @@ export function useHomeView() {
       poolId: file.poolId
     }))
     clipboardMode.value = 'copy'
-    showToast(`已复制 ${files.length} 个项目`, 'success')
+    showToast(format('file.copiedItems', 'Copied {count} item(s)', { count: files.length }), 'success')
   }
 
   function handleMove(files: { path: string; name?: string; poolId?: number }[]) {
@@ -920,7 +924,7 @@ export function useHomeView() {
             const dest = destPath ? `${destPath}/${file.name}` : file.name
             await api.post('/files/copy', { src: file.path, dest, poolId: currentPoolId.value })
           }
-          showToast(`已粘贴 ${clipboardFiles.value.length} 个项目`, 'success')
+          showToast(format('file.pastedItems', 'Pasted {count} item(s)', { count: clipboardFiles.value.length }), 'success')
         } else {
           await api.post('/files/cross-copy', {
             srcPaths: clipboardFiles.value.map((file) => file.path),
@@ -929,7 +933,7 @@ export function useHomeView() {
             destPoolId,
             destPath
           })
-          showToast(`已跨池复制 ${clipboardFiles.value.length} 个项目`, 'success')
+          showToast(format('file.crossPoolCopiedItems', 'Cross-pool copied {count} item(s)', { count: clipboardFiles.value.length }), 'success')
         }
       } else {
         if (!srcPoolId || srcPoolId === destPoolId) {
@@ -937,7 +941,7 @@ export function useHomeView() {
             const dest = destPath ? `${destPath}/${file.name}` : file.name
             await api.post('/files/move', { src: file.path, dest, poolId: currentPoolId.value })
           }
-          showToast(`已移动 ${clipboardFiles.value.length} 个项目`, 'success')
+          showToast(format('file.movedItems', 'Moved {count} item(s)', { count: clipboardFiles.value.length }), 'success')
         } else {
           await api.post('/files/cross-move', {
             srcPaths: clipboardFiles.value.map((file) => file.path),
@@ -946,14 +950,14 @@ export function useHomeView() {
             destPoolId,
             destPath
           })
-          showToast(`已跨池移动 ${clipboardFiles.value.length} 个项目`, 'success')
+          showToast(format('file.crossPoolMovedItems', 'Cross-pool moved {count} item(s)', { count: clipboardFiles.value.length }), 'success')
         }
         clipboardFiles.value = []
         clipboardMode.value = 'copy'
       }
       await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
     } catch (err: any) {
-      showToast(err.message || '操作失败', 'error')
+      showToast(err.message || t('common.operationFailed', 'Operation failed'), 'error')
     }
   }
 
@@ -967,7 +971,7 @@ export function useHomeView() {
           const dest = destPath ? `${destPath}/${file.name}` : file.name
           await api.post('/files/move', { src: file.path, dest, poolId: destPoolId })
         }
-        showToast(`已移动 ${filesToMove.value.length} 个项目`, 'success')
+        showToast(format('file.movedItems', 'Moved {count} item(s)', { count: filesToMove.value.length }), 'success')
       } else {
         await api.post('/files/cross-move', {
           srcPaths: filesToMove.value.map((file) => file.path),
@@ -976,11 +980,11 @@ export function useHomeView() {
           destPoolId,
           destPath
         })
-        showToast(`已跨池移动 ${filesToMove.value.length} 个项目`, 'success')
+        showToast(format('file.crossPoolMovedItems', 'Cross-pool moved {count} item(s)', { count: filesToMove.value.length }), 'success')
       }
       await filesStore.fetchFiles(currentPath.value, currentPoolId.value)
     } catch (err: any) {
-      showToast(err.message || '移动失败', 'error')
+      showToast(err.message || t('common.moveFailed', 'Move failed'), 'error')
     }
     filesToMove.value = []
   }

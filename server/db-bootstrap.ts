@@ -499,7 +499,7 @@ async function migrateStorageSettings(db: DatabaseAdapter) {
       await db.prepare(`
         INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
         VALUES (?, ?, ?, 1, ?)
-      `).run(setting.user_id, '默认存储', setting.storage_type, JSON.stringify(poolConfig))
+      `).run(setting.user_id, 'Default Storage', setting.storage_type, JSON.stringify(poolConfig))
     }
   }
 }
@@ -647,7 +647,7 @@ async function ensureAdminUser(db: DatabaseAdapter) {
 
   await db.prepare('INSERT INTO user_settings (user_id, language) VALUES (?, ?)').run(userId, getDefaultLanguage())
 
-  const pools = config.storage_pools || [{ name: '本地存储', type: 'local', default: true, config: {} }]
+  const pools = config.storage_pools || [{ name: 'Local Storage', type: 'local', default: true, config: {} }]
   for (const pool of pools) {
     await db.prepare(`
       INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)

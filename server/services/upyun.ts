@@ -103,7 +103,7 @@ export class UpyunStorage implements StorageProvider {
     const passThrough = new PassThrough()
     passThrough.on('data', (chunk: Buffer) => chunks.push(chunk))
     await withRetry(() => this.client.getFile(remotePath, passThrough))
-    if (chunks.length === 0) throw new Error('文件不存在')
+    if (chunks.length === 0) throw new Error('common.fileNotFound')
     return Buffer.concat(chunks)
   }
 
@@ -179,7 +179,7 @@ export class UpyunStorage implements StorageProvider {
     const targetPath = this.normalizePath(destPath)
     const moved = await withRetry(() => this.client.move(targetPath, sourcePath))
     if (!moved) {
-      throw new Error('又拍云移动文件失败')
+      throw new Error('Failed to move file in UpYun')
     }
   }
 
@@ -188,7 +188,7 @@ export class UpyunStorage implements StorageProvider {
     const targetPath = this.normalizePath(destPath)
     const copied = await withRetry(() => this.client.copy(targetPath, sourcePath))
     if (!copied) {
-      throw new Error('又拍云复制文件失败')
+      throw new Error('Failed to copy file in UpYun')
     }
   }
 

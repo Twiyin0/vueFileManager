@@ -41,7 +41,7 @@ router.get('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReques
     `).get(userId) as any
 
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const pools = (await db.prepare(`
@@ -104,21 +104,21 @@ router.post('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, 
     const { username, password, role } = req.body
 
     if (!username || !password) {
-      return res.status(400).json({ error: '用户名和密码不能为空' })
+      return res.status(400).json({ error: 'auth.usernameAndPasswordRequired' })
     }
     if (username.length < 3 || username.length > 20) {
-      return res.status(400).json({ error: '用户名长度需在 3 到 20 个字符之间' })
+      return res.status(400).json({ error: 'auth.usernameLengthInvalid' })
     }
     if (password.length < 6) {
-      return res.status(400).json({ error: '密码长度不能少于 6 位' })
+      return res.status(400).json({ error: 'auth.passwordTooShort' })
     }
     if (role && !['admin', 'user'].includes(role)) {
-      return res.status(400).json({ error: '无效的角色' })
+      return res.status(400).json({ error: 'admin.invalidRole' })
     }
 
     const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(username)
     if (existing) {
-      return res.status(409).json({ error: '用户名已存在' })
+      return res.status(409).json({ error: 'auth.usernameAlreadyExists' })
     }
 
     const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
@@ -133,7 +133,7 @@ router.post('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, 
     await syncStoragePoolsFromConfig(userId)
 
     res.json({
-      message: '用户创建成功',
+      message: 'admin.userCreated',
       user: { id: userId, username, role: role || 'user' }
     })
   } catch (err) {
@@ -147,14 +147,14 @@ router.put('/users/:id/role', authMiddleware, adminMiddleware, async (req: AuthR
     const userId = Number(req.params.id)
 
     if (!['admin', 'user'].includes(role)) {
-      return res.status(400).json({ error: '无效的角色' })
+      return res.status(400).json({ error: 'admin.invalidRole' })
     }
     if (userId === req.userId && role !== 'admin') {
-      return res.status(400).json({ error: '不能降低自己的管理员权限' })
+      return res.status(400).json({ error: 'admin.cannotDemoteSelf' })
     }
 
     await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId)
-    res.json({ message: '角色已更新' })
+    res.json({ message: 'admin.roleUpdated' })
   } catch (err) {
     await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to update user role' })
   }
@@ -164,20 +164,20 @@ router.put('/users/:id/ban', authMiddleware, adminMiddleware, async (req: AuthRe
   try {
     const userId = Number(req.params.id)
     if (userId === req.userId) {
-      return res.status(400).json({ error: '不能封禁自己' })
+      return res.status(400).json({ error: 'admin.cannotBanSelf' })
     }
 
     const user = await db.prepare('SELECT banned, role FROM users WHERE id = ?').get(userId) as any
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
     if (user.role === 'admin') {
-      return res.status(400).json({ error: '不能封禁管理员账号' })
+      return res.status(400).json({ error: 'admin.cannotBanAdmin' })
     }
 
     const newBanned = user.banned ? 0 : 1
     await db.prepare('UPDATE users SET banned = ? WHERE id = ?').run(newBanned, userId)
-    res.json({ message: newBanned ? '用户已封禁' : '用户已解封', banned: !!newBanned })
+    res.json({ message: newBanned ? 'admin.userBanned' : 'admin.userUnbanned', banned: !!newBanned })
   } catch (err) {
     await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to update user ban status' })
   }
@@ -189,17 +189,17 @@ router.put('/users/:id/password', authMiddleware, adminMiddleware, async (req: A
     const userId = Number(req.params.id)
 
     if (!password || password.length < 6) {
-      return res.status(400).json({ error: '密码长度不能少于 6 位' })
+      return res.status(400).json({ error: 'auth.passwordTooShort' })
     }
 
     const user = await db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
     await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, userId)
-    res.json({ message: '密码已重置' })
+    res.json({ message: 'admin.passwordReset' })
   } catch (err) {
     await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to reset user password' })
   }
@@ -209,12 +209,12 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReq
   try {
     const userId = Number(req.params.id)
     if (userId === req.userId) {
-      return res.status(400).json({ error: '不能删除自己' })
+      return res.status(400).json({ error: 'admin.cannotDeleteSelf' })
     }
 
     await db.prepare('DELETE FROM users WHERE id = ?').run(userId)
     clearStorageCache(userId)
-    res.json({ message: '用户已删除' })
+    res.json({ message: 'admin.userDeleted' })
   } catch (err) {
     await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to delete user' })
   }
@@ -227,16 +227,16 @@ router.put('/users/:id/quota', authMiddleware, adminMiddleware, async (req: Auth
     const quota = typeof rawQuota === 'string' ? Number(rawQuota) : rawQuota
 
     if (typeof quota !== 'number' || !Number.isFinite(quota) || quota < 0) {
-      return res.status(400).json({ error: '配额值无效' })
+      return res.status(400).json({ error: 'admin.invalidQuota' })
     }
 
     const user = await db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     await db.prepare('UPDATE users SET storage_quota = ? WHERE id = ?').run(quota, userId)
-    res.json({ message: '配额已更新', quota })
+    res.json({ message: 'admin.quotaUpdated', quota })
   } catch (err) {
     await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to update user quota' })
   }
@@ -247,11 +247,11 @@ router.put('/users/:id/verify', authMiddleware, adminMiddleware, async (req: Aut
     const userId = Number(req.params.id)
     const user = await db.prepare('SELECT id FROM users WHERE id = ?').get(userId)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     await db.prepare('UPDATE users SET verified = 1 WHERE id = ?').run(userId)
-    res.json({ message: '用户已验证' })
+    res.json({ message: 'admin.userVerified' })
   } catch (err) {
     await sendServerError(req, res, err, { source: 'api', fileName: 'users.ts', message: 'Failed to verify user' })
   }

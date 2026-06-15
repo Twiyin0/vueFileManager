@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express'
 import db from '../db'
 import { authMiddleware, type AuthRequest } from '../middleware/auth'
+import { getRequestTranslator } from '../services/server-i18n'
 
 const router = Router()
 
@@ -31,9 +32,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const t = getRequestTranslator(req)
     const { filePath, fileName, fileType, storagePoolId } = req.body
     if (!filePath || !fileName || !fileType || !storagePoolId) {
-      return res.status(400).json({ error: '缺少必要参数' })
+      return res.status(400).json({ error: t('common.missingRequiredParameters', 'Missing required parameters') })
     }
 
     await db.prepare(`
@@ -41,7 +43,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       VALUES (?, ?, ?, ?, ?)
     `).run(req.userId!, filePath, fileName, fileType, storagePoolId)
 
-    res.json({ message: '已添加到收藏' })
+    res.json({ message: 'favourites.added' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -49,15 +51,16 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 router.delete('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const t = getRequestTranslator(req)
     const { filePath, storagePoolId } = req.query
     if (!filePath || !storagePoolId) {
-      return res.status(400).json({ error: '缺少必要参数' })
+      return res.status(400).json({ error: t('common.missingRequiredParameters', 'Missing required parameters') })
     }
 
     await db.prepare('DELETE FROM favourites WHERE user_id = ? AND file_path = ? AND storage_pool_id = ?')
       .run(req.userId!, filePath, parseInt(storagePoolId as string, 10))
 
-    res.json({ message: '已取消收藏' })
+    res.json({ message: 'favourites.removed' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -65,9 +68,10 @@ router.delete('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 router.get('/check', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const t = getRequestTranslator(req)
     const { filePath, storagePoolId } = req.query
     if (!filePath || !storagePoolId) {
-      return res.status(400).json({ error: '缺少必要参数' })
+      return res.status(400).json({ error: t('common.missingRequiredParameters', 'Missing required parameters') })
     }
 
     const item = await db.prepare('SELECT id FROM favourites WHERE user_id = ? AND file_path = ? AND storage_pool_id = ?')

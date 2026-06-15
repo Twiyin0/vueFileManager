@@ -44,13 +44,13 @@ async function getUsername(userId: number) {
 export function registerUploadRoutes(router: Router) {
   router.post('/upload', flexibleAuth, requirePermission('write'), uploadSingle('file'), async (req: ApiKeyRequest, res: Response) => {
     try {
-      if (!req.file) return res.status(400).json({ error: '没有文件' })
+      if (!req.file) return res.status(400).json({ error: 'common.missingFile' })
 
       const poolId = req.query.poolId as string || req.body.poolId as string
       const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
       const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, req.file.size)
       if (!quotaCheck.allowed) {
-        return res.status(400).json({ error: quotaCheck.message })
+        return res.status(400).json({ error: quotaCheck.message, params: quotaCheck.params })
       }
 
       const storage = getStorageForRequest(req)
@@ -65,7 +65,7 @@ export function registerUploadRoutes(router: Router) {
       await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
 
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
-      res.json({ message: '上传成功', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
+      res.json({ message: 'common.uploadSuccessful', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
     } catch (err) {
       await sendServerError(req, res, err, {
         source: 'web',
@@ -80,20 +80,20 @@ export function registerUploadRoutes(router: Router) {
     try {
       const { path: filePath, content } = req.body
       if (!filePath || content === undefined) {
-        return res.status(400).json({ error: '缺少 filePath 或 content' })
+        return res.status(400).json({ error: 'file.writeMissingFields' })
       }
       if (typeof content !== 'string') {
-        return res.status(400).json({ error: 'content 必须是字符串' })
+        return res.status(400).json({ error: 'file.writeContentMustBeString' })
       }
       if (content.length > 10 * 1024 * 1024) {
-        return res.status(413).json({ error: '文件过大，请使用上传功能' })
+        return res.status(413).json({ error: 'file.writeContentTooLarge' })
       }
 
       const storage = getStorageForRequest(req)
       const buffer = Buffer.from(content, 'utf-8')
       await Promise.race([
         storage.upload(filePath, buffer),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('保存超时')), 30000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('common.saveTimedOut')), 30000)),
       ])
 
       const username = await getUsername(req.userId!)
@@ -129,10 +129,10 @@ export function registerUploadRoutes(router: Router) {
 
       const poolIdStr = req.headers['x-pool-id'] as string
       if (!fileName) {
-        return res.status(400).json({ error: '缺少 X-File-Name 头' })
+        return res.status(400).json({ error: 'file.missingXFileNameHeader' })
       }
       if (isJunkFile(fileName)) {
-        return res.status(400).json({ error: `已拦截系统文件: ${fileName}` })
+        return res.status(400).json({ error: `file.blockedSystemFile`, params: { fileName } })
       }
 
       const resolvedPoolId = await resolvePoolId(req.userId!, poolIdStr)
@@ -143,10 +143,10 @@ export function registerUploadRoutes(router: Router) {
       const contentLength = typeof contentLengthHeader === 'string' ? parseInt(contentLengthHeader, 10) : NaN
 
       if (Number.isFinite(contentLength)) {
-        const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, contentLength)
-        if (!quotaCheck.allowed) {
-          return res.status(400).json({ error: quotaCheck.message })
-        }
+      const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, contentLength)
+      if (!quotaCheck.allowed) {
+          return res.status(400).json({ error: quotaCheck.message, params: quotaCheck.params })
+      }
       }
 
       const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type) ? buildTemporaryUploadPath(filePath) : filePath
@@ -157,7 +157,7 @@ export function registerUploadRoutes(router: Router) {
 
         req.on('aborted', () => {
           requestAborted = true
-          uploadStream.destroy(new Error('上传已取消'))
+          uploadStream.destroy(new Error('file.uploadCancelled'))
         })
         req.on('error', (err) => {
           uploadStream.destroy(err)
@@ -180,14 +180,14 @@ export function registerUploadRoutes(router: Router) {
           if (uploadPath !== filePath) {
             await storage.remove(uploadPath).catch(() => {})
           }
-          throw new Error('上传已取消')
+          throw new Error('file.uploadCancelled')
         }
 
         const username = await getUsername(req.userId!)
         await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
 
         const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
-        return res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
+        return res.json({ message: 'file.streamUploadCompleted', path: filePath, poolId: resolvedPoolId, storageType: pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
       }
 
       const tempId = crypto.randomBytes(16).toString('hex')
@@ -208,7 +208,7 @@ export function registerUploadRoutes(router: Router) {
         req.on('end', () => resolve())
         req.on('aborted', () => {
           requestAborted = true
-          reject(new Error('上传已取消'))
+          reject(new Error('file.uploadCancelled'))
         })
         req.on('error', (err) => reject(err))
       })
@@ -217,14 +217,14 @@ export function registerUploadRoutes(router: Router) {
       fileHandle = null
 
       if (requestAborted) {
-        throw new Error('上传已取消')
+        throw new Error('file.uploadCancelled')
       }
 
       const buffer = await fs.readFile(tempPath)
       const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, buffer.length)
       if (!quotaCheck.allowed) {
         await fs.unlink(tempPath).catch(() => {})
-        return res.status(400).json({ error: quotaCheck.message })
+        return res.status(400).json({ error: quotaCheck.message, params: quotaCheck.params })
       }
 
       try {
@@ -245,9 +245,9 @@ export function registerUploadRoutes(router: Router) {
       await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
 
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
-      res.json({ message: '流式上传成功', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
+      res.json({ message: 'file.streamUploadCompleted', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
     } catch (err: any) {
-      if (err.message === '上传已取消') {
+      if (err.message === 'file.uploadCancelled') {
         return res.status(499).json({ error: err.message })
       }
       await sendServerError(req, res, err, {
@@ -268,10 +268,10 @@ export function registerUploadRoutes(router: Router) {
       const { fileName: rawFileName, fileSize, dirPath, poolId } = req.body
       const fileName = rawFileName ? rawFileName.normalize('NFC') : rawFileName
       if (!fileName || !fileSize) {
-        return res.status(400).json({ error: '缺少文件名或文件大小' })
+        return res.status(400).json({ error: 'file.writeMissingFields' })
       }
       if (isJunkFile(fileName)) {
-        return res.status(400).json({ error: `已拦截系统文件: ${fileName}` })
+        return res.status(400).json({ error: 'file.blockedSystemFile', params: { fileName } })
       }
 
       const uploadId = crypto.randomBytes(16).toString('hex')
@@ -290,7 +290,7 @@ export function registerUploadRoutes(router: Router) {
         updatedAt: Date.now()
       }))
 
-      res.json({ uploadId, message: '分片上传已初始化' })
+      res.json({ uploadId, message: 'file.chunkUploadInitialized' })
     } catch (err) {
       await sendServerError(req, res, err, {
         source: 'web',
@@ -307,28 +307,28 @@ export function registerUploadRoutes(router: Router) {
       const uploadId = req.params.uploadId as string
       const contentRange = req.headers['content-range'] as string
       if (!contentRange) {
-        return res.status(400).json({ error: '缺少 Content-Range 头' })
+        return res.status(400).json({ error: 'file.missingContentRangeHeader' })
       }
 
       const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/)
       if (!match) {
-        return res.status(400).json({ error: 'Content-Range 格式错误' })
+        return res.status(400).json({ error: 'file.invalidContentRangeFormat' })
       }
 
       let task
       try {
         task = await readUploadMeta(uploadId)
       } catch {
-        return res.status(404).json({ error: '上传任务不存在' })
+        return res.status(404).json({ error: 'file.uploadTaskNotFound' })
       }
 
       const { uploadDir, metaPath, meta } = task
       if (meta.userId !== req.userId) {
-        return res.status(403).json({ error: '无权操作此上传任务' })
+        return res.status(403).json({ error: 'file.uploadTaskForbidden' })
       }
       if ((meta.updatedAt || meta.createdAt) + RESUMABLE_UPLOAD_TTL_MS < Date.now()) {
         await removeUploadTask(uploadId)
-        return res.status(410).json({ error: '上传任务已过期' })
+        return res.status(410).json({ error: 'file.uploadTaskExpired' })
       }
 
       const partIndex = meta.nextPartIndex ?? meta.uploadedParts.length
@@ -355,7 +355,7 @@ export function registerUploadRoutes(router: Router) {
       meta.nextPartIndex = partIndex + 1
       await writeUploadMeta(metaPath, meta)
 
-      res.json({ message: '分片上传成功', partIndex, uploadedParts: meta.uploadedParts })
+      res.json({ message: 'file.chunkUploaded', partIndex, uploadedParts: meta.uploadedParts })
     } catch (err) {
       await sendServerError(req, res, err, {
         source: 'web',
@@ -374,16 +374,16 @@ export function registerUploadRoutes(router: Router) {
       try {
         task = await readUploadMeta(uploadId)
       } catch {
-        return res.status(404).json({ error: '上传任务不存在' })
+        return res.status(404).json({ error: 'file.uploadTaskNotFound' })
       }
 
       const { meta } = task
       if (meta.userId !== req.userId) {
-        return res.status(403).json({ error: '无权查看此上传任务' })
+        return res.status(403).json({ error: 'file.uploadTaskViewForbidden' })
       }
       if ((meta.updatedAt || meta.createdAt) + RESUMABLE_UPLOAD_TTL_MS < Date.now()) {
         await removeUploadTask(uploadId)
-        return res.status(410).json({ error: '上传任务已过期' })
+        return res.status(410).json({ error: 'file.uploadTaskExpired' })
       }
 
       res.json({
@@ -412,16 +412,16 @@ export function registerUploadRoutes(router: Router) {
       try {
         task = await readUploadMeta(uploadId)
       } catch {
-        return res.status(404).json({ error: '上传任务不存在' })
+        return res.status(404).json({ error: 'file.uploadTaskNotFound' })
       }
 
       const { uploadDir, meta } = task
       if (meta.userId !== req.userId) {
-        return res.status(403).json({ error: '无权操作此上传任务' })
+        return res.status(403).json({ error: 'file.uploadTaskForbidden' })
       }
       if ((meta.updatedAt || meta.createdAt) + RESUMABLE_UPLOAD_TTL_MS < Date.now()) {
         await removeUploadTask(uploadId)
-        return res.status(410).json({ error: '上传任务已过期' })
+        return res.status(410).json({ error: 'file.uploadTaskExpired' })
       }
 
       const parts = (await fs.readdir(uploadDir)).filter((file) => file.startsWith('part-')).sort()
@@ -435,7 +435,7 @@ export function registerUploadRoutes(router: Router) {
       const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, finalBuffer.length)
       if (!quotaCheck.allowed) {
         await fs.rm(uploadDir, { recursive: true, force: true }).catch(() => {})
-        return res.status(400).json({ error: quotaCheck.message })
+        return res.status(400).json({ error: quotaCheck.message, params: quotaCheck.params })
       }
 
       const storage = meta.poolId ? getStorageByPoolId(req.userId!, meta.poolId) : getStorage(req.userId!)
@@ -448,7 +448,7 @@ export function registerUploadRoutes(router: Router) {
       await Logger.info('web', 'upload-routes.ts', `User ${username} uploaded a file in poolID:#${resolvedPoolId || 'default'} ${filePath}`)
 
       const directUrl = buildDirectUrl(req, filePath, resolvedPoolId)
-      res.json({ message: '分片上传完成', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
+      res.json({ message: 'file.chunkUploadCompleted', path: filePath, poolId: resolvedPoolId, storageType: quotaCheck.pool?.storage_type || 'local', directUrl, fileUrl: directUrl })
     } catch (err) {
       await sendServerError(req, res, err, {
         source: 'web',
@@ -466,15 +466,15 @@ export function registerUploadRoutes(router: Router) {
       try {
         task = await readUploadMeta(uploadId)
       } catch {
-        return res.status(404).json({ error: '上传任务不存在' })
+        return res.status(404).json({ error: 'file.uploadTaskNotFound' })
       }
 
       if (task.meta.userId !== req.userId) {
-        return res.status(403).json({ error: '无权操作此上传任务' })
+        return res.status(403).json({ error: 'file.uploadTaskForbidden' })
       }
 
       await removeUploadTask(uploadId)
-      res.json({ message: '上传缓存已清理' })
+      res.json({ message: 'file.uploadCacheCleared' })
     } catch (err) {
       await sendServerError(req, res, err, {
         source: 'web',

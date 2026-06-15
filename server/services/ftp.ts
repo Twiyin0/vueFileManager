@@ -64,7 +64,7 @@ export class FtpStorage implements StorageProvider {
     const client = await this.connect()
     try {
       const remotePath = this.fullPath(filePath)
-      // 确保父目录存在
+      // Ensure the parent directory exists.
       const dir = path.posix.dirname(remotePath)
       await client.ensureDir(dir)
       const readable = Readable.from(data)
@@ -107,7 +107,7 @@ export class FtpStorage implements StorageProvider {
       try {
         await client.remove(remotePath)
       } catch {
-        // 可能是目录
+        // Fall back to directory removal.
         await client.removeDir(remotePath)
       }
     } finally {
@@ -133,7 +133,7 @@ export class FtpStorage implements StorageProvider {
       const fileName = path.posix.basename(remotePath)
       const items = await client.list(parentDir)
       const item = items.find(i => i.name === fileName)
-      if (!item) throw new Error('文件不存在')
+      if (!item) throw new Error('common.fileNotFound')
       return {
         name: item.name,
         type: item.isDirectory ? 'folder' : 'file',
@@ -228,7 +228,7 @@ export class FtpStorage implements StorageProvider {
         }
       }
     } catch {
-      // 忽略无法访问的目录
+      // Ignore inaccessible directories.
     }
   }
 }

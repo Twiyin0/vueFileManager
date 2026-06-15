@@ -21,36 +21,36 @@ function maskSecrets(rawConfig: Record<string, any>) {
 
 function validateStorageConfig(storageType: string, storageConfig: Record<string, any>) {
   if (!['local', 'upyun', 'ftp', 's3', 'sftp'].includes(storageType)) {
-    throw new Error('不支持的存储类型')
+    throw new Error('storagePool.unsupportedType')
   }
 
   if (storageType === 'upyun') {
     if (!storageConfig.upyunOperator || !storageConfig.upyunPassword || !storageConfig.upyunBucket) {
-      throw new Error('又拍云存储需要填写操作员、密码和服务名')
+      throw new Error('storagePool.upyunRequiresFields')
     }
   }
 
   if (storageType === 'ftp') {
     if (!storageConfig.ftpHost) {
-      throw new Error('FTP 存储需要填写主机地址')
+      throw new Error('storagePool.ftpRequiresHost')
     }
   }
 
   if (storageType === 'sftp') {
     if (!storageConfig.sftpHost || !storageConfig.sftpUser) {
-      throw new Error('SFTP 存储需要填写主机地址和用户名')
+      throw new Error('storagePool.sftpRequiresHostAndUsername')
     }
     if (!storageConfig.sftpPassword && !storageConfig.sftpPrivateKey) {
-      throw new Error('SFTP 存储需要密码或私钥')
+      throw new Error('storagePool.sftpRequiresPasswordOrKey')
     }
   }
 
   if (storageType === 's3') {
     if (!storageConfig.s3Bucket) {
-      throw new Error('S3 存储需要填写 Bucket 名称')
+      throw new Error('storagePool.s3RequiresBucket')
     }
     if (!storageConfig.s3AccessKeyId || !storageConfig.s3SecretAccessKey) {
-      throw new Error('S3 存储需要填写 Access Key')
+      throw new Error('storagePool.s3RequiresAccessKey')
     }
   }
 }
@@ -110,7 +110,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     const { name, storageType, config: storageConfig } = req.body
 
     if (!name || !storageType || !storageConfig) {
-      return res.status(400).json({ error: '缺少必要参数' })
+      return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
 
     validateStorageConfig(storageType, storageConfig)
@@ -135,7 +135,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     await Logger.info('api', 'storage-pools.ts', `User ${username} created storage pool "${name}" type=${storageType}`)
 
     res.json({
-      message: '存储池创建成功',
+      message: 'storagePool.created',
       pool: {
         id: result.lastInsertRowid,
         name,
@@ -145,7 +145,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       }
     })
   } catch (err: any) {
-    if (err instanceof Error && err.message === '不支持的存储类型') {
+    if (err instanceof Error && err.message === 'storagePool.unsupportedType') {
       return res.status(400).json({ error: err.message })
     }
     await sendServerError(req, res, err, {
@@ -164,7 +164,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
-      return res.status(404).json({ error: '存储池不存在' })
+      return res.status(404).json({ error: 'storagePool.notFound' })
     }
 
     const existingConfig = JSON.parse(pool.config || '{}')
@@ -216,7 +216,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'storage-pools.ts', `User ${username} updated storage pool #${id}`)
 
-    res.json({ message: '存储池更新成功' })
+    res.json({ message: 'storagePool.updated' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -232,10 +232,10 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     const { id } = req.params
     const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
-      return res.status(404).json({ error: '存储池不存在' })
+      return res.status(404).json({ error: 'storagePool.notFound' })
     }
     if (pool.is_default) {
-      return res.status(400).json({ error: '不能删除默认存储池，请先设置其他存储池为默认' })
+      return res.status(400).json({ error: 'storagePool.cannotDeleteDefault' })
     }
 
     await db.prepare('DELETE FROM storage_pools WHERE id = ? AND user_id = ?').run(id, req.userId!)
@@ -244,7 +244,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'storage-pools.ts', `User ${username} deleted storage pool #${id} "${pool.name}"`)
 
-    res.json({ message: '存储池删除成功' })
+    res.json({ message: 'storagePool.deleted' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -259,26 +259,26 @@ router.post('/batch-delete', authMiddleware, async (req: AuthRequest, res: Respo
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
     if (ids.length === 0) {
-      return res.status(400).json({ error: '缺少存储池 ID 列表' })
+      return res.status(400).json({ error: 'storagePool.missingIdList' })
     }
 
     const deletedIds: number[] = []
-    const errors: string[] = []
+    const errors: Array<string | { error: string; params?: Record<string, string | number> }> = []
 
     for (const rawId of ids) {
       const id = Number(rawId)
       if (!Number.isInteger(id) || id <= 0) {
-        errors.push(`无效的存储池 ID: ${rawId}`)
+        errors.push({ error: 'storagePool.invalidId', params: { value: String(rawId) } })
         continue
       }
 
       const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
       if (!pool) {
-        errors.push(`存储池不存在: #${id}`)
+        errors.push({ error: 'storagePool.notFoundWithId', params: { id } })
         continue
       }
       if (pool.is_default) {
-        errors.push(`不能删除默认存储池 ${pool.name}`)
+        errors.push({ error: 'storagePool.cannotDeleteDefaultNamed', params: { name: pool.name } })
         continue
       }
 
@@ -293,7 +293,8 @@ router.post('/batch-delete', authMiddleware, async (req: AuthRequest, res: Respo
     }
 
     res.json({
-      message: deletedIds.length > 0 ? `已删除 ${deletedIds.length} 个存储池` : '没有存储池被删除',
+      message: deletedIds.length > 0 ? 'storagePool.deletedCount' : 'storagePool.noneDeleted',
+      params: deletedIds.length > 0 ? { count: deletedIds.length } : undefined,
       deletedIds,
       errors
     })
@@ -312,7 +313,7 @@ router.post('/:id/set-default', authMiddleware, async (req: AuthRequest, res: Re
     const { id } = req.params
     const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
-      return res.status(404).json({ error: '存储池不存在' })
+      return res.status(404).json({ error: 'storagePool.notFound' })
     }
 
     await db.prepare('UPDATE storage_pools SET is_default = 0 WHERE user_id = ?').run(req.userId!)
@@ -322,7 +323,7 @@ router.post('/:id/set-default', authMiddleware, async (req: AuthRequest, res: Re
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'storage-pools.ts', `User ${username} set storage pool #${id} as default`)
 
-    res.json({ message: '默认存储池设置成功' })
+    res.json({ message: 'storagePool.defaultUpdated' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -338,7 +339,7 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
     const { id } = req.params
     const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(id, req.userId!) as any
     if (!pool) {
-      return res.status(404).json({ error: '存储池不存在' })
+      return res.status(404).json({ error: 'storagePool.notFound' })
     }
 
     const poolConfig = JSON.parse(pool.config || '{}')

@@ -27,14 +27,14 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
-  // 监听系统主题变化
+  // Listen for system theme changes.
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (mode.value === 'system') {
       applyTheme()
     }
   })
 
-  // 初始化
+  // Initialize immediately.
   applyTheme()
 
   return { mode, setTheme }

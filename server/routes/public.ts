@@ -2,15 +2,14 @@ import { Router, Response, Request } from 'express'
 import path from 'path'
 import db from '../db'
 import { getGuestStorage, getStorageByPoolId } from '../services/factory'
+import { getRequestTranslator } from '../services/server-i18n'
 
 const router = Router()
 
-// 获取用户信息（根据用户名）
 async function getUserByUsername(username: string) {
   return await db.prepare('SELECT id, username FROM users WHERE username = ?').get(username) as any
 }
 
-// MIME 类型映射
 const mimeTypes: Record<string, string> = {
   'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
   'gif': 'image/gif', 'svg': 'image/svg+xml', 'webp': 'image/webp',
@@ -24,68 +23,59 @@ const mimeTypes: Record<string, string> = {
   'rs': 'text/x-rust', 'vue': 'text/x-vue', 'sh': 'text/x-shellscript',
 }
 
-// 安全检查：防止路径越权（目录遍历攻击）
 function isPathSafe(targetPath: string): boolean {
   if (!targetPath) return true
-  // 检查原始路径中是否包含 .. 段（Express 会预处理规范化，所以用正则兜底）
   if (/\.\./.test(targetPath)) return false
   return true
 }
 
-// 匿名公网访问文件
-// 路径格式：/f/:username/*filePath
 router.get('/:username/*', async (req: Request, res: Response) => {
   try {
+    const t = getRequestTranslator(req)
     const { username } = req.params
-    const filePath = (req.params as any)[0] // Express wildcard
+    const filePath = (req.params as any)[0]
 
     if (!filePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: t('common.missingFilePath', 'Missing file path') })
     }
 
-    // 查找用户
     const user = await getUserByUsername(username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: t('auth.userNotFound', 'User not found') })
     }
 
-    // 获取访客存储配置
     const guestConfig = await getGuestStorage(user.id)
     if (!guestConfig) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: t('guest.guestModeDisabled', 'Guest mode is disabled for this user') })
     }
 
     const { storage, basePath } = guestConfig
 
-    // 构建完整路径
     const fullPath = basePath ? (filePath ? `${basePath}/${filePath}` : basePath) : filePath
 
-    // 安全检查：防止目录遍历攻击
     if (!isPathSafe(filePath) || !isPathSafe(fullPath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: t('public.pathAccessDenied', 'No permission to access this path') })
     }
 
-    // 获取文件信息
     const fileInfo = await storage.info(fullPath)
     if (fileInfo.type !== 'file') {
-      return res.status(400).json({ error: '不支持访问文件夹' })
+      return res.status(400).json({ error: t('public.folderAccessUnsupported', 'Folder access is not supported') })
     }
 
-    // 下载文件
     const data = await storage.download(fullPath)
     const ext = filePath.split('.').pop()?.toLowerCase() || ''
     const fileName = filePath.split('/').pop() || 'file'
 
-    // 设置响应头（inline 显示而非下载）
     res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
     res.setHeader('Content-Length', data.length)
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
-    res.setHeader('Cache-Control', 'public, max-age=86400') // 缓存 24 小时
+    res.setHeader('Cache-Control', 'public, max-age=86400')
 
     res.send(data)
   } catch (err: any) {
-    if (err.message === '文件不存在' || err.code === 'ENOENT') {
-      return res.status(404).json({ error: '文件不存在' })
+    const t = getRequestTranslator(req)
+    if (err.message === 'File not found' || err.code === 'ENOENT') {
+      return res.status(404).json({ error: t('common.fileNotFound', 'File not found') })
     }
     res.status(500).json({ error: err.message })
   }

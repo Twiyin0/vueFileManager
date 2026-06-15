@@ -49,7 +49,7 @@ async function resolveStorageByPoolId(userId: number, poolId: number): Promise<S
 
   const pool = await db.prepare('SELECT * FROM storage_pools WHERE id = ? AND user_id = ?').get(poolId, userId) as any
   if (!pool) {
-    throw new Error('存储池不存在')
+    throw new Error('storagePool.notFound')
   }
 
   const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
@@ -65,7 +65,7 @@ function createDeferredStorage(getter: () => Promise<StorageProvider>): StorageP
     list: (prefix) => getter().then((storage) => storage.list(prefix)),
     upload: (filePath, data) => getter().then((storage) => storage.upload(filePath, data)),
     uploadStream: (filePath, stream, size) => getter().then(async (storage) => {
-      if (!storage.uploadStream) throw new Error('当前存储不支持流式上传')
+      if (!storage.uploadStream) throw new Error('Streaming uploads are not supported by the current storage backend')
       return storage.uploadStream(filePath, stream, size)
     }),
     download: (filePath) => getter().then((storage) => storage.download(filePath)),
@@ -101,7 +101,7 @@ export function getStorage(userId: number): StorageProvider {
     const result = await db.prepare(`
       INSERT INTO storage_pools (user_id, name, storage_type, is_default, config)
       VALUES (?, ?, ?, 1, ?)
-    `).run(userId, '默认存储', 'local', JSON.stringify({}))
+    `).run(userId, 'Default Storage', 'local', JSON.stringify({}))
 
     return resolveStorageByPoolId(userId, result.lastInsertRowid as number)
   })

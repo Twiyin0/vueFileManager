@@ -1,9 +1,9 @@
 import { StorageProvider, FileInfo } from './storage'
 
 /**
- * 路径前缀包装器：将所有操作限定在存储的某个子目录下
- * 例如 prefix = '/my-app'，则 list('') 实际列出 '/my-app' 下的内容，
- * 返回的 path 已去掉前缀，对客户端透明
+ * Scope all operations to a fixed subdirectory of the underlying storage.
+ * For example, prefix = '/my-app' makes list('') resolve within '/my-app',
+ * while returned paths remain transparent to callers.
  */
 export class PrefixStorage implements StorageProvider {
   private inner: StorageProvider
@@ -11,7 +11,7 @@ export class PrefixStorage implements StorageProvider {
 
   constructor(inner: StorageProvider, prefix: string) {
     this.inner = inner
-    // 规范化前缀：以 / 开头，去掉尾部 /
+    // Normalize the prefix and trim trailing slashes.
     this.prefix = prefix.replace(/\/+$/, '') || ''
   }
 
@@ -42,7 +42,7 @@ export class PrefixStorage implements StorageProvider {
 
   async uploadStream(filePath: string, stream: NodeJS.ReadableStream, size?: number): Promise<void> {
     if (!this.inner.uploadStream) {
-      throw new Error('当前存储不支持流式上传')
+      throw new Error('Streaming uploads are not supported by the current storage backend')
     }
     return this.inner.uploadStream(this.withPrefix(filePath), stream, size)
   }

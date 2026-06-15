@@ -84,7 +84,7 @@ export const useFilesStore = defineStore('files', () => {
     })
 
     if (!response.ok) {
-      throw new Error('下载失败')
+      throw new Error('Download failed')
     }
 
     return response.blob()
@@ -129,7 +129,7 @@ export const useFilesStore = defineStore('files', () => {
     await Promise.all(Array.from({ length: limit }, () => worker()))
 
     if (failures.length > 0) {
-      throw new Error(`部分文件下载失败：${failures.slice(0, 3).join('、')}${failures.length > 3 ? ' 等' : ''}`)
+      throw new Error(`Some files failed to download: ${failures.slice(0, 3).join(', ')}${failures.length > 3 ? ' ...' : ''}`)
     }
   }
 
@@ -142,7 +142,7 @@ export const useFilesStore = defineStore('files', () => {
 
   function formatDate(dateStr: string): string {
     const date = new Date(dateStr)
-    return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   return {

@@ -68,7 +68,7 @@ router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) =
   try {
     const { filePath, fileType, password, expiresIn, maxDownloads, storagePoolId } = req.body
     if (!filePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     const shareCode = crypto.randomBytes(8).toString('hex')
@@ -90,7 +90,7 @@ router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) =
     await Logger.info('api', 'share.ts', `User ${username} shared a file in poolID:#${storagePoolId || 'default'} ${filePath}`)
 
     res.json({
-      message: '分享链接创建成功',
+      message: 'share.linkCreated',
       shareCode,
       signKey,
       url: `/s/${shareCode}`,
@@ -139,11 +139,11 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     const share = await db.prepare('SELECT file_path, storage_pool_id FROM shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
     const result = await db.prepare('DELETE FROM shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'share.shareNotFound' })
     }
     const username = await getUsernameById(req.userId!)
     await Logger.info('api', 'share.ts', `User ${username} deleted share in poolID:#${share?.storage_pool_id || 'default'} ${share?.file_path || ''}`.trim())
-    res.json({ message: '分享已删除' })
+    res.json({ message: 'share.shareDeletedShort' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -163,15 +163,15 @@ router.get('/s/:code', async (req: Request, res: Response) => {
     `).get(req.params.code) as any
 
     if (!share) {
-      return res.status(404).json({ error: '分享链接不存在' })
+      return res.status(404).json({ error: 'share.shareLinkNotFound' })
     }
 
     if (share.expires_at && new Date(share.expires_at) < new Date()) {
-      return res.status(410).json({ error: '分享链接已过期' })
+      return res.status(410).json({ error: 'share.shareLinkExpired' })
     }
 
     if (share.max_downloads && share.download_count >= share.max_downloads) {
-      return res.status(410).json({ error: '下载次数已达上限' })
+      return res.status(410).json({ error: 'share.downloadLimitReached' })
     }
 
     if (share.password) {
@@ -212,18 +212,18 @@ router.get('/list/:code', async (req: Request, res: Response) => {
       WHERE s.share_code = ?
     `).get(req.params.code) as any
 
-    if (!share) return res.status(404).json({ error: '分享链接不存在' })
-    if (share.file_type !== 'folder') return res.status(400).json({ error: '不是文件夹分享' })
-    if (share.expires_at && new Date(share.expires_at) < new Date()) return res.status(410).json({ error: '分享链接已过期' })
+    if (!share) return res.status(404).json({ error: 'share.shareLinkNotFound' })
+    if (share.file_type !== 'folder') return res.status(400).json({ error: 'share.folderShareRequired' })
+    if (share.expires_at && new Date(share.expires_at) < new Date()) return res.status(410).json({ error: 'share.shareLinkExpired' })
 
     const sign = req.query.sign as string
     const timestamp = parseInt(req.query.t as string)
-    if (!sign || !timestamp) return res.status(403).json({ error: '缺少签名参数' })
-    if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) return res.status(403).json({ error: '签名验证失败' })
+    if (!sign || !timestamp) return res.status(403).json({ error: 'share.missingSignatureParameters' })
+    if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) return res.status(403).json({ error: 'share.signatureVerificationFailed' })
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) return res.status(403).json({ error: '密码错误' })
+      if (!providedPassword || providedPassword !== share.password) return res.status(403).json({ error: 'share.incorrectPassword' })
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
@@ -252,21 +252,21 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     `).get(req.params.code) as any
 
     if (!share) {
-      return res.status(404).json({ error: '分享链接不存在' })
+      return res.status(404).json({ error: 'share.shareLinkNotFound' })
     }
 
     if (share.expires_at && new Date(share.expires_at) < new Date()) {
-      return res.status(410).json({ error: '分享链接已过期' })
+      return res.status(410).json({ error: 'share.shareLinkExpired' })
     }
 
     if (share.max_downloads && share.download_count >= share.max_downloads) {
-      return res.status(410).json({ error: '下载次数已达上限' })
+      return res.status(410).json({ error: 'share.downloadLimitReached' })
     }
 
     if (share.password) {
       const providedPassword = req.query.password as string
       if (!providedPassword || providedPassword !== share.password) {
-        return res.status(403).json({ error: '密码错误' })
+        return res.status(403).json({ error: 'share.incorrectPassword' })
       }
     }
 
@@ -274,11 +274,11 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     const timestamp = parseInt(req.query.t as string)
 
     if (!sign || !timestamp) {
-      return res.status(403).json({ error: '缺少签名参数' })
+      return res.status(403).json({ error: 'share.missingSignatureParameters' })
     }
 
     if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) {
-      return res.status(403).json({ error: '签名验证失败' })
+      return res.status(403).json({ error: 'share.signatureVerificationFailed' })
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
@@ -312,17 +312,17 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     `).get(req.params.code) as any
 
     if (!share) {
-      return res.status(404).json({ error: '分享链接不存在' })
+      return res.status(404).json({ error: 'share.shareLinkNotFound' })
     }
 
     if (share.expires_at && new Date(share.expires_at) < new Date()) {
-      return res.status(410).json({ error: '分享链接已过期' })
+      return res.status(410).json({ error: 'share.shareLinkExpired' })
     }
 
     if (share.password) {
       const providedPassword = req.query.password as string
       if (!providedPassword || providedPassword !== share.password) {
-        return res.status(403).json({ error: '密码错误' })
+        return res.status(403).json({ error: 'share.incorrectPassword' })
       }
     }
 
@@ -330,11 +330,11 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     const timestamp = parseInt(req.query.t as string)
 
     if (!sign || !timestamp) {
-      return res.status(403).json({ error: '缺少签名参数' })
+      return res.status(403).json({ error: 'share.missingSignatureParameters' })
     }
 
     if (!verifySignToken(share.username, share.sign_key, sign, timestamp)) {
-      return res.status(403).json({ error: '签名验证失败' })
+      return res.status(403).json({ error: 'share.signatureVerificationFailed' })
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
@@ -342,7 +342,7 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     const previewPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
     const fileInfo = await storage.info(previewPath)
     if (fileInfo.type !== 'file') {
-      return res.status(400).json({ error: '不支持预览文件夹' })
+      return res.status(400).json({ error: 'share.folderPreviewUnsupported' })
     }
 
     const fileName = previewPath.split('/').pop() || share.file_path.split('/').pop() || 'file'

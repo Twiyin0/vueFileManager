@@ -8,17 +8,17 @@ export class LocalStorage implements StorageProvider {
   private basePath: string
 
   constructor(basePath: string, userPrefix?: string) {
-    // 如果提供了 userPrefix，将 basePath 设为 basePath/userPrefix/（用户隔离）
+    // Use a per-user root when userPrefix is provided.
     this.basePath = userPrefix
       ? path.resolve(basePath, userPrefix)
       : path.resolve(basePath)
-    // 确保基础目录存在
+    // Ensure the base directory exists.
     fsSync.mkdirSync(this.basePath, { recursive: true })
   }
 
-  /** 确保子目录存在（供 PrefixStorage rootPath 使用） */
+  /** Ensure a prefixed subdirectory exists for PrefixStorage rootPath usage. */
   ensureSubdir(subdir: string): void {
-    // 去掉开头的 /，避免 path.resolve 当成绝对路径
+    // Strip leading slashes so path.resolve does not treat it as absolute.
     const clean = subdir.replace(/^\/+/, '')
     if (!clean) return
     const full = path.resolve(this.basePath, clean)
@@ -28,13 +28,13 @@ export class LocalStorage implements StorageProvider {
   }
 
   private fullPath(filePath: string): string {
-    // 去掉开头的 /，避免 path.resolve 当成绝对路径
+    // Strip leading slashes so path.resolve does not treat it as absolute.
     const clean = filePath.replace(/^\/+/, '')
     const resolved = path.resolve(this.basePath, clean)
-    // 安全检查：防止路径遍历
+    // Prevent path traversal beyond the storage root.
     const baseWithSlash = this.basePath.endsWith(path.sep) ? this.basePath : this.basePath + path.sep
     if (resolved !== this.basePath && !resolved.startsWith(baseWithSlash)) {
-      throw new Error('路径越界')
+      throw new Error('Path escapes the storage root')
     }
     return resolved
   }
@@ -48,7 +48,7 @@ export class LocalStorage implements StorageProvider {
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name)
         const stat = await fs.stat(fullPath)
-        // macOS 使用 NFD 编码中文文件名，统一标准化为 NFC
+        // Normalize macOS NFD filenames to NFC.
         const normalizedName = entry.name.normalize('NFC')
         files.push({
           name: normalizedName,
@@ -59,7 +59,7 @@ export class LocalStorage implements StorageProvider {
         })
       }
 
-      // 排序：文件夹在前，然后按名称
+      // Sort folders first, then by name.
       return files.sort((a, b) => {
         if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
         return a.name.localeCompare(b.name)
@@ -94,7 +94,7 @@ export class LocalStorage implements StorageProvider {
     return await fs.readFile(fullPath)
   }
 
-  /** Resolve a possibly-mangled path by matching against actual filesystem entries */
+  /** Resolve a path by matching actual filesystem entries when direct lookup fails. */
   async resolvePath(filePath: string): Promise<string> {
     const direct = this.fullPath(filePath)
     try { await fs.access(direct); return direct } catch {}
@@ -154,7 +154,7 @@ export class LocalStorage implements StorageProvider {
     const fullOld = await this.resolvePath(oldPath)
     const parentDir = path.dirname(fullOld)
     const fullNew = path.join(parentDir, newName)
-    if (!fullNew.startsWith(this.basePath)) throw new Error('路径越界')
+    if (!fullNew.startsWith(this.basePath)) throw new Error('Path escapes the storage root')
     await fs.rename(fullOld, fullNew)
   }
 
@@ -209,11 +209,11 @@ export class LocalStorage implements StorageProvider {
             await walk(fullPath, relPath)
           }
         }
-      } catch { /* 忽略无权限的目录 */ }
+      } catch { /* Ignore inaccessible directories. */ }
     }
 
     await walk(searchDir, prefix || '')
-    return results.slice(0, 100) // 限制返回数量
+    return results.slice(0, 100) // Limit result count.
   }
   async resolveLocalPath(filePath: string): Promise<string | null> {
     return this.resolvePath(filePath)

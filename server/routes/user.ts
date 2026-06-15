@@ -41,7 +41,7 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
     `).get(req.userId!) as any
 
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const pools = await db.prepare(`
@@ -174,7 +174,7 @@ router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
       await Logger.info('api', 'user.ts', `User ${username} updated settings`)
     }
 
-    res.json({ message: '设置已更新' })
+    res.json({ message: 'common.settingsUpdated' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -203,7 +203,7 @@ router.post('/apikeys', authMiddleware, async (req: AuthRequest, res: Response) 
   try {
     const { name, permissions } = req.body
     if (!name) {
-      return res.status(400).json({ error: '名称不能为空' })
+      return res.status(400).json({ error: 'common.nameRequired' })
     }
 
     const key = `vfm_${crypto.randomBytes(32).toString('hex')}`
@@ -219,7 +219,7 @@ router.post('/apikeys', authMiddleware, async (req: AuthRequest, res: Response) 
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'user.ts', `User ${username} generated API key "${name}" with permissions ${perms}`)
 
-    res.json({ message: 'API Key 创建成功', key, name, permissions: perms })
+    res.json({ message: 'API key created successfully', key, name, permissions: perms })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -235,11 +235,11 @@ router.delete('/apikeys/:id', authMiddleware, async (req: AuthRequest, res: Resp
     const keyRecord = await db.prepare('SELECT name FROM api_keys WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
     const result = await db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
-      return res.status(404).json({ error: 'API Key 不存在' })
+      return res.status(404).json({ error: 'API key not found' })
     }
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'user.ts', `User ${username} deleted API key "${keyRecord?.name || req.params.id}"`)
-    res.json({ message: 'API Key 已删除' })
+    res.json({ message: 'API key deleted' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -275,12 +275,12 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
   try {
     const { folderPath, storagePoolId, label, permissions } = req.body
     if (!folderPath || !storagePoolId) {
-      return res.status(400).json({ error: '缺少文件夹路径或存储池 ID' })
+      return res.status(400).json({ error: 'common.missingFolderPathOrPoolId' })
     }
 
     const pool = await db.prepare('SELECT id, name FROM storage_pools WHERE id = ? AND user_id = ?').get(storagePoolId, req.userId!) as any
     if (!pool) {
-      return res.status(404).json({ error: '存储池不存在' })
+      return res.status(404).json({ error: 'storagePool.notFound' })
     }
 
     const existing = await db.prepare(`
@@ -289,7 +289,7 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
     `).get(req.userId!, folderPath, storagePoolId) as any
 
     if (existing) {
-      return res.status(409).json({ error: '该文件夹已经分享至访客模式' })
+      return res.status(409).json({ error: 'guest.shareAlreadyExists' })
     }
 
     const perms = permissions || 'read'
@@ -303,7 +303,7 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
     await Logger.info('api', 'user.ts', `User ${username} shared folder to guest mode in poolID:#${storagePoolId} ${folderPath}`)
 
     res.json({
-      message: '已分享至访客模式',
+      message: 'guest.sharedToGuestMode',
       share: {
         id: result.lastInsertRowid,
         folder_path: folderPath,
@@ -328,7 +328,7 @@ router.put('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Re
     const share = await db.prepare('SELECT id, folder_path, storage_pool_id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
 
     if (!share) {
-      return res.status(404).json({ error: '访客分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     await db.prepare(`
@@ -340,7 +340,7 @@ router.put('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Re
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'user.ts', `User ${username} updated guest share in poolID:#${share.storage_pool_id} ${share.folder_path}`)
 
-    res.json({ message: '访客分享已更新' })
+    res.json({ message: 'guest.guestShareUpdated' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -356,11 +356,11 @@ router.delete('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res:
     const share = await db.prepare('SELECT folder_path, storage_pool_id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
     const result = await db.prepare('DELETE FROM guest_shares WHERE id = ? AND user_id = ?').run(req.params.id, req.userId!)
     if (result.changes === 0) {
-      return res.status(404).json({ error: '访客分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'user.ts', `User ${username} removed guest share in poolID:#${share?.storage_pool_id || 'unknown'} ${share?.folder_path || ''}`.trim())
-    res.json({ message: '访客分享已删除' })
+    res.json({ message: 'guest.guestShareDeleted' })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',

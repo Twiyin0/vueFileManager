@@ -44,7 +44,7 @@ async function processTask(task: DownloadTaskRow) {
   try {
     const response = await fetch(task.url)
     if (!response.ok || !response.body) {
-      throw new Error(`下载失败: ${response.status} ${response.statusText}`)
+      throw new Error(`Download failed: ${response.status} ${response.statusText}`)
     }
 
     const totalBytes = Number(response.headers.get('content-length') || 0) || null
@@ -66,7 +66,7 @@ async function processTask(task: DownloadTaskRow) {
 
           const current = await db.prepare('SELECT status FROM offline_download_tasks WHERE id = ?').get(task.id) as { status: TaskStatus } | undefined
           if (!current || current.status === 'cancelled') {
-            trackedStream.destroy(new Error('任务已取消'))
+            trackedStream.destroy(new Error('file.taskCancelled'))
             return
           }
 
@@ -104,7 +104,7 @@ async function processTask(task: DownloadTaskRow) {
     if (current?.status === 'cancelled') {
       await updateTask(task.id, { progress: 0, error_message: '' })
     } else {
-      await updateTask(task.id, { status: 'failed', error_message: err.message || '任务失败' })
+      await updateTask(task.id, { status: 'failed', error_message: err.message || 'Task failed' })
     }
   } finally {
     runningTaskId = null
@@ -165,15 +165,15 @@ export async function listOfflineDownloadTasks(userId: number) {
 export async function cancelOfflineDownloadTask(userId: number, taskId: number) {
   await ensureTable()
   const task = await db.prepare('SELECT * FROM offline_download_tasks WHERE id = ? AND user_id = ?').get(taskId, userId) as DownloadTaskRow | undefined
-  if (!task) throw new Error('任务不存在')
-  if (task.status === 'completed') throw new Error('已完成任务不能取消')
+  if (!task) throw new Error('Task not found')
+  if (task.status === 'completed') throw new Error('Completed tasks cannot be cancelled')
   await updateTask(taskId, { status: 'cancelled', error_message: '' })
 }
 
 export async function retryOfflineDownloadTask(userId: number, taskId: number) {
   await ensureTable()
   const task = await db.prepare('SELECT * FROM offline_download_tasks WHERE id = ? AND user_id = ?').get(taskId, userId) as DownloadTaskRow | undefined
-  if (!task) throw new Error('任务不存在')
+  if (!task) throw new Error('Task not found')
   await updateTask(taskId, {
     status: 'pending',
     progress: 0,

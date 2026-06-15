@@ -42,18 +42,18 @@ export function startServer(app: express.Express) {
   const host = process.env.HOST || config.server.host || 'localhost'
 
   function logServerReady(listenHost: string) {
-    const displayHost = listenHost === '0.0.0.0' ? '0.0.0.0 (所有网络接口)' : listenHost
-    console.log(`\n🚀 VueFileManager 服务器已启动`)
-    console.log(`📡 监听地址: ${displayHost}:${port}`)
+    const displayHost = listenHost === '0.0.0.0' ? '0.0.0.0 (all network interfaces)' : listenHost
+    console.log(`\nVueFileManager server started`)
+    console.log(`Listening on: ${displayHost}:${port}`)
     console.log(`📡 API: http://${listenHost === '0.0.0.0' ? 'localhost' : listenHost}:${port}/api`)
-    console.log(`🌐 开发环境: http://localhost:5173\n`)
+    console.log(`Development UI: http://localhost:5173\n`)
   }
 
   function attachShutdown(server: ReturnType<typeof app.listen>) {
     function shutdown() {
-      console.log('\n🛑 正在关闭服务器...')
+      console.log('\nShutting down server...')
       server.close(() => {
-        console.log('✅ 服务器已关闭')
+        console.log('Server closed')
         process.exit(0)
       })
       setTimeout(() => process.exit(1), 3000)
@@ -70,12 +70,12 @@ export function startServer(app: express.Express) {
 
     server.once('error', (error: NodeJS.ErrnoException) => {
       if (allowFallback && listenHost === '0.0.0.0' && (error.code === 'EPERM' || error.code === 'EACCES')) {
-        console.warn(`⚠️  无法监听 ${listenHost}:${port}（${error.code}），正在回退到 127.0.0.1:${port}`)
+        console.warn(`Unable to listen on ${listenHost}:${port} (${error.code}), falling back to 127.0.0.1:${port}`)
         listenWithHost('127.0.0.1', false)
         return
       }
 
-      console.error(`❌ 服务器启动失败: ${error.code || error.message}`)
+      console.error(`Server failed to start: ${error.code || error.message}`)
       console.error(error)
       process.exit(1)
     })

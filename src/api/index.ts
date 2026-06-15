@@ -1,4 +1,4 @@
-// fetch 封装
+// Fetch wrapper.
 
 const BASE_URL = '/api'
 
@@ -37,7 +37,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   const response = await fetch(`${BASE_URL}${url}`, config)
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: '请求失败' }))
+    const error = await response.json().catch(() => ({ error: 'Request failed' }))
     throw new Error(error.error || `HTTP ${response.status}`)
   }
 

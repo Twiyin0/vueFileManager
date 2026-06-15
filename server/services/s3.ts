@@ -74,10 +74,10 @@ export class S3Storage implements StorageProvider {
       })
       const response = await this.client.send(command)
 
-      // 文件
+      // Files.
       for (const obj of response.Contents || []) {
         const key = obj.Key!
-        if (key === fullPrefix + '/') continue // 跳过自身
+        if (key === fullPrefix + '/') continue // Skip the directory marker itself.
         const relPath = this.relativePath(key)
         if (!relPath) continue
         files.push({
@@ -89,7 +89,7 @@ export class S3Storage implements StorageProvider {
         })
       }
 
-      // 文件夹（公共前缀）
+      // Folders represented by common prefixes.
       for (const cp of response.CommonPrefixes || []) {
         const key = cp.Prefix!
         const relPath = this.relativePath(key.replace(/\/$/, ''))
@@ -139,12 +139,12 @@ export class S3Storage implements StorageProvider {
 
   async remove(filePath: string): Promise<void> {
     const key = this.fullKey(filePath)
-    // 先尝试作为文件删除
+    // Try removing it as a file first.
     try {
       await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }))
     } catch {}
 
-    // 列出并删除子对象（文件夹场景）
+    // Then remove nested objects for folder-like paths.
     let continuationToken: string | undefined
     do {
       const listCommand = new ListObjectsV2Command({
@@ -161,7 +161,7 @@ export class S3Storage implements StorageProvider {
   }
 
   async mkdir(_dirPath: string): Promise<void> {
-    // S3 没有真正的文件夹概念，上传一个空对象模拟
+    // S3 has no real folders, so create an empty marker object.
     const key = this.fullKey(_dirPath) + '/'
     await this.client.send(new PutObjectCommand({
       Bucket: this.bucket,
@@ -183,7 +183,7 @@ export class S3Storage implements StorageProvider {
         path: filePath,
       }
     } catch {
-      // 可能是文件夹
+      // Fall back to folder detection.
       const listCommand = new ListObjectsV2Command({
         Bucket: this.bucket,
         Prefix: key + '/',
@@ -199,7 +199,7 @@ export class S3Storage implements StorageProvider {
           path: filePath,
         }
       }
-      throw new Error('文件不存在')
+      throw new Error('common.fileNotFound')
     }
   }
 

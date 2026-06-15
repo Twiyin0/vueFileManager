@@ -37,15 +37,15 @@ function isSafeRelativeAssetPath(assetPath: string): boolean {
 
 function ensurePluginAssetPath(dirPath: string, assetPath: string, fieldName: string): string {
   if (!isSafeRelativeAssetPath(assetPath)) {
-    throw new Error(`${fieldName} 只能是插件目录内的相对路径`)
+    throw new Error(`${fieldName} must be a relative path inside the plugin directory`)
   }
 
   const resolvedPath = path.resolve(dirPath, assetPath)
   if (!resolvedPath.startsWith(path.resolve(dirPath) + path.sep) && resolvedPath !== path.resolve(dirPath, '.')) {
-    throw new Error(`${fieldName} 超出插件目录范围`)
+    throw new Error(`${fieldName} points outside the plugin directory`)
   }
   if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`${fieldName} 指向的文件不存在: ${assetPath}`)
+    throw new Error(`${fieldName} points to a missing file: ${assetPath}`)
   }
   return resolvedPath
 }
@@ -55,13 +55,13 @@ function createPluginRecord(dirName: string, dirPath: string, manifestPath: stri
   const enabled = manifest.enabled !== false
 
   if (!manifest.name || !manifest.version) {
-    throw new Error('manifest 缺少 name 或 version')
+    throw new Error('manifest is missing name or version')
   }
 
   if (kind === 'theme') {
     const themeManifest = manifest as ThemePluginManifest
     if (!themeManifest.style) {
-      throw new Error('theme 插件缺少 style 字段')
+      throw new Error('theme plugin is missing the style field')
     }
     ensurePluginAssetPath(dirPath, themeManifest.style, 'style')
   } else {
@@ -98,16 +98,16 @@ export function loadPlugins(): void {
   pluginRegistry.clear()
 
   if (!config.plugins?.enabled) {
-    console.log('🎨 插件系统已禁用')
+    console.log('Plugin system is disabled')
     return
   }
 
   const pluginsDir = getPluginsDir()
-  console.log('🎨 插件目录:', pluginsDir)
+  console.log('Plugin directory:', pluginsDir)
 
   if (!fs.existsSync(pluginsDir)) {
     fs.mkdirSync(pluginsDir, { recursive: true })
-    console.log('🎨 已创建插件目录')
+    console.log('Created plugin directory')
     return
   }
 
@@ -123,14 +123,14 @@ export function loadPlugins(): void {
       if (!record) continue
 
       pluginRegistry.set(record.id, record)
-      console.log(`  🎨 发现插件: ${record.id}, kind=${record.kind}, enabled=${record.enabled}`)
+      console.log(`  Discovered plugin: ${record.id}, kind=${record.kind}, enabled=${record.enabled}`)
       if (record.enabled) loaded++
     } catch (err: any) {
-      console.error(`  ⚠️ 加载插件 ${entry.name} 失败:`, err.message)
+      console.error(`  Failed to load plugin ${entry.name}:`, err.message)
     }
   }
 
-  console.log(`🎨 已发现 ${pluginRegistry.size} 个插件，启用 ${loaded} 个`)
+  console.log(`Discovered ${pluginRegistry.size} plugins, ${loaded} enabled`)
 }
 
 export function getPluginsDirPath() {

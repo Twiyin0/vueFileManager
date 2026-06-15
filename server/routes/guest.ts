@@ -94,7 +94,7 @@ function guestUploadSingle(field: string) {
 
       stream.on('end', () => {
         if (totalSize > limits.fileSize && !res.headersSent) {
-          res.status(413).json({ error: `文件大小超过限制 (${config.upload_limit}MB)` })
+          res.status(413).json({ error: 'file.fileSizeExceeded', params: { limit: config.upload_limit } })
           return
         }
 
@@ -117,7 +117,7 @@ function guestUploadSingle(field: string) {
 
     bb.on('close', () => {
       if (!fileReceived && !res.headersSent) {
-        res.status(400).json({ error: '没有文件' })
+        res.status(400).json({ error: 'common.missingFile' })
         return
       }
       if (!res.headersSent) next()
@@ -217,12 +217,12 @@ router.get('/:username/list', async (req: Request, res: Response) => {
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const shares = await db.prepare(`
@@ -243,12 +243,12 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await db.prepare(`
@@ -259,7 +259,7 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
     `).get(req.params.shareId, user.id) as any
 
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
@@ -306,30 +306,30 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'preview')) {
-      return res.status(403).json({ error: '该分享未开启预览权限' })
+      return res.status(403).json({ error: 'guest.previewPermissionRequired' })
     }
 
     const relativePath = req.query.path as string
     if (!relativePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     if (!isPathSafe(relativePath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
@@ -338,7 +338,7 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
 
     const fileInfo = await storage.info(fullPath)
     if (fileInfo.type !== 'file') {
-      return res.status(400).json({ error: '不支持预览文件夹' })
+      return res.status(400).json({ error: 'guest.folderPreviewUnsupported' })
     }
 
     const ext = relativePath.split('.').pop()?.toLowerCase() || ''
@@ -413,8 +413,8 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
     res.setHeader('Cache-Control', 'public, max-age=3600')
     res.send(data)
   } catch (err: any) {
-    if (err.message === '文件不存在' || err.code === 'ENOENT') {
-      return res.status(404).json({ error: '文件不存在' })
+    if (err.message === 'common.fileNotFound' || err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'common.fileNotFound' })
     }
     res.status(500).json({ error: err.message })
   }
@@ -424,30 +424,30 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'download')) {
-      return res.status(403).json({ error: '该分享未开启下载权限' })
+      return res.status(403).json({ error: 'guest.downloadPermissionRequired' })
     }
 
     const relativePath = req.query.path as string
     if (!relativePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     if (!isPathSafe(relativePath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
@@ -460,8 +460,8 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
     res.setHeader('Content-Type', 'application/octet-stream')
     res.send(data)
   } catch (err: any) {
-    if (err.message === '文件不存在' || err.code === 'ENOENT') {
-      return res.status(404).json({ error: '文件不存在' })
+    if (err.message === 'common.fileNotFound' || err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'common.fileNotFound' })
     }
     res.status(500).json({ error: err.message })
   }
@@ -471,35 +471,35 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'upload')) {
-      return res.status(403).json({ error: '该分享未开启上传权限' })
+      return res.status(403).json({ error: 'guest.uploadPermissionRequired' })
     }
 
     if (!req.file) {
-      return res.status(400).json({ error: '缺少文件' })
+      return res.status(400).json({ error: 'common.missingFile' })
     }
 
     if (/^\._/.test(req.file.originalname) || req.file.originalname === '.DS_Store') {
-      return res.status(400).json({ error: '不支持的文件类型' })
+      return res.status(400).json({ error: 'common.unsupportedFileType' })
     }
 
     const queryFilename = (req.query.filename as string) || null
     const dirPath = (req.body.dirPath as string) || (req.query.dirPath as string) || ''
     if (dirPath && !isPathSafe(dirPath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     let fallbackName = req.file.originalname
@@ -539,7 +539,7 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
     }
 
     const relativePath = basePath ? filePath.replace(`${basePath}/`, '').replace(basePath, '') : filePath
-    res.json({ message: '上传成功', path: relativePath })
+    res.json({ message: 'guest.uploadSuccessful', path: relativePath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -549,34 +549,34 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'edit')) {
-      return res.status(403).json({ error: '该分享未开启编辑权限' })
+      return res.status(403).json({ error: 'guest.editPermissionRequired' })
     }
 
     const { path: filePath, content } = req.body
     if (!filePath || content === undefined) {
-      return res.status(400).json({ error: '缺少文件路径或内容' })
+      return res.status(400).json({ error: 'guest.missingContentOrPath' })
     }
 
     if (!isPathSafe(filePath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     if (content.length > 10 * 1024 * 1024) {
-      return res.status(400).json({ error: '文件内容不能超过 10MB' })
+      return res.status(400).json({ error: 'guest.contentTooLarge' })
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
@@ -599,30 +599,30 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'delete')) {
-      return res.status(403).json({ error: '该分享未开启删除权限' })
+      return res.status(403).json({ error: 'guest.deletePermissionRequired' })
     }
 
     const { path: filePath } = req.body
     if (!filePath) {
-      return res.status(400).json({ error: '缺少文件路径' })
+      return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
     if (!isPathSafe(filePath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
@@ -633,11 +633,11 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
     const fileName = filePath.split('/').pop() || filePath
     const result = await db.prepare(
       'INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `访客: ${req.params.username}`)
+    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `Guest: ${req.params.username}`)
 
     const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
     await moveToTrash(storage, fullPath, trashPath, stat.type)
-    return res.json({ message: '删除成功' })
+    return res.json({ message: 'guest.deleteSuccessful' })
 
     try {
       const data = await storage.download(fullPath)
@@ -646,13 +646,13 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
 
     await db.prepare(
       'INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `访客: ${req.params.username}`)
+    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `Guest: ${req.params.username}`)
 
     await storage.remove(fullPath)
-    res.json({ message: '删除成功' })
+    res.json({ message: 'guest.deleteSuccessful' })
   } catch (err: any) {
-    if (err.message === '文件不存在' || err.code === 'ENOENT') {
-      return res.status(404).json({ error: '文件不存在' })
+    if (err.message === 'common.fileNotFound' || err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'common.fileNotFound' })
     }
     res.status(500).json({ error: err.message })
   }
@@ -662,30 +662,30 @@ router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => 
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'upload')) {
-      return res.status(403).json({ error: '该分享未开启写入权限' })
+      return res.status(403).json({ error: 'guest.writePermissionRequired' })
     }
 
     const { path: dirPath } = req.body
     if (!dirPath) {
-      return res.status(400).json({ error: '缺少文件夹路径' })
+      return res.status(400).json({ error: 'guest.missingDirectoryPath' })
     }
 
     if (!isPathSafe(dirPath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
@@ -693,7 +693,7 @@ router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => 
     const fullPath = basePath ? `${basePath}/${dirPath}` : dirPath
 
     await storage.mkdir(fullPath)
-    res.json({ message: '创建成功', path: dirPath })
+    res.json({ message: 'guest.createSuccessful', path: dirPath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -703,30 +703,30 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
   try {
     const user = await getUserByUsername(req.params.username as string)
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
     const settings = await getGuestSettings(user.id)
     if (!settings || !settings.guest_enabled) {
-      return res.status(403).json({ error: '该用户未开启访客模式' })
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
     }
 
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
-      return res.status(404).json({ error: '分享不存在' })
+      return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
     if (!hasPermission(share.permissions, 'rename')) {
-      return res.status(403).json({ error: '该分享未开启重命名权限' })
+      return res.status(403).json({ error: 'guest.editPermissionRequired' })
     }
 
     const { path: filePath, newName: rawNewName } = req.body
     if (!filePath || !rawNewName) {
-      return res.status(400).json({ error: '缺少文件路径或新名称' })
+      return res.status(400).json({ error: 'guest.missingContentOrPath' })
     }
 
     if (!isPathSafe(filePath)) {
-      return res.status(403).json({ error: '无权访问此路径' })
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
     const newName = rawNewName.normalize('NFC')
@@ -735,7 +735,7 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
     const fullPath = basePath ? `${basePath}/${filePath}` : filePath
 
     await storage.rename(fullPath, newName)
-    res.json({ message: '重命名成功' })
+    res.json({ message: 'guest.renameSuccessful' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import jwt from 'jsonwebtoken'
 import config from '../config'
 import { getAllThemes, getPluginSummaries, getThemeStyles, togglePlugin, toggleTheme } from '../plugins/loader'
+import { getRequestTranslator } from '../services/server-i18n'
 
 export function createPublicPlatformRouter() {
   const router = Router()
@@ -30,50 +31,52 @@ export function createPublicPlatformRouter() {
   })
 
   router.put('/plugins/:name/toggle', (req, res) => {
+    const t = getRequestTranslator(req)
     const token = req.headers.authorization?.replace('Bearer ', '')
-    if (!token) return res.status(401).json({ error: '未登录' })
+    if (!token) return res.status(401).json({ error: t('auth.notSignedIn', 'Not signed in') })
 
     try {
       jwt.verify(token, config.server.jwt_secret)
     } catch {
-      return res.status(401).json({ error: 'Token 无效' })
+      return res.status(401).json({ error: t('auth.invalidToken', 'Invalid token') })
     }
 
     const { name } = req.params
     const { enabled } = req.body
     if (typeof enabled !== 'boolean') {
-      return res.status(400).json({ error: 'enabled 必须为布尔值' })
+      return res.status(400).json({ error: t('common.enabledMustBeBoolean', 'enabled must be a boolean') })
     }
 
     const success = togglePlugin(name, enabled)
-    if (!success) return res.status(404).json({ error: '插件不存在' })
+    if (!success) return res.status(404).json({ error: t('platform.pluginNotFound', 'Plugin not found') })
 
     res.json({
-      message: enabled ? '插件已启用，重启服务后生效' : '插件已禁用，重启服务后生效'
+      message: enabled ? 'platform.pluginEnabledAfterRestart' : 'platform.pluginDisabledAfterRestart'
     })
   })
 
   router.put('/themes/:name/toggle', (req, res) => {
+    const t = getRequestTranslator(req)
     const token = req.headers.authorization?.replace('Bearer ', '')
-    if (!token) return res.status(401).json({ error: '未登录' })
+    if (!token) return res.status(401).json({ error: t('auth.notSignedIn', 'Not signed in') })
 
     try {
       jwt.verify(token, config.server.jwt_secret)
     } catch {
-      return res.status(401).json({ error: 'Token 无效' })
+      return res.status(401).json({ error: t('auth.invalidToken', 'Invalid token') })
     }
 
     const { name } = req.params
     const { enabled } = req.body
     if (typeof enabled !== 'boolean') {
-      return res.status(400).json({ error: 'enabled 必须为布尔值' })
+      return res.status(400).json({ error: t('common.enabledMustBeBoolean', 'enabled must be a boolean') })
     }
 
     const success = toggleTheme(name, enabled)
-    if (!success) return res.status(404).json({ error: '主题不存在' })
+    if (!success) return res.status(404).json({ error: t('platform.themeNotFound', 'Theme not found') })
 
     res.json({
-      message: enabled ? '主题已启用，重启服务后生效' : '主题已禁用，重启服务后生效'
+      message: enabled ? 'platform.themeEnabledAfterRestart' : 'platform.themeDisabledAfterRestart'
     })
   })
 

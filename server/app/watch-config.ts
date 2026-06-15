@@ -37,11 +37,11 @@ export function watchConfigFile(
         configWatchDebounce = null
 
         if (skipNextRestart) {
-          console.log('\n📝 检测到程序内部保存 config.yml，跳过开发环境热重启')
+          console.log('\nDetected internal config.yml write. Skipping dev hot restart.')
           return
         }
 
-        console.log('\n🔄 检测到手动修改 config.yml，正在重启开发服务...')
+        console.log('\nDetected manual config.yml change. Restarting dev server...')
         const time = new Date()
         fs.utimesSync(serverEntryPath, time, time)
       }, 500)

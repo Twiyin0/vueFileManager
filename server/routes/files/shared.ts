@@ -141,7 +141,7 @@ export async function writeUploadMeta(metaPath: string, meta: UploadMeta) {
 
 export function uploadSingle(field: string) {
   return (req: ApiKeyRequest, res: any, next: any) => {
-    if (!req.is('multipart')) return res.status(400).json({ error: '需要 multipart 请求' })
+    if (!req.is('multipart')) return res.status(400).json({ error: 'file.multipartRequired' })
 
     const limits = { fileSize: config.upload_limit * 1024 * 1024 }
     const bb = Busboy({ headers: req.headers, limits, defCharset: 'latin1' })
@@ -167,14 +167,14 @@ export function uploadSingle(field: string) {
           }
         }
       } catch (error) {
-        console.error('[upload] 编码检测异常:', error)
+        console.error('[upload] Failed to detect filename encoding:', error)
       }
 
       rawFilename = rawFilename.normalize('NFC')
 
       if (isJunkFile(rawFilename)) {
         stream.resume()
-        return res.status(400).json({ error: `已拦截系统文件: ${rawFilename}` })
+        return res.status(400).json({ error: 'file.blockedSystemFile', params: { fileName: rawFilename } })
       }
 
       const chunks: Buffer[] = []
@@ -189,7 +189,7 @@ export function uploadSingle(field: string) {
       })
       stream.on('end', () => {
         if (totalSize > limits.fileSize) {
-          return res.status(413).json({ error: `文件大小超过限制 (${config.upload_limit}MB)` })
+          return res.status(413).json({ error: 'file.fileSizeExceeded', params: { limit: config.upload_limit } })
         }
         ;(req as any).file = {
           fieldname,
@@ -202,7 +202,7 @@ export function uploadSingle(field: string) {
         fileReceived = true
       })
       stream.on('error', () => {
-        return res.status(500).json({ error: '文件上传流错误' })
+        return res.status(500).json({ error: 'file.fileUploadStreamError' })
       })
     })
 
@@ -213,7 +213,7 @@ export function uploadSingle(field: string) {
 
     bb.on('close', () => {
       if (!fileReceived && !res.headersSent) {
-        return res.status(400).json({ error: '没有文件' })
+        return res.status(400).json({ error: 'common.missingFile' })
       }
       if (!res.headersSent) next()
     })

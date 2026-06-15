@@ -42,14 +42,22 @@ export async function getUserQuota(userId: number): Promise<{ quota: number; use
   return { quota, used, remaining: Math.max(0, quota - used) }
 }
 
-export async function checkQuota(userId: number, uploadSize: number): Promise<{ allowed: boolean; message?: string }> {
+export async function checkQuota(
+  userId: number,
+  uploadSize: number
+): Promise<{ allowed: boolean; message?: string; params?: Record<string, string | number> }> {
   const { quota, used, remaining } = await getUserQuota(userId)
   if (uploadSize > remaining) {
     const quotaMB = Math.round(quota / 1024 / 1024)
     const usedMB = Math.round(used / 1024 / 1024)
     return {
       allowed: false,
-      message: `存储空间不足。已用 ${usedMB}MB / ${quotaMB}MB，剩余 ${Math.round(remaining / 1024 / 1024)}MB`,
+      message: 'common.insufficientStorage',
+      params: {
+        usedMB,
+        quotaMB,
+        remainingMB: Math.round(remaining / 1024 / 1024)
+      }
     }
   }
   return { allowed: true }
