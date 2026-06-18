@@ -5,7 +5,7 @@ import { resolveFromRoot } from './runtime-paths'
 
 const configPath = resolveFromRoot('config.yml')
 const envPath = resolveFromRoot('.env')
-const configWriteMarkerPath = resolveFromRoot('.config-write-marker')
+let lastInternalConfigWriteAt = 0
 
 export type AppLanguage = 'zh-CN' | 'en-US'
 
@@ -263,11 +263,11 @@ function mergeConfig(loaded: any): Config {
 }
 
 function markInternalConfigWrite() {
-  try {
-    fs.writeFileSync(configWriteMarkerPath, String(Date.now()), 'utf8')
-  } catch {
-    // ignore marker write failures
-  }
+  lastInternalConfigWriteAt = Date.now()
+}
+
+export function wasRecentInternalConfigWrite(windowMs = 1500) {
+  return Date.now() - lastInternalConfigWriteAt <= windowMs
 }
 
 loadEnvFile()
@@ -357,7 +357,7 @@ export function updateConfigFile(mutator: (rawConfig: any) => void): Config {
 }
 
 export default config
-export { configPath, envPath, configWriteMarkerPath }
+export { configPath, envPath }
 export type {
   Config,
   StoragePoolConfig,

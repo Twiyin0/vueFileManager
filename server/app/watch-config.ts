@@ -3,7 +3,7 @@ import path from 'path'
 
 interface WatchConfigFileOptions {
   enabled?: boolean
-  internalWriteMarkerPath?: string
+  shouldSkipRestart?: () => boolean
 }
 
 export function watchConfigFile(
@@ -15,20 +15,6 @@ export function watchConfigFile(
 
   const configFilePath = path.join(rootDir, 'config.yml')
   let configWatchDebounce: NodeJS.Timeout | null = null
-  let skipNextRestart = false
-
-  if (options.internalWriteMarkerPath) {
-    try {
-      fs.watch(options.internalWriteMarkerPath, () => {
-        skipNextRestart = true
-        setTimeout(() => {
-          skipNextRestart = false
-        }, 1500)
-      })
-    } catch {
-      // ignore watcher failures in restricted environments
-    }
-  }
 
   try {
     fs.watch(configFilePath, () => {
@@ -36,7 +22,7 @@ export function watchConfigFile(
       configWatchDebounce = setTimeout(() => {
         configWatchDebounce = null
 
-        if (skipNextRestart) {
+        if (options.shouldSkipRestart?.()) {
           console.log('\nDetected internal config.yml write. Skipping dev hot restart.')
           return
         }

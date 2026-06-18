@@ -17,7 +17,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - User registration, login, JWT auth, and API keys
 - Admin user management, quota control, ban or unban, and manual verification
 - Per-user multi-storage-pool management
-- File listing, upload, stream upload, resumable upload, download, preview, search, and ZIP download
+- File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search, and ZIP download
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`
 - Remote upload and background offline download tasks, including comma-separated batch URLs
@@ -73,6 +73,8 @@ Or run frontend and backend separately:
 yarn dev:client
 yarn dev:server
 ```
+
+In development mode, when the backend writes `config.yml` through admin APIs, it skips the redundant hot restart and no longer creates an extra config-write marker file.
 
 ## Build
 

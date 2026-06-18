@@ -9,10 +9,9 @@ import { buildTrashPath, moveToTrash } from '../services/trash'
 import config from '../config'
 import fs from 'fs/promises'
 import fsSync from 'fs'
-import { isJunkFile } from './files/shared'
+import { buildTemporaryUploadPath, sanitizeUploadFileName, isJunkFile } from './files/shared'
 
 const router = Router()
-const TEMP_UPLOAD_PREFIX = '.temp_'
 
 const mimeTypes: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -161,23 +160,11 @@ function isPathSafe(targetPath: string): boolean {
 
 function isTemporaryUploadFile(filename: string): boolean {
   const name = filename.split('/').pop() || filename
-  return name.startsWith(TEMP_UPLOAD_PREFIX)
+  return name.startsWith('.temp_')
 }
 
 function shouldUseAtomicTempUpload(storageType?: string): boolean {
   return storageType === 'local' || storageType === 'ftp'
-}
-
-function buildTemporaryUploadPath(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/')
-  const lastSlashIndex = normalized.lastIndexOf('/')
-  if (lastSlashIndex === -1) {
-    return `${TEMP_UPLOAD_PREFIX}${normalized}`
-  }
-
-  const dir = normalized.slice(0, lastSlashIndex)
-  const name = normalized.slice(lastSlashIndex + 1)
-  return `${dir}/${TEMP_UPLOAD_PREFIX}${name}`
 }
 
 async function getUserByUsername(username: string) {
@@ -507,7 +494,10 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
       fallbackName = decodeURIComponent(fallbackName)
     } catch {}
 
-    const normalizedName = (queryFilename || fallbackName).normalize('NFC')
+    const normalizedName = sanitizeUploadFileName(queryFilename || fallbackName)
+    if (!normalizedName) {
+      return res.status(400).json({ error: 'file.invalidFileName' })
+    }
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
     const basePath = (share.folder_path || '').replace(/\\/g, '/')
     const filePath = basePath
@@ -515,7 +505,9 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
       : (dirPath ? `${dirPath}/${normalizedName}` : normalizedName)
 
     const pool = await db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(share.storage_pool_id) as any
-    const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type) ? buildTemporaryUploadPath(filePath) : filePath
+    const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type)
+      ? buildTemporaryUploadPath(filePath, Date.now().toString(36))
+      : filePath
 
     try {
       await storage.upload(uploadPath, req.file.buffer)

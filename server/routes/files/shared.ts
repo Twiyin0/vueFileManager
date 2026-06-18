@@ -42,15 +42,28 @@ export function shouldUseAtomicTempUpload(storageType?: string) {
   return storageType === 'local' || storageType === 'ftp'
 }
 
-export function buildTemporaryUploadPath(filePath: string): string {
+export function sanitizeUploadFileName(fileName: string): string {
+  const normalized = fileName
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .pop()
+    ?.trim()
+    .normalize('NFC') || ''
+
+  return normalized.replace(/[\u0000-\u001f]/g, '')
+}
+
+export function buildTemporaryUploadPath(filePath: string, suffix?: string): string {
   const normalized = filePath.replace(/\\/g, '/')
   const lastSlashIndex = normalized.lastIndexOf('/')
+  const marker = suffix ? `${TEMP_UPLOAD_PREFIX}${suffix}_` : TEMP_UPLOAD_PREFIX
   if (lastSlashIndex === -1) {
-    return `${TEMP_UPLOAD_PREFIX}${normalized}`
+    return `${marker}${normalized}`
   }
   const dir = normalized.slice(0, lastSlashIndex)
   const name = normalized.slice(lastSlashIndex + 1)
-  return `${dir}/${TEMP_UPLOAD_PREFIX}${name}`
+  return `${dir}/${marker}${name}`
 }
 
 export async function finalizeAtomicUpload(storage: Awaited<ReturnType<typeof getStorageForRequest>>, tempPath: string, finalPath: string) {

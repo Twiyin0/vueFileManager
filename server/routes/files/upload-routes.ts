@@ -18,6 +18,7 @@ import {
   readUploadMeta,
   removeUploadTask,
   resolvePoolId,
+  sanitizeUploadFileName,
   shouldUseAtomicTempUpload,
   uploadSingle,
   writeUploadMeta,
@@ -57,7 +58,10 @@ export function registerUploadRoutes(router: Router) {
       const dirPath = (req.query.path as string) || ''
       let normalizedName = req.file.originalname
       try { normalizedName = decodeURIComponent(normalizedName) } catch {}
-      normalizedName = normalizedName.normalize('NFC')
+      normalizedName = sanitizeUploadFileName(normalizedName)
+      if (!normalizedName) {
+        return res.status(400).json({ error: 'file.invalidFileName' })
+      }
       const filePath = dirPath ? `${dirPath}/${normalizedName}` : normalizedName
       await storage.upload(filePath, req.file.buffer)
 
@@ -120,7 +124,7 @@ export function registerUploadRoutes(router: Router) {
       const rawFileName = req.headers['x-file-name'] as string
       let fileName: string
       try { fileName = decodeURIComponent(rawFileName) } catch { fileName = rawFileName }
-      fileName = fileName.normalize('NFC')
+      fileName = sanitizeUploadFileName(fileName)
 
       const rawDirPath = (req.headers['x-dir-path'] as string) || ''
       let dirPath: string
@@ -149,7 +153,10 @@ export function registerUploadRoutes(router: Router) {
       }
       }
 
-      const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type) ? buildTemporaryUploadPath(filePath) : filePath
+      const tempSuffix = crypto.randomBytes(6).toString('hex')
+      const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type)
+        ? buildTemporaryUploadPath(filePath, tempSuffix)
+        : filePath
 
       if (storage.uploadStream) {
         let requestAborted = false
@@ -266,7 +273,7 @@ export function registerUploadRoutes(router: Router) {
     try {
       await cleanupExpiredUploads()
       const { fileName: rawFileName, fileSize, dirPath, poolId } = req.body
-      const fileName = rawFileName ? rawFileName.normalize('NFC') : rawFileName
+      const fileName = rawFileName ? sanitizeUploadFileName(rawFileName) : rawFileName
       if (!fileName || !fileSize) {
         return res.status(400).json({ error: 'file.writeMissingFields' })
       }

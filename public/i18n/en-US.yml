@@ -164,6 +164,10 @@ upload:
   busyHint: Upload is in progress. You can close this window and keep watching progress at the bottom-right corner.
   dropHint: Click or drag files here to upload
   dropOverlay: Drop files here to upload
+  clipboardHint: While this window is open, press {shortcut} to upload files or screenshots from the system clipboard
+  readClipboard: Read Clipboard
+  clipboardEmpty: No uploadable files were found in the system clipboard
+  clipboardReadFailed: Unable to read the system clipboard. You can still try {shortcut} after copying a file or screenshot
   limitHint: Single file size is controlled by the server upload limit
   queue: Upload Queue
   pendingFiles: Pending Files

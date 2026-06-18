@@ -164,6 +164,10 @@ upload:
   busyHint: 上传任务进行中，可关闭此窗口，右下角会继续显示进度
   dropHint: 点击或拖拽文件到此处上传
   dropOverlay: 拖放文件到此处上传
+  clipboardHint: 打开此窗口后，可按 {shortcut} 从系统剪贴板上传文件或截图
+  readClipboard: 读取剪贴板
+  clipboardEmpty: 系统剪贴板中没有可上传的文件
+  clipboardReadFailed: 无法读取系统剪贴板。复制文件或截图后，仍可尝试按 {shortcut}
   limitHint: 单文件大小受服务端上传限制控制
   queue: 上传队列
   pendingFiles: 待上传文件
