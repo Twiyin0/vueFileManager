@@ -54,6 +54,10 @@ router.post('/send-code', async (req: Request, res: Response) => {
 
 router.post('/register', async (req: Request, res: Response) => {
   try {
+    if (!config.allow_user_registration) {
+      return res.status(403).json({ error: 'auth.userRegistrationDisabled' })
+    }
+
     const { username, password, email, code } = req.body
 
     if (!username || !password) {

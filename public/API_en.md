@@ -55,6 +55,7 @@ Returns public site config:
 - `icp_beian`
 - `police_beian`
 - `smtp_enabled`
+- `registration_enabled`
 - `themes_enabled`
 - `plugins_enabled`
 - `webdav_enabled`
@@ -93,9 +94,11 @@ Request body:
 
 Notes:
 
+- Registration can be globally disabled by the administrator
 - `email` and `code` are only required when SMTP-backed registration is enabled
 - Passwords are still stored with MD5 in the current implementation
 - New users receive the current default language from `.env` on first initialization
+- When registration is disabled, the endpoint returns `403` with `auth.userRegistrationDisabled`
 
 ### `POST /api/auth/login`
 
@@ -447,6 +450,10 @@ Examples:
 
 Returns the current user profile, pool list, storage stats, and dashboard counts.
 
+Additional fields:
+
+- `registration_enabled`
+
 ### `GET /api/user/settings`
 
 Returns current user settings, including:
@@ -500,6 +507,7 @@ Returns system settings:
 
 - `upload_limit`
 - `max_concurrent_uploads`
+- `allow_user_registration`
 - `log_level`
 
 ### `PUT /api/admin/upload-limit`
@@ -510,6 +518,7 @@ Updates system settings:
 {
   "upload_limit": 100,
   "max_concurrent_uploads": 3,
+  "allow_user_registration": true,
   "log_level": 2
 }
 ```

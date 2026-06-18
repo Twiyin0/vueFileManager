@@ -12,6 +12,7 @@ export function createPublicPlatformRouter() {
       icp_beian: config.site?.icp_beian || '',
       police_beian: config.site?.police_beian || '',
       smtp_enabled: config.smtp?.enabled || false,
+      registration_enabled: config.allow_user_registration,
       themes_enabled: config.plugins?.enabled || false,
       plugins_enabled: config.plugins?.enabled || false,
       webdav_enabled: true

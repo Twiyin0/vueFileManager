@@ -130,10 +130,12 @@ export function useAdminPage() {
 
   const uploadLimit = ref(100)
   const maxConcurrentUploads = ref(3)
+  const allowUserRegistration = ref(true)
   const logLevel = ref(2)
   const showUploadLimitDialog = ref(false)
   const newUploadLimit = ref('100')
   const newMaxConcurrentUploads = ref('3')
+  const newAllowUserRegistration = ref(true)
   const newLogLevel = ref('2')
 
   const databaseSaving = ref(false)
@@ -191,9 +193,15 @@ export function useAdminPage() {
 
   async function fetchSystemSettings() {
     try {
-      const res = await api.get<{ upload_limit: number; max_concurrent_uploads: number; log_level: number }>('/admin/upload-limit')
+      const res = await api.get<{
+        upload_limit: number
+        max_concurrent_uploads: number
+        allow_user_registration: boolean
+        log_level: number
+      }>('/admin/upload-limit')
       uploadLimit.value = res.upload_limit
       maxConcurrentUploads.value = Number(res.max_concurrent_uploads || 3)
+      allowUserRegistration.value = res.allow_user_registration !== false
       logLevel.value = Number(res.log_level || 2)
     } catch {}
   }
@@ -381,6 +389,7 @@ export function useAdminPage() {
   function openUploadLimitDialog() {
     newUploadLimit.value = String(uploadLimit.value)
     newMaxConcurrentUploads.value = String(maxConcurrentUploads.value)
+    newAllowUserRegistration.value = allowUserRegistration.value
     newLogLevel.value = String(logLevel.value)
     showUploadLimitDialog.value = true
   }
@@ -409,10 +418,12 @@ export function useAdminPage() {
       const res = await api.put<{ message: string }>('/admin/upload-limit', {
         upload_limit: limit,
         max_concurrent_uploads: concurrency,
+        allow_user_registration: newAllowUserRegistration.value,
         log_level: nextLogLevel
       })
       uploadLimit.value = limit
       maxConcurrentUploads.value = concurrency
+      allowUserRegistration.value = newAllowUserRegistration.value
       logLevel.value = nextLogLevel
       showUploadLimitDialog.value = false
       setDatabaseMessage(res.message || t('admin.settingsSaved', 'Upload settings saved. The service will not restart automatically.'), 'success')
@@ -535,10 +546,12 @@ export function useAdminPage() {
     quotaDialog,
     uploadLimit,
     maxConcurrentUploads,
+    allowUserRegistration,
     logLevel,
     showUploadLimitDialog,
     newUploadLimit,
     newMaxConcurrentUploads,
+    newAllowUserRegistration,
     newLogLevel,
     databaseSaving,
     databaseTesting,

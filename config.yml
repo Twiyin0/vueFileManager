@@ -39,6 +39,11 @@ upload_limit: 100
 # 同时上传任务数限制
 max_concurrent_uploads: 3
 
+# 是否允许新用户自行注册
+# true  允许访问注册页并创建新用户
+# false 关闭新用户注册，注册页显示关闭提示
+allow_user_registration: true
+
 # 断点续传缓存保留时间，单位分钟
 # 超时未完成的上传缓存会被自动清理
 resumable_upload_cache_minutes: 120
@@ -114,9 +119,7 @@ storage_pools:
     type: local
     default: true
     config:
-      # 本地目录路径
       localPath: ./uploads
-
   # 又拍云示例
   # - name: 又拍云存储
   #   type: upyun
@@ -150,10 +153,10 @@ storage_pools:
   #     s3Bucket: your-bucket
   #     s3Prefix: uploads/
 
-# ============================================================
-# SMTP 邮箱配置
-# ============================================================
-# 用于注册验证码、邮件通知等场景
+  # ============================================================
+  # SMTP 邮箱配置
+  # ============================================================
+  # 用于注册验证码、邮件通知等场景
 smtp:
   enabled: false
   host: smtp.example.com
@@ -171,3 +174,4 @@ plugins:
   enabled: true
   # 插件目录，系统会从这里加载主题和插件
   dir: ./plugins
+log_level: 2

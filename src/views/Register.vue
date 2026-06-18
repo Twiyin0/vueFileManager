@@ -16,6 +16,7 @@ const code = ref('')
 const error = ref('')
 const loading = ref(false)
 const smtpEnabled = ref(false)
+const registrationEnabled = ref(true)
 const codeSending = ref(false)
 const codeCountdown = ref(0)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -40,6 +41,7 @@ onMounted(async () => {
     if (res.ok) {
       const data = await res.json()
       smtpEnabled.value = data.smtp_enabled
+      registrationEnabled.value = data.registration_enabled !== false
     }
   } catch {}
 })
@@ -86,6 +88,11 @@ async function sendCode() {
 
 async function handleRegister() {
   error.value = ''
+
+  if (!registrationEnabled.value) {
+    error.value = t('register.closedTitle', 'New user registration has been disabled by the administrator')
+    return
+  }
 
   if (password.value !== confirmPassword.value) {
     error.value = t('register.passwordMismatch', 'Passwords do not match')
@@ -136,7 +143,20 @@ async function handleRegister() {
         {{ error }}
       </div>
 
-      <form class="space-y-4" @submit.prevent="handleRegister">
+      <div
+        v-if="!registrationEnabled"
+        class="rounded-xl border px-4 py-5 text-center"
+        style="border-color: var(--border-color); background-color: var(--surface-color)"
+      >
+        <p class="text-base font-semibold" style="color: var(--text-color)">
+          {{ t('register.closedTitle', 'New user registration has been disabled by the administrator') }}
+        </p>
+        <p class="mt-2 text-sm" style="color: var(--text-secondary-color)">
+          {{ t('register.closedDescription', 'If you need an account, please contact the administrator or use an existing account to sign in.') }}
+        </p>
+      </div>
+
+      <form v-else class="space-y-4" @submit.prevent="handleRegister">
         <div>
           <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('common.username', 'Username') }}</label>
           <input

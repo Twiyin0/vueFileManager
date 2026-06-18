@@ -52,12 +52,13 @@ X-API-Key: <key>
 
 返回公开站点配置：
 
-- `icp_beian`
-- `police_beian`
-- `smtp_enabled`
-- `themes_enabled`
-- `plugins_enabled`
-- `webdav_enabled`
+  - `icp_beian`
+  - `police_beian`
+  - `smtp_enabled`
+  - `registration_enabled`
+  - `themes_enabled`
+  - `plugins_enabled`
+  - `webdav_enabled`
 
 ### `GET /api/themes/styles`
 
@@ -91,11 +92,13 @@ X-API-Key: <key>
 { "username": "user", "password": "secret123", "email": "user@example.com", "code": "123456" }
 ```
 
-说明：
-
-- 只有在启用 SMTP 注册时才要求 `email` 和 `code`
-- 当前实现中的密码仍以 MD5 存储
-- 新用户首次初始化时会继承 `.env` 中的默认语言
+  说明：
+  
+  - 管理员可全局关闭新用户注册
+  - 只有在启用 SMTP 注册时才要求 `email` 和 `code`
+  - 当前实现中的密码仍以 MD5 存储
+  - 新用户首次初始化时会继承 `.env` 中的默认语言
+  - 当注册被关闭时，接口返回 `403`，错误码为 `auth.userRegistrationDisabled`
 
 ### `POST /api/auth/login`
 
@@ -447,6 +450,10 @@ API Key 的通用权限模型：
 
 返回当前用户资料、存储池列表、空间统计和面板计数。
 
+额外字段：
+
+- `registration_enabled`
+
 ### `GET /api/user/settings`
 
 返回当前用户设置，包括：
@@ -500,6 +507,7 @@ API Key 的通用权限模型：
 
 - `upload_limit`
 - `max_concurrent_uploads`
+- `allow_user_registration`
 - `log_level`
 
 ### `PUT /api/admin/upload-limit`
@@ -510,6 +518,7 @@ API Key 的通用权限模型：
 {
   "upload_limit": 100,
   "max_concurrent_uploads": 3,
+  "allow_user_registration": true,
   "log_level": 2
 }
 ```

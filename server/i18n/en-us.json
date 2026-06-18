@@ -25,6 +25,7 @@
     "emailAndCodeRequired": "Email and verification code are required",
     "verificationCodeInvalid": "Verification code is invalid or expired",
     "usernameAlreadyExists": "Username already exists",
+    "userRegistrationDisabled": "New user registration has been disabled by the administrator",
     "registrationSuccessful": "Registration successful",
     "loginSuccessful": "Login successful",
     "invalidCredentials": "Invalid username or password",

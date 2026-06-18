@@ -6,6 +6,7 @@ import { useI18n } from '@/composables/useI18n'
 defineProps<{
   uploadLimit: number
   maxConcurrentUploads: number
+  allowUserRegistration: boolean
   logLevel: number
   databaseSaving: boolean
   databaseTesting: boolean
@@ -45,6 +46,12 @@ const { t } = useI18n()
       <div class="flex items-center gap-3">
         <span class="text-sm" style="color: var(--text-secondary-color)">{{ t('admin.maxConcurrentUploads', 'Max concurrent uploads') }}{{ t('common.colon', ': ') }}</span>
         <span class="text-lg font-semibold" style="color: var(--text-color)">{{ maxConcurrentUploads }}</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-sm" style="color: var(--text-secondary-color)">{{ t('admin.allowUserRegistration', 'Allow New User Registration') }}{{ t('common.colon', ': ') }}</span>
+        <span class="text-lg font-semibold" style="color: var(--text-color)">
+          {{ allowUserRegistration ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled') }}
+        </span>
       </div>
       <div class="flex items-center gap-3">
         <span class="text-sm" style="color: var(--text-secondary-color)">{{ t('admin.logLevel', 'Log Level') }}{{ t('common.colon', ': ') }}</span>

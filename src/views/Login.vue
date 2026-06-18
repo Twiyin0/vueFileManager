@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from '@/composables/useI18n'
@@ -13,10 +13,20 @@ const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+const registrationEnabled = ref(true)
 
 function normalizeLanguage(language: unknown): 'zh-CN' | 'en-US' {
   return language === 'en-US' ? 'en-US' : 'zh-CN'
 }
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/site-config')
+    if (!res.ok) return
+    const data = await res.json()
+    registrationEnabled.value = data.registration_enabled !== false
+  } catch {}
+})
 
 async function handleLogin() {
   error.value = ''
@@ -84,8 +94,13 @@ async function handleLogin() {
       </form>
 
       <p class="mt-6 text-center text-sm" style="color: var(--text-secondary-color)">
-        {{ t('login.noAccount', 'Don\'t have an account yet?') }}
-        <router-link to="/register" class="text-blue-500 hover:text-blue-600">{{ t('register.submit', 'Register') }}</router-link>
+        <template v-if="registrationEnabled">
+          {{ t('login.noAccount', 'Don\'t have an account yet?') }}
+          <router-link to="/register" class="text-blue-500 hover:text-blue-600">{{ t('register.submit', 'Register') }}</router-link>
+        </template>
+        <template v-else>
+          {{ t('register.closedTitle', 'New user registration has been disabled by the administrator') }}
+        </template>
       </p>
 
       <div class="mt-4 border-t pt-4" style="border-color: var(--border-color)">

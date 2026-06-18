@@ -1,5 +1,6 @@
 import fs from 'fs'
 import yaml from 'js-yaml'
+import { isMap, isSeq, parseDocument } from 'yaml'
 import { resolveFromRoot } from './runtime-paths'
 
 const configPath = resolveFromRoot('config.yml')
@@ -73,6 +74,7 @@ interface Config {
   storage_root: string
   upload_limit: number
   max_concurrent_uploads: number
+  allow_user_registration: boolean
   log_level: 1 | 2 | 3
   resumable_upload_cache_minutes: number
   ip_list_mode: 'blacklist' | 'whitelist'
@@ -100,6 +102,7 @@ const defaultConfig: Config = {
   storage_root: './uploads',
   upload_limit: 100,
   max_concurrent_uploads: 3,
+  allow_user_registration: true,
   log_level: 2,
   resumable_upload_cache_minutes: 120,
   ip_list_mode: 'blacklist',
@@ -169,6 +172,17 @@ function toNumber(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function toBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  return fallback
+}
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
 function loadEnvFile() {
   if (!fs.existsSync(envPath)) return
 
@@ -211,6 +225,10 @@ function mergeConfig(loaded: any): Config {
     storage_root: loaded.storage_root || defaultConfig.storage_root,
     upload_limit: toNumber(loaded.upload_limit, defaultConfig.upload_limit),
     max_concurrent_uploads: toNumber(loaded.max_concurrent_uploads, defaultConfig.max_concurrent_uploads),
+    allow_user_registration: toBoolean(
+      loaded.allow_user_registration,
+      defaultConfig.allow_user_registration
+    ),
     log_level: normalizeLogLevel(loaded.log_level ?? process.env.LOG_LEVEL ?? defaultConfig.log_level),
     resumable_upload_cache_minutes: toNumber(
       loaded.resumable_upload_cache_minutes,
@@ -271,9 +289,49 @@ try {
   config = mergeConfig({})
 }
 
+function syncYamlNode(document: any, node: any, value: unknown): boolean {
+  if (isMap(node) && isPlainObject(value)) {
+    syncYamlMap(document, node, value)
+    return true
+  }
+
+  if (isSeq(node) && Array.isArray(value)) {
+    node.items = value.map((entry) => document.createNode(entry))
+    return true
+  }
+
+  return false
+}
+
+function syncYamlMap(document: any, mapNode: any, value: Record<string, any>) {
+  const nextKeys = new Set(Object.keys(value))
+
+  for (const item of [...mapNode.items]) {
+    const key = String(item.key?.value ?? item.key ?? '')
+    if (!nextKeys.has(key)) {
+      mapNode.delete(key)
+    }
+  }
+
+  for (const [key, childValue] of Object.entries(value)) {
+    const existingNode = mapNode.get(key, true)
+    if (!existingNode) {
+      mapNode.set(key, childValue)
+      continue
+    }
+
+    if (!syncYamlNode(document, existingNode, childValue)) {
+      mapNode.set(key, childValue)
+    }
+  }
+}
+
 export function updateConfigFile(mutator: (rawConfig: any) => void): Config {
-  const existing = fs.existsSync(configPath)
-    ? ((yaml.load(fs.readFileSync(configPath, 'utf8')) as any) || {})
+  const configText = fs.existsSync(configPath)
+    ? fs.readFileSync(configPath, 'utf8')
+    : ''
+  const existing = configText
+    ? ((yaml.load(configText) as any) || {})
     : {}
 
   mutator(existing)
@@ -281,7 +339,19 @@ export function updateConfigFile(mutator: (rawConfig: any) => void): Config {
   delete existing.default_language
 
   markInternalConfigWrite()
-  fs.writeFileSync(configPath, yaml.dump(existing, { lineWidth: -1 }), 'utf8')
+
+  if (configText.trim()) {
+    const document = parseDocument(configText)
+    if (document.contents && isMap(document.contents) && isPlainObject(existing)) {
+      syncYamlMap(document, document.contents, existing)
+      fs.writeFileSync(configPath, String(document), 'utf8')
+    } else {
+      fs.writeFileSync(configPath, yaml.dump(existing, { lineWidth: -1 }), 'utf8')
+    }
+  } else {
+    fs.writeFileSync(configPath, yaml.dump(existing, { lineWidth: -1 }), 'utf8')
+  }
+
   config = mergeConfig(existing)
   return config
 }

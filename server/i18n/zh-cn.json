@@ -25,6 +25,7 @@
     "emailAndCodeRequired": "请输入邮箱和验证码",
     "verificationCodeInvalid": "验证码无效或已过期",
     "usernameAlreadyExists": "用户名已存在",
+    "userRegistrationDisabled": "管理员已关闭新用户注册",
     "registrationSuccessful": "注册成功",
     "loginSuccessful": "登录成功",
     "invalidCredentials": "用户名或密码错误",

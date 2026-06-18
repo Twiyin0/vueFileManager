@@ -59,6 +59,7 @@ router.get('/info', authMiddleware, async (req: AuthRequest, res: Response) => {
     const quota = await getUserQuota(req.userId!)
 
     res.json({
+      registration_enabled: config.allow_user_registration,
       user: {
         id: user.id,
         username: user.username,

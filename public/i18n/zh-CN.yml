@@ -324,6 +324,8 @@ admin:
   uploadLimitHint: 请输入 1 到 10240 之间的整数
   maxConcurrentUploads: 最大同时上传文件数
   maxConcurrentUploadsHint: 请输入 1 到 16 之间的整数
+  allowUserRegistration: 允许新用户注册
+  allowUserRegistrationHint: 关闭后，注册页会显示“管理员已关闭新用户注册”提示。
   logLevel: 日志级别
   logLevelHint: 1 = error，2 = info，3 = debug
   logLevelSummary: 1 = error，2 = info，3 = debug
@@ -470,6 +472,8 @@ preview:
 register:
   title: 创建账户
   subtitle: 注册 VueFileManager 账户
+  closedTitle: 管理员已关闭新用户注册
+  closedDescription: 如需账户，请联系管理员，或使用已有账户登录。
   usernamePlaceholder: 3-20 个字符
   optional: 可选
   emailPlaceholder: your@email.com

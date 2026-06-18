@@ -12,12 +12,13 @@ router.get('/upload-limit', authMiddleware, adminMiddleware, (_req: AuthRequest,
   res.json({
     upload_limit: config.upload_limit,
     max_concurrent_uploads: config.max_concurrent_uploads,
+    allow_user_registration: config.allow_user_registration,
     log_level: config.log_level
   })
 })
 
 router.put('/upload-limit', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  const { upload_limit, max_concurrent_uploads, log_level } = req.body
+  const { upload_limit, max_concurrent_uploads, allow_user_registration, log_level } = req.body
   const t = getRequestTranslator(req)
 
   if (typeof upload_limit !== 'number' || upload_limit < 1 || upload_limit > 10240) {
@@ -32,21 +33,32 @@ router.put('/upload-limit', authMiddleware, adminMiddleware, async (req: AuthReq
     return res.status(400).json({ error: 'log_level must be 1, 2, or 3' })
   }
 
+  if (typeof allow_user_registration !== 'boolean') {
+    return res.status(400).json({ error: 'allow_user_registration must be a boolean' })
+  }
+
   config.upload_limit = upload_limit
   config.max_concurrent_uploads = max_concurrent_uploads
+  config.allow_user_registration = allow_user_registration
   config.log_level = log_level as 1 | 2 | 3
 
   updateConfigFile((rawConfig) => {
     rawConfig.upload_limit = upload_limit
     rawConfig.max_concurrent_uploads = max_concurrent_uploads
+    rawConfig.allow_user_registration = allow_user_registration
     rawConfig.log_level = log_level
   })
 
-  await Logger.info('api', 'system.ts', `Admin #${req.userId} updated system settings: upload_limit=${upload_limit}, max_concurrent_uploads=${max_concurrent_uploads}, log_level=${log_level}`)
+  await Logger.info(
+    'api',
+    'system.ts',
+    `Admin #${req.userId} updated system settings: upload_limit=${upload_limit}, max_concurrent_uploads=${max_concurrent_uploads}, allow_user_registration=${allow_user_registration}, log_level=${log_level}`
+  )
 
   res.json({
     upload_limit,
     max_concurrent_uploads,
+    allow_user_registration,
     log_level,
     message: t('Upload settings saved without restarting the service.')
   })

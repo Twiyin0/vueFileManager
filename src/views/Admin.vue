@@ -41,6 +41,7 @@ const themeLabelMap: Record<string, string> = {
       v-model:database-form="state.databaseForm"
       :upload-limit="state.uploadLimit"
       :max-concurrent-uploads="state.maxConcurrentUploads"
+      :allow-user-registration="state.allowUserRegistration"
       :log-level="state.logLevel"
       :database-saving="state.databaseSaving"
       :database-testing="state.databaseTesting"
@@ -331,6 +332,23 @@ const themeLabelMap: Record<string, string> = {
             <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.maxConcurrentUploads', 'Max concurrent uploads') }}</label>
             <input v-model="state.newMaxConcurrentUploads" type="number" min="1" max="16" class="input-field" placeholder="3" />
             <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">{{ t('admin.maxConcurrentUploadsHint', 'Enter an integer between 1 and 16') }}</p>
+          </div>
+
+          <div class="mb-4 border-t pt-4" style="border-color: var(--border-color)">
+            <div class="flex items-center justify-between gap-4">
+              <div class="min-w-0 pr-2">
+                <p class="text-sm font-medium" style="color: var(--text-color)">
+                  {{ t('admin.allowUserRegistration', 'Allow New User Registration') }}
+                </p>
+                <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">
+                  {{ t('admin.allowUserRegistrationHint', 'When disabled, the register page will show that registration has been closed by the administrator.') }}
+                </p>
+              </div>
+              <label class="relative inline-flex shrink-0 cursor-pointer items-center">
+                <input v-model="state.newAllowUserRegistration" type="checkbox" class="peer sr-only" />
+                <div class="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-500 peer-checked:after:translate-x-full dark:bg-dark-border"></div>
+              </label>
+            </div>
           </div>
 
           <div class="mb-4">

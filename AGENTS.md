@@ -11,6 +11,7 @@ This repository has project-specific guardrails for any future implementation wo
 5. Every functional change must be aligned with the corresponding documentation updates.
 6. Frontend changes must stay visually consistent with the existing product style and must account for both light and dark themes.
 7. Do not modify existing routes in this project.
+8. In admin panels, settings pages, and modal forms, reuse existing control patterns before introducing new visual treatments. Toggles, checkboxes, field groups, spacing, and helper text should match the established UI instead of adding one-off bordered blocks or ad hoc layouts.
 
 ## Additional Notes
 
