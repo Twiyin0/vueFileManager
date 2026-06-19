@@ -54,6 +54,31 @@ export function sanitizeUploadFileName(fileName: string): string {
   return normalized.replace(/[\u0000-\u001f]/g, '')
 }
 
+export function normalizeStoragePath(inputPath: string): string {
+  const normalized = (inputPath || '')
+    .replace(/\\/g, '/')
+    .normalize('NFC')
+
+  if (!normalized) return ''
+
+  const segments: string[] = []
+  for (const segment of normalized.split('/')) {
+    const trimmed = segment.trim()
+    if (!trimmed || trimmed === '.') {
+      continue
+    }
+    if (trimmed === '..') {
+      throw new Error('common.invalidPath')
+    }
+    if (/[\u0000-\u001f]/.test(trimmed)) {
+      throw new Error('common.invalidPath')
+    }
+    segments.push(trimmed)
+  }
+
+  return segments.join('/')
+}
+
 export function buildTemporaryUploadPath(filePath: string, suffix?: string): string {
   const normalized = filePath.replace(/\\/g, '/')
   const lastSlashIndex = normalized.lastIndexOf('/')

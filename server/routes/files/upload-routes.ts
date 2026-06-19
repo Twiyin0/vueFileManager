@@ -15,6 +15,7 @@ import {
   finalizeAtomicUpload,
   getStorageForRequest,
   isJunkFile,
+  normalizeStoragePath,
   readUploadMeta,
   removeUploadTask,
   resolvePoolId,
@@ -55,11 +56,11 @@ export function registerUploadRoutes(router: Router) {
       }
 
       const storage = getStorageForRequest(req)
-      const dirPath = (req.query.path as string) || ''
+      const dirPath = normalizeStoragePath((req.query.path as string) || '')
       let normalizedName = req.file.originalname
       try { normalizedName = decodeURIComponent(normalizedName) } catch {}
       normalizedName = sanitizeUploadFileName(normalizedName)
-      if (!normalizedName) {
+      if (!normalizedName || normalizedName === '.' || normalizedName === '..') {
         return res.status(400).json({ error: 'file.invalidFileName' })
       }
       const filePath = dirPath ? `${dirPath}/${normalizedName}` : normalizedName
@@ -129,10 +130,10 @@ export function registerUploadRoutes(router: Router) {
       const rawDirPath = (req.headers['x-dir-path'] as string) || ''
       let dirPath: string
       try { dirPath = decodeURIComponent(rawDirPath) } catch { dirPath = rawDirPath }
-      dirPath = dirPath.normalize('NFC')
+      dirPath = normalizeStoragePath(dirPath)
 
       const poolIdStr = req.headers['x-pool-id'] as string
-      if (!fileName) {
+      if (!fileName || fileName === '.' || fileName === '..') {
         return res.status(400).json({ error: 'file.missingXFileNameHeader' })
       }
       if (isJunkFile(fileName)) {

@@ -15,6 +15,7 @@ import UploadDialog from '@/components/UploadDialog.vue'
 import Icon from '@/components/Icon.vue'
 import DirectoryReadme from '@/components/DirectoryReadme.vue'
 import { useAuthStore } from '@/stores/auth'
+import { sortFiles, type FileSortDirection, type FileSortKey } from '@/utils/fileSort'
 
 import 'aplayer/dist/APlayer.min.css'
 
@@ -75,6 +76,8 @@ const newFolderName = ref('')
 const searchQuery = ref('')
 const searchResults = ref<FileItem[]>([])
 const showSearch = ref(false)
+const sortKey = ref<FileSortKey>((localStorage.getItem('guestFileSortKey') as FileSortKey) || 'name')
+const sortDirection = ref<FileSortDirection>((localStorage.getItem('guestFileSortDirection') as FileSortDirection) || 'asc')
 
 const showShareDropdown = ref(false)
 
@@ -93,6 +96,11 @@ const currentPath = computed(() => ((route.query.path as string) || '').replace(
 const pathSegments = computed(() => currentPath.value.split('/').filter(Boolean))
 const isFolderView = computed(() => !!shareId.value)
 const currentShare = computed(() => shares.value.find((share) => String(share.id) === shareId.value))
+const sortedFiles = computed(() => sortFiles(files.value, sortKey.value, sortDirection.value))
+const sortedSearchResults = computed(() => sortFiles(searchResults.value, sortKey.value, sortDirection.value))
+
+watch(sortKey, (value) => localStorage.setItem('guestFileSortKey', value))
+watch(sortDirection, (value) => localStorage.setItem('guestFileSortDirection', value))
 
 const permissionAliases: Record<string, string[]> = {
   read: ['preview', 'download'],
@@ -372,9 +380,39 @@ function handleSearch() {
     showSearch.value = false
     return
   }
-  const q = searchQuery.value.toLowerCase()
-  searchResults.value = files.value.filter((file) => file.name.toLowerCase().includes(q))
+  if (searchQuery.value.startsWith('//')) {
+    const source = searchQuery.value.slice(2).trim()
+    if (!source) {
+      uploadError.value = t('search.invalidRegex', 'Invalid regular expression')
+      searchResults.value = []
+      showSearch.value = true
+      return
+    }
+    try {
+      const matcher = new RegExp(source, 'i')
+      searchResults.value = files.value.filter((file) => matcher.test(file.name))
+      uploadError.value = ''
+    } catch {
+      uploadError.value = t('search.invalidRegex', 'Invalid regular expression')
+      searchResults.value = []
+      showSearch.value = true
+      return
+    }
+  } else {
+    const q = searchQuery.value.toLowerCase()
+    searchResults.value = files.value.filter((file) => file.name.toLowerCase().includes(q))
+    uploadError.value = ''
+  }
   showSearch.value = true
+}
+
+function updateSort(nextKey: FileSortKey) {
+  if (sortKey.value === nextKey) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    return
+  }
+  sortKey.value = nextKey
+  sortDirection.value = nextKey === 'modified' || nextKey === 'size' ? 'desc' : 'asc'
 }
 
 function toggleSelectFile(path: string) {
@@ -774,7 +812,7 @@ const permLabels: Record<string, string> = {
                     v-model="searchQuery"
                     type="text"
                     class="input-field w-24 text-sm sm:w-32"
-                    :placeholder="t('guest.searchPlaceholder', 'Search...')"
+                    :placeholder="t('guest.searchPlaceholder', 'Search... (//regex)')"
                     @keyup.enter="handleSearch"
                     @input="!searchQuery && (showSearch = false)"
                   />
@@ -797,6 +835,34 @@ const permLabels: Record<string, string> = {
                   </button>
                   <button class="p-1.5 transition-colors" :class="viewMode === 'grid' ? 'view-mode-active' : ''" @click="viewMode = 'grid'">
                     <Icon name="grid" class="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div class="toolbar-select-group">
+                  <span class="toolbar-select-label hidden sm:inline">
+                    {{ t('file.sortShort', 'Sort') }}
+                  </span>
+                  <div class="relative flex min-w-[5.5rem] items-center">
+                    <select
+                      class="toolbar-select-native"
+                      :value="sortKey"
+                      :title="t('file.sortShort', 'Sort')"
+                      @change="updateSort(($event.target as HTMLSelectElement).value as any)"
+                    >
+                      <option value="name">{{ t('file.sortField.name', 'Name') }}</option>
+                      <option value="modified">{{ t('file.sortField.modified', 'Modified') }}</option>
+                      <option value="type">{{ t('file.sortField.type', 'Type') }}</option>
+                      <option value="size">{{ t('file.sortField.size', 'Size') }}</option>
+                    </select>
+                    <Icon name="chevron-down" class="toolbar-select-caret pointer-events-none absolute right-0 h-4 w-4" />
+                  </div>
+                  <span class="toolbar-select-divider" />
+                  <button
+                    class="toolbar-select-action"
+                    :title="t(`file.sortDirection.${sortDirection}`, sortDirection)"
+                    @click="updateSort(sortKey)"
+                  >
+                    <Icon :name="sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'" class="h-4 w-4" />
                   </button>
                 </div>
 
@@ -833,7 +899,7 @@ const permLabels: Record<string, string> = {
             <div v-if="showSearch" class="mb-3">
               <div class="mb-2 flex items-center justify-between">
                 <span class="text-sm" style="color: var(--text-color)">
-                  {{ format('guest.searchResults', 'Search results: {count}', { count: searchResults.length }) }}
+                  {{ format('guest.searchResults', 'Search results: {count}', { count: sortedSearchResults.length }) }}
                 </span>
                 <button class="text-xs hover:underline" style="color: var(--accent-color)" @click="showSearch = false; searchQuery = ''">
                   {{ t('file.clear', 'Clear') }}
@@ -851,18 +917,21 @@ const permLabels: Record<string, string> = {
             <DirectoryReadme v-if="!showSearch && readme" :src="readme.directUrl || readme.fileUrl" :title="readme.name" />
 
             <FileList
-              :files="showSearch ? searchResults : files"
+              :files="showSearch ? sortedSearchResults : sortedFiles"
               :loading="loading"
               :show-actions="false"
               :select-mode="!!shareId"
               :selected-files="selectedFiles"
               :view-mode="viewMode"
               :guest-base-url="guestBaseUrl"
+              :sort-key="sortKey"
+              :sort-direction="sortDirection"
               @open="openFile"
               @download="handleDownload"
               @contextmenu="handleContextMenu"
               @toggle-select="toggleSelectFile"
               @detail="(file) => { detailItem = file; showDetailPanel = true }"
+              @sort="updateSort"
             />
           </div>
         </template>
@@ -913,28 +982,32 @@ const permLabels: Record<string, string> = {
       />
 
       <Teleport to="body">
-        <div v-if="showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-          <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showCreateFolder = false" />
-          <div class="card relative max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
-            <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">{{ t('file.newFolder', 'New Folder') }}</h3>
+        <div v-if="showCreateFolder" class="dialog-overlay">
+          <div class="dialog-backdrop" @click="showCreateFolder = false" />
+          <div class="dialog-panel dialog-panel-scroll dialog-panel-sm">
+            <div class="dialog-section">
+            <h3 class="dialog-title mb-4">{{ t('file.newFolder', 'New Folder') }}</h3>
             <input v-model="newFolderName" type="text" class="input-field mb-4" :placeholder="t('file.newFolderPlaceholder', 'Folder name')" @keyup.enter="handleCreateFolder" />
-            <div class="flex justify-end gap-3">
+            <div class="dialog-footer mt-0">
               <button class="btn-secondary text-sm" @click="showCreateFolder = false">{{ t('common.cancel', 'Cancel') }}</button>
               <button class="btn-primary text-sm" @click="handleCreateFolder">{{ t('common.create', 'Create') }}</button>
+            </div>
             </div>
           </div>
         </div>
       </Teleport>
 
       <Teleport to="body">
-        <div v-if="showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-          <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="showRename = false" />
-          <div class="card relative max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
-            <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">{{ t('file.rename', 'Rename') }}</h3>
+        <div v-if="showRename" class="dialog-overlay">
+          <div class="dialog-backdrop" @click="showRename = false" />
+          <div class="dialog-panel dialog-panel-scroll dialog-panel-sm">
+            <div class="dialog-section">
+            <h3 class="dialog-title mb-4">{{ t('file.rename', 'Rename') }}</h3>
             <input v-model="newFileName" type="text" class="input-field mb-4" :placeholder="t('file.renamePlaceholder', 'New name')" @keyup.enter="handleRename" />
-            <div class="flex justify-end gap-3">
+            <div class="dialog-footer mt-0">
               <button class="btn-secondary text-sm" @click="showRename = false">{{ t('common.cancel', 'Cancel') }}</button>
               <button class="btn-primary text-sm" @click="handleRename">{{ t('common.confirm', 'Confirm') }}</button>
+            </div>
             </div>
           </div>
         </div>

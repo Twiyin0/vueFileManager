@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { FileItem } from '@/stores/files'
 import Icon from '@/components/Icon.vue'
 import { useI18n } from '@/composables/useI18n'
+import type { FileSortDirection, FileSortKey } from '@/utils/fileSort'
 
 const { t, language } = useI18n()
 
@@ -45,6 +46,8 @@ const props = withDefaults(defineProps<{
   viewMode?: 'list' | 'grid'
   currentPoolId?: number
   guestBaseUrl?: string
+  sortKey?: FileSortKey
+  sortDirection?: FileSortDirection
 }>(), {
   viewMode: 'list'
 })
@@ -56,6 +59,7 @@ const emit = defineEmits<{
   contextmenu: [e: MouseEvent, file?: FileItem]
   toggleSelect: [path: string]
   detail: [file: FileItem]
+  sort: [key: FileSortKey]
 }>()
 
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
@@ -128,6 +132,15 @@ function getPreviewUrl(file: FileItem): string {
   if (token) params.set('token', token)
   return `/api/files/preview?${params.toString()}`
 }
+
+function isActiveSort(key: FileSortKey) {
+  return props.sortKey === key
+}
+
+function sortIconName(key: FileSortKey) {
+  if (!isActiveSort(key)) return 'chevron-down'
+  return props.sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'
+}
 </script>
 
 <template>
@@ -196,9 +209,18 @@ function getPreviewUrl(file: FileItem): string {
         class="grid grid-cols-12 gap-2 border-b px-4 py-2 text-xs font-medium"
         style="color: var(--text-secondary-color); border-color: var(--border-color)"
       >
-        <div class="col-span-8 sm:col-span-5">{{ t('file.name', 'Name') }}</div>
-        <div class="col-span-2 hidden text-right sm:block">{{ t('file.size', 'Size') }}</div>
-        <div class="col-span-3 hidden text-right md:block">{{ t('file.modified', 'Modified') }}</div>
+        <button class="col-span-8 flex items-center gap-1 text-left sm:col-span-5" @click="emit('sort', 'name')">
+          <span>{{ t('file.name', 'Name') }}</span>
+          <Icon :name="sortIconName('name')" class="h-3.5 w-3.5" :class="isActiveSort('name') ? '' : 'opacity-40'" />
+        </button>
+        <button class="col-span-2 hidden items-center justify-end gap-1 text-right sm:flex" @click="emit('sort', 'size')">
+          <span>{{ t('file.size', 'Size') }}</span>
+          <Icon :name="sortIconName('size')" class="h-3.5 w-3.5" :class="isActiveSort('size') ? '' : 'opacity-40'" />
+        </button>
+        <button class="col-span-3 hidden items-center justify-end gap-1 text-right md:flex" @click="emit('sort', 'modified')">
+          <span>{{ t('file.modified', 'Modified') }}</span>
+          <Icon :name="sortIconName('modified')" class="h-3.5 w-3.5" :class="isActiveSort('modified') ? '' : 'opacity-40'" />
+        </button>
         <div v-if="showActions" class="col-span-4 text-right sm:col-span-2">{{ t('common.actions', 'Actions') }}</div>
       </div>
 

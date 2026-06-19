@@ -1,4 +1,5 @@
 import { StorageProvider, FileInfo } from './storage'
+import { normalizeStoragePath, sanitizeUploadFileName } from '../routes/files/shared'
 
 /**
  * Scope all operations to a fixed subdirectory of the underlying storage.
@@ -16,7 +17,8 @@ export class PrefixStorage implements StorageProvider {
   }
 
   private withPrefix(filePath: string): string {
-    const p = filePath.startsWith('/') ? filePath : `/${filePath}`
+    const normalized = normalizeStoragePath(filePath || '')
+    const p = normalized ? `/${normalized}` : '/'
     return this.prefix + p
   }
 
@@ -69,7 +71,11 @@ export class PrefixStorage implements StorageProvider {
   }
 
   async rename(oldPath: string, newName: string): Promise<void> {
-    return this.inner.rename(this.withPrefix(oldPath), newName)
+    const sanitizedName = sanitizeUploadFileName(newName)
+    if (!sanitizedName || sanitizedName === '.' || sanitizedName === '..') {
+      throw new Error('file.invalidFileName')
+    }
+    return this.inner.rename(this.withPrefix(oldPath), sanitizedName)
   }
 
   async move(srcPath: string, destPath: string): Promise<void> {

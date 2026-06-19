@@ -67,11 +67,13 @@ theme:
 search:
   shortcutHint: Ctrl+K 搜索
   resultsCount: 搜索结果：{count} 项
+  invalidRegex: 正则表达式无效
 spotlight:
-  placeholder: 搜索文件和文件夹... (Ctrl+K)
+  placeholder: 搜索文件和文件夹... (Ctrl+K, //正则)
   loading: 搜索中...
   noResults: 未找到匹配结果
   emptyHint: 输入关键词搜索文件和文件夹
+  regexHint: 使用 // 开头可启用正则表达式搜索
 file:
   open: 打开
   preview: 预览
@@ -133,6 +135,15 @@ file:
   name: 名称
   size: 大小
   modified: 修改时间
+  sortCurrent: 当前排序：{field}（{direction}）
+  sortField:
+    name: 名称
+    modified: 修改时间
+    type: 类型
+    size: 大小
+  sortDirection:
+    asc: 升序
+    desc: 降序
 shareMount:
   menu: 跨池挂载
   batchMenu: 批量跨池挂载

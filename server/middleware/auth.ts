@@ -5,10 +5,22 @@ import config from '../config'
 import { Logger } from '../services/logger'
 import { getRequestTranslator } from '../services/server-i18n'
 
+function normalizeIp(ip: string): string {
+  return ip.replace(/^::ffff:/, '').trim()
+}
+
+function isTrustedProxy(remoteIp: string): boolean {
+  const normalizedRemote = normalizeIp(remoteIp)
+  return config.server.trusted_proxies.includes(normalizedRemote)
+}
+
 export function getClientIp(req: Request): string {
+  const remoteIp = normalizeIp(req.socket.remoteAddress || 'unknown')
   const forwarded = req.headers['x-forwarded-for']
-  if (forwarded) return (forwarded as string).split(',')[0].trim()
-  return req.socket.remoteAddress || 'unknown'
+  if (forwarded && isTrustedProxy(remoteIp)) {
+    return normalizeIp((forwarded as string).split(',')[0].trim())
+  }
+  return remoteIp
 }
 
 function ipToInt(ip: string): number {
@@ -17,7 +29,7 @@ function ipToInt(ip: string): number {
 }
 
 function matchIp(clientIp: string, pattern: string): boolean {
-  const cleanIp = clientIp.replace(/^::ffff:/, '')
+  const cleanIp = normalizeIp(clientIp)
   const cleanPattern = pattern.trim()
 
   if (cleanPattern.includes('/')) {

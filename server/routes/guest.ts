@@ -9,7 +9,7 @@ import { buildTrashPath, moveToTrash } from '../services/trash'
 import config from '../config'
 import fs from 'fs/promises'
 import fsSync from 'fs'
-import { buildTemporaryUploadPath, sanitizeUploadFileName, isJunkFile } from './files/shared'
+import { buildTemporaryUploadPath, normalizeStoragePath, sanitizeUploadFileName, isJunkFile } from './files/shared'
 
 const router = Router()
 
@@ -154,8 +154,12 @@ function hasPermission(permissions: string, action: string): boolean {
 }
 
 function isPathSafe(targetPath: string): boolean {
-  if (!targetPath) return true
-  return !/\.\./.test(targetPath)
+  try {
+    normalizeStoragePath(targetPath || '')
+    return true
+  } catch {
+    return false
+  }
 }
 
 function isTemporaryUploadFile(filename: string): boolean {
@@ -484,10 +488,11 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
     }
 
     const queryFilename = (req.query.filename as string) || null
-    const dirPath = (req.body.dirPath as string) || (req.query.dirPath as string) || ''
-    if (dirPath && !isPathSafe(dirPath)) {
+    const dirPathInput = (req.body.dirPath as string) || (req.query.dirPath as string) || ''
+    if (dirPathInput && !isPathSafe(dirPathInput)) {
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
+    const dirPath = normalizeStoragePath(dirPathInput)
 
     let fallbackName = req.file.originalname
     try {
@@ -495,11 +500,11 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
     } catch {}
 
     const normalizedName = sanitizeUploadFileName(queryFilename || fallbackName)
-    if (!normalizedName) {
+    if (!normalizedName || normalizedName === '.' || normalizedName === '..') {
       return res.status(400).json({ error: 'file.invalidFileName' })
     }
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
+    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
     const filePath = basePath
       ? (dirPath ? `${basePath}/${dirPath}/${normalizedName}` : `${basePath}/${normalizedName}`)
       : (dirPath ? `${dirPath}/${normalizedName}` : normalizedName)
@@ -571,9 +576,10 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'guest.contentTooLarge' })
     }
 
+    const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? `${basePath}/${filePath}` : filePath
+    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
+    const fullPath = basePath ? `${basePath}/${normalizedFilePath}` : normalizedFilePath
 
     const buffer = Buffer.from(content, 'utf-8')
     await storage.upload(fullPath, buffer)
@@ -581,7 +587,7 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
     if (savedBuffer.toString('utf-8') !== content) {
       throw new Error('Saved content verification failed')
     }
-    res.json({ success: true, path: filePath })
+    res.json({ success: true, path: normalizedFilePath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -617,12 +623,13 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
+    const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? `${basePath}/${filePath}` : filePath
+    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
+    const fullPath = basePath ? `${basePath}/${normalizedFilePath}` : normalizedFilePath
 
     const stat = await storage.info(fullPath).catch(() => ({ type: 'file' as const }))
-    const fileName = filePath.split('/').pop() || filePath
+    const fileName = normalizedFilePath.split('/').pop() || normalizedFilePath
     const result = await db.prepare(
       'INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `Guest: ${req.params.username}`)
@@ -680,12 +687,13 @@ router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => 
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
+    const normalizedDirPath = normalizeStoragePath(dirPath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? `${basePath}/${dirPath}` : dirPath
+    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
+    const fullPath = basePath ? `${basePath}/${normalizedDirPath}` : normalizedDirPath
 
     await storage.mkdir(fullPath)
-    res.json({ message: 'guest.createSuccessful', path: dirPath })
+    res.json({ message: 'guest.createSuccessful', path: normalizedDirPath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -721,10 +729,14 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
-    const newName = rawNewName.normalize('NFC')
+    const newName = sanitizeUploadFileName(rawNewName)
+    if (!newName || newName === '.' || newName === '..') {
+      return res.status(400).json({ error: 'file.invalidFileName' })
+    }
+    const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? `${basePath}/${filePath}` : filePath
+    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
+    const fullPath = basePath ? `${basePath}/${normalizedFilePath}` : normalizedFilePath
 
     await storage.rename(fullPath, newName)
     res.json({ message: 'guest.renameSuccessful' })

@@ -22,6 +22,10 @@ server:
   host: 0.0.0.0
   # JWT 密钥，用于 Token 签名，生产环境请务必修改
   jwt_secret: vue-file-manager-secret-key-2024
+  # 受信任反向代理 IP 列表
+  # 只有当请求直接来自这些代理地址时，才会使用 X-Forwarded-For 解析真实客户端 IP
+  # 留空表示忽略 X-Forwarded-For，直接使用 TCP 连接来源地址
+  trusted_proxies: []
 
 # ============================================================
 # 本地存储根目录

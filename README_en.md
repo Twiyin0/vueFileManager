@@ -17,10 +17,11 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - User registration, login, JWT auth, and API keys
 - Admin user management, quota control, ban or unban, and manual verification
 - Per-user multi-storage-pool management
-- File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search, and ZIP download
+- File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search with optional `//` regex mode, and ZIP download
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`
 - Remote upload and background offline download tasks, including comma-separated batch URLs
+- Directory sorting by name, modified time, file type, or size in ascending or descending order
 - Recycle bin, favourites, guest folder shares, and public shares
 - WebDAV with basic auth, JWT, and API key support
 - Theme and plugin discovery from `plugins/`
@@ -142,6 +143,10 @@ Important fields:
   - Single file upload limit in MB
 - `max_concurrent_uploads`
   - Default max number of concurrent uploads
+- `server.trusted_proxies`
+  - Trusted reverse-proxy IP list
+  - `X-Forwarded-For` is only honored when the direct peer IP is in this list
+  - Leave it empty to ignore proxy headers and use the TCP peer address directly
 - `log_level`
   - Log verbosity level
   - `1 = error`

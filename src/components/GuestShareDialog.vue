@@ -91,13 +91,14 @@ async function handleSubmit() {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')" />
-      <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">
+    <div v-if="show" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="emit('close')" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-md">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-2">
           {{ editShare ? t('guestShare.editTitle', 'Edit Guest Share') : t('guestShare.createTitle', 'Share to Guest Mode') }}
         </h3>
-        <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
+        <p class="dialog-description mb-4">
           {{
             editShare
               ? t('guestShare.editDescription', 'Update guest share permissions and display name.')
@@ -107,29 +108,29 @@ async function handleSubmit() {
 
         <div class="space-y-4">
           <div>
-            <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('guestShare.displayName', 'Display Name') }}</label>
+            <label class="dialog-form-label">{{ t('guestShare.displayName', 'Display Name') }}</label>
             <input v-model="label" type="text" class="input-field" :placeholder="t('guestShare.displayNamePlaceholder', 'Folder name shown to guests')" />
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-medium" style="color: var(--text-color)">{{ t('guestShare.permissionsTitle', 'Guest Permissions') }}</label>
+            <label class="dialog-form-label mb-2">{{ t('guestShare.permissionsTitle', 'Guest Permissions') }}</label>
             <div class="space-y-2.5">
-              <label class="flex cursor-pointer items-center gap-2.5">
+              <label class="dialog-muted-block-strong flex cursor-pointer items-center gap-2.5">
                 <input v-model="perms.read" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span class="text-sm" style="color: var(--text-color)">{{ t('permissions.read', 'Read') }}</span>
                 <span class="text-xs" style="color: var(--text-secondary-color)">{{ t('guestShare.readHint', '(preview and download files)') }}</span>
               </label>
-              <label class="flex cursor-pointer items-center gap-2.5">
+              <label class="dialog-muted-block-strong flex cursor-pointer items-center gap-2.5">
                 <input v-model="perms.write" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span class="text-sm" style="color: var(--text-color)">{{ t('permissions.write', 'Write') }}</span>
                 <span class="text-xs" style="color: var(--text-secondary-color)">{{ t('guestShare.writeHint', '(upload files and create folders)') }}</span>
               </label>
-              <label class="flex cursor-pointer items-center gap-2.5">
+              <label class="dialog-muted-block-strong flex cursor-pointer items-center gap-2.5">
                 <input v-model="perms.delete" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span class="text-sm" style="color: var(--text-color)">{{ t('permissions.delete', 'Delete') }}</span>
                 <span class="text-xs" style="color: var(--text-secondary-color)">{{ t('guestShare.deleteHint', '(delete files and folders)') }}</span>
               </label>
-              <label class="flex cursor-pointer items-center gap-2.5">
+              <label class="dialog-muted-block-strong flex cursor-pointer items-center gap-2.5">
                 <input v-model="perms.edit" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span class="text-sm" style="color: var(--text-color)">{{ t('permissions.edit', 'Text Edit') }}</span>
                 <span class="text-xs" style="color: var(--text-secondary-color)">{{ t('guestShare.editHint', '(edit file content and rename)') }}</span>
@@ -140,12 +141,13 @@ async function handleSubmit() {
           <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
         </div>
 
-        <div class="mt-5 flex justify-end gap-3">
+        <div class="dialog-footer mt-5">
           <button class="btn-secondary text-sm" @click="emit('close')">{{ t('common.cancel', 'Cancel') }}</button>
           <button class="btn-primary text-sm" :disabled="loading" @click="handleSubmit">
             <span v-if="loading">{{ editShare ? t('guestShare.saving', 'Saving...') : t('guestShare.sharing', 'Sharing...') }}</span>
             <span v-else>{{ editShare ? t('common.save', 'Save') : t('guestShare.confirmShare', 'Confirm Share') }}</span>
           </button>
+        </div>
         </div>
       </div>
     </div>

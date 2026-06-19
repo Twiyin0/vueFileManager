@@ -237,16 +237,17 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')" />
-      <div class="relative card max-h-[90vh] w-full max-w-lg overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('upload.title', 'Upload Files') }}</h3>
-        <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
+    <div v-if="show" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="emit('close')" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-lg">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-2">{{ t('upload.title', 'Upload Files') }}</h3>
+        <p class="dialog-description mb-4">
           {{ t('upload.targetPath', 'Upload to: {path}').replace('{path}', currentPath || t('upload.rootPath', 'Root Directory')) }}
         </p>
 
         <div v-if="pools && pools.length > 0" class="mb-4">
-          <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('upload.targetPool', 'Target Storage Pool') }}</label>
+          <label class="dialog-form-label">{{ t('upload.targetPool', 'Target Storage Pool') }}</label>
           <select v-model="selectedPoolId" class="input-field" :disabled="isUploadingState">
             <option :value="undefined">{{ t('upload.currentPool', 'Current Storage Pool') }}</option>
             <option v-for="pool in pools" :key="pool.id" :value="pool.id">
@@ -256,7 +257,7 @@ onUnmounted(() => {
         </div>
 
         <div
-          class="rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+          class="dialog-muted-block-strong rounded-2xl border-2 border-dashed p-8 text-center transition-colors"
           :class="isUploadingState ? 'cursor-default opacity-70' : 'cursor-pointer'"
           :style="isDragging
             ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color)'
@@ -290,8 +291,7 @@ onUnmounted(() => {
 
         <div
           v-if="pendingFiles?.length"
-          class="mt-4 rounded-lg border p-3"
-          style="background-color: var(--surface-color); border-color: var(--border-color)"
+          class="dialog-muted-block-strong mt-4"
         >
           <div class="mb-2 text-sm font-medium" style="color: var(--text-color)">
             {{ isUploadingState ? t('upload.queue', 'Upload Queue') : t('upload.pendingFiles', 'Pending Files') }}
@@ -304,7 +304,7 @@ onUnmounted(() => {
 
         <div
           v-if="uploadError"
-          class="mt-4 rounded-lg px-3 py-2 text-sm"
+          class="mt-4 rounded-xl px-3 py-2 text-sm"
           style="background: rgba(239,68,68,0.12); color: #dc2626"
         >
           {{ uploadError }}
@@ -312,7 +312,7 @@ onUnmounted(() => {
 
         <div
           v-if="skippedFiles.length"
-          class="mt-3 rounded-lg px-3 py-2 text-xs"
+          class="mt-3 rounded-xl px-3 py-2 text-xs"
           style="background: rgba(245,158,11,0.12); color: #d97706"
         >
           <span class="flex items-center gap-1">
@@ -325,7 +325,7 @@ onUnmounted(() => {
 
         <div
           v-if="clipboardNotice"
-          class="mt-3 rounded-lg px-3 py-2 text-xs"
+          class="mt-3 rounded-xl px-3 py-2 text-xs"
           :style="clipboardNotice.type === 'error'
             ? 'background: rgba(239,68,68,0.12); color: #dc2626'
             : 'background: rgba(59,130,246,0.12); color: #2563eb'"
@@ -336,7 +336,7 @@ onUnmounted(() => {
           </span>
         </div>
 
-        <div class="mt-4 flex justify-end gap-3">
+        <div class="dialog-footer mt-4">
           <button
             v-if="!isUploadingState && pendingFiles?.length"
             class="btn-primary text-sm"
@@ -352,6 +352,7 @@ onUnmounted(() => {
           <button class="btn-secondary text-sm" @click="emit('close')">
             {{ isUploadingState ? t('upload.hideWindow', 'Hide Window') : t('common.close', 'Close') }}
           </button>
+        </div>
         </div>
       </div>
     </div>

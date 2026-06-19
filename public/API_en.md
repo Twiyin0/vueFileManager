@@ -231,6 +231,12 @@ Query params:
 - `path`
 - `poolId`
 
+Notes:
+
+- When `q` starts with `//`, the endpoint switches to regular-expression search mode
+- For example, `//^report-\\d+` matches file names that satisfy that expression
+- Invalid regular expressions return `400`
+
 ### `GET /api/files/download`
 
 Downloads a single file.

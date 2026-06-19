@@ -78,34 +78,31 @@ async function handleSubmit() {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')" />
+    <div v-if="show" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="emit('close')" />
 
-      <div class="card relative max-h-[90vh] w-full max-w-lg overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-lg">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-2">
           {{ t('shareMount.title', 'Cross-Pool Mount') }}
         </h3>
 
-        <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
+        <p class="dialog-description mb-4">
           {{ t('shareMount.desc', 'Mount the selected folders into the shared cross-pool directory under /share.') }}
         </p>
 
         <div class="mb-4 grid grid-cols-2 gap-2">
           <button
-            class="rounded-lg border px-3 py-2 text-sm transition-colors"
-            :style="selectedMode === 'select'
-              ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
-              : 'border-color: var(--border-color); color: var(--text-color)'"
+            class="dialog-choice-card"
+            :class="selectedMode === 'select' ? 'dialog-choice-card-active' : ''"
             @click="selectedMode = 'select'"
           >
             {{ t('shareMount.selectFolder', 'Choose Mount Folder') }}
           </button>
 
           <button
-            class="rounded-lg border px-3 py-2 text-sm transition-colors"
-            :style="selectedMode === 'create'
-              ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
-              : 'border-color: var(--border-color); color: var(--text-color)'"
+            class="dialog-choice-card"
+            :class="selectedMode === 'create' ? 'dialog-choice-card-active' : ''"
             @click="selectedMode = 'create'"
           >
             {{ t('shareMount.createFolder', 'Create Mount Folder') }}
@@ -113,7 +110,7 @@ async function handleSubmit() {
         </div>
 
         <div v-if="selectedMode === 'select'" class="mb-4">
-          <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">
+          <label class="dialog-form-label">
             {{ t('shareMount.targetDir', 'Target Mount Directory') }}
           </label>
 
@@ -125,7 +122,7 @@ async function handleSubmit() {
         </div>
 
         <div v-else class="mb-4">
-          <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">
+          <label class="dialog-form-label">
             {{ t('shareMount.newDirName', 'New Mount Directory Name') }}
           </label>
 
@@ -147,8 +144,7 @@ async function handleSubmit() {
         </div>
 
         <div
-          class="mb-4 rounded-lg border p-3 text-sm"
-          style="border-color: var(--border-color); background-color: var(--hover-color)"
+          class="dialog-muted-block-strong mb-4 text-sm"
         >
           <p class="mb-2 font-medium" style="color: var(--text-color)">
             {{ t('shareMount.selectedFolders', 'Folders to Mount') }}
@@ -171,7 +167,7 @@ async function handleSubmit() {
           {{ error }}
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="dialog-footer mt-0">
           <button class="btn-secondary text-sm" @click="emit('close')">
             {{ t('common.cancel', 'Cancel') }}
           </button>
@@ -179,6 +175,7 @@ async function handleSubmit() {
           <button class="btn-primary text-sm" :disabled="loading || !canSubmit" @click="handleSubmit">
             {{ loading ? t('common.loading', 'Loading...') : t('shareMount.confirmMount', 'Confirm Mount') }}
           </button>
+        </div>
         </div>
       </div>
     </div>

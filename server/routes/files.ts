@@ -13,14 +13,17 @@ import {
   getStorageForRequest,
   isJunkFile,
   isTemporaryUploadFile,
+  normalizeStoragePath,
   processConcurrently,
   resolvePoolId,
   withDirectUrl,
 } from './files/shared'
 import { registerOfflineTaskRoutes } from './files/offline-routes'
 import { registerUploadRoutes } from './files/upload-routes'
+import type { FileInfo, StorageProvider } from '../services/storage'
 
 const router = Router()
+const SEARCH_RESULT_LIMIT = 100
 
 registerUploadRoutes(router)
 registerOfflineTaskRoutes(router)
@@ -35,6 +38,37 @@ function getPoolLabel(poolId: unknown) {
     return 'default'
   }
   return String(poolId)
+}
+
+async function listFilesRecursively(storage: StorageProvider, prefix: string, limit = SEARCH_RESULT_LIMIT): Promise<FileInfo[]> {
+  const results: FileInfo[] = []
+  const visited = new Set<string>()
+
+  const walk = async (currentPath: string) => {
+    if (results.length >= limit) return
+
+    let entries: FileInfo[] = []
+    try {
+      entries = await storage.list(currentPath)
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      if (visited.has(entry.path)) continue
+      visited.add(entry.path)
+      results.push(entry)
+
+      if (results.length >= limit) return
+      if (entry.type === 'folder') {
+        await walk(entry.path)
+        if (results.length >= limit) return
+      }
+    }
+  }
+
+  await walk(prefix)
+  return results
 }
 
 router.get('/list', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
@@ -418,13 +452,29 @@ router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKe
   try {
     await cleanupExpiredUploads()
     const storage = getStorageForRequest(req)
-    const keyword = req.query.q as string
-    const prefix = (req.query.path as string) || ''
+    const keyword = (req.query.q as string) || ''
+    const prefix = normalizeStoragePath((req.query.path as string) || '')
     if (!keyword) {
       return res.status(400).json({ error: 'common.missingSearchKeyword' })
     }
 
-    const files = await storage.search(prefix, keyword)
+    const isRegexMode = keyword.startsWith('//')
+    let files: FileInfo[]
+    if (isRegexMode) {
+      const source = keyword.slice(2).trim()
+      if (!source) {
+        return res.status(400).json({ error: 'common.invalidRegexPattern' })
+      }
+      let matcher: RegExp
+      try {
+        matcher = new RegExp(source, 'i')
+      } catch {
+        return res.status(400).json({ error: 'common.invalidRegexPattern' })
+      }
+      files = (await listFilesRecursively(storage, prefix)).filter((file) => matcher.test(file.name))
+    } else {
+      files = await storage.search(prefix, keyword)
+    }
     const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
     const normalized = files
       .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))

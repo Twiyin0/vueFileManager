@@ -67,11 +67,13 @@ theme:
 search:
   shortcutHint: Ctrl+K Search
   resultsCount: "Search results: {count} items"
+  invalidRegex: Invalid regular expression
 spotlight:
-  placeholder: Search files and folders... (Ctrl+K)
+  placeholder: Search files and folders... (Ctrl+K, //regex)
   loading: Searching...
   noResults: No matching results
   emptyHint: Type keywords to search files and folders
+  regexHint: Prefix with // to enable regular expression search
 file:
   open: Open
   preview: Preview
@@ -133,6 +135,15 @@ file:
   name: Name
   size: Size
   modified: Modified
+  sortCurrent: "Sorted by {field} ({direction})"
+  sortField:
+    name: Name
+    modified: Modified
+    type: Type
+    size: Size
+  sortDirection:
+    asc: Ascending
+    desc: Descending
 shareMount:
   menu: Cross-Pool Mount
   batchMenu: Batch Cross-Pool Mount

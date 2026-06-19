@@ -69,6 +69,7 @@ interface Config {
     port: number
     host: string
     jwt_secret: string
+    trusted_proxies: string[]
   }
   default_language: AppLanguage
   storage_root: string
@@ -96,7 +97,8 @@ const defaultConfig: Config = {
   server: {
     port: 3000,
     host: '',
-    jwt_secret: 'vue-file-manager-secret-key-2024'
+    jwt_secret: 'vue-file-manager-secret-key-2024',
+    trusted_proxies: []
   },
   default_language: 'zh-CN',
   storage_root: './uploads',
@@ -219,7 +221,10 @@ function mergeConfig(loaded: any): Config {
     server: {
       ...defaultConfig.server,
       ...loaded.server,
-      port: toNumber(loaded.server?.port, defaultConfig.server.port)
+      port: toNumber(loaded.server?.port, defaultConfig.server.port),
+      trusted_proxies: Array.isArray(loaded.server?.trusted_proxies)
+        ? loaded.server.trusted_proxies.map((value: unknown) => String(value).trim()).filter(Boolean)
+        : defaultConfig.server.trusted_proxies
     },
     default_language: resolveDefaultLanguage(),
     storage_root: loaded.storage_root || defaultConfig.storage_root,
