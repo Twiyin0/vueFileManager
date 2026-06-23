@@ -30,7 +30,8 @@
     "loginSuccessful": "Login successful",
     "invalidCredentials": "Invalid username or password",
     "accountNotVerified": "Account is not verified. Please check your email verification code or contact an administrator",
-    "loggedOut": "Logged out"
+    "loggedOut": "Logged out",
+    "tooManyRequests": "Too many requests, please try again later"
   },
   "common": {
     "internalServerError": "Internal server error",
@@ -76,6 +77,10 @@
     "crossPoolMoveCompleted": "Cross-pool move completed",
     "remoteUploadCompleted": "Remote upload completed",
     "offlineTaskCreated": "Offline download task created",
+    "invalidRemoteUrl": "Invalid remote URL",
+    "unsupportedRemoteProtocol": "Unsupported remote URL protocol; only http and https are allowed",
+    "remoteUrlNotAllowed": "This remote address is not allowed (private or reserved addresses are blocked)",
+    "tooManyRedirects": "The remote URL has too many redirects",
     "taskCancelled": "Task cancelled",
     "taskRequeued": "Task re-queued",
     "finishedTasksCleared": "Finished tasks cleared",

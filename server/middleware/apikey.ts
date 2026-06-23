@@ -1,9 +1,9 @@
 import type { NextFunction, Request, Response } from 'express'
-import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import db from '../db'
 import config from '../config'
 import { Logger } from '../services/logger'
+import { hashPassword, verifyPassword } from '../services/password'
 import { getRequestTranslator } from '../services/server-i18n'
 
 const JWT_SECRET = config.server.jwt_secret
@@ -46,8 +46,16 @@ async function authenticateWithBasicAuth(req: ApiKeyRequest) {
     const user = await db.prepare('SELECT id, role, banned, password FROM users WHERE username = ?').get(username) as any
     if (!user || user.banned) return null
 
-    const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
-    if (hashedPassword !== user.password) return null
+    const { valid, needsRehash } = await verifyPassword(password, user.password)
+    if (!valid) return null
+
+    if (needsRehash) {
+      try {
+        await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(await hashPassword(password), user.id)
+      } catch (err) {
+        await Logger.error('webdav', 'apikey.ts', 'Failed to upgrade legacy password hash', err)
+      }
+    }
 
     return {
       userId: user.id as number,

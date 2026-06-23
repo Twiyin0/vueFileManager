@@ -120,13 +120,23 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
 
       return next()
     } catch (err: any) {
-      await Logger.error('system', 'auth.ts', 'IP list middleware fallback to allow request', err)
-      return next()
+      await Logger.error('system', 'auth.ts', 'IP list middleware failed', err)
+      return failOpenOrClosed(req, res, next)
     }
   })().catch(async (err: any) => {
     await Logger.error('system', 'auth.ts', 'IP list middleware unexpected failure', err)
-    return next()
+    return failOpenOrClosed(req, res, next)
   })
+}
+
+// On internal errors, fail open for blacklist mode (do not lock everyone out) but
+// fail closed for whitelist mode (an outage must not become an access bypass).
+function failOpenOrClosed(req: Request, res: Response, next: NextFunction) {
+  if (config.ip_list_mode === 'whitelist') {
+    const t = getRequestTranslator(req)
+    return res.status(403).json({ error: t('auth.ipNotInWhitelist', 'IP address is not in the whitelist') })
+  }
+  return next()
 }
 
 const JWT_SECRET = config.server.jwt_secret

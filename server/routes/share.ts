@@ -6,9 +6,11 @@ import { authMiddleware, type AuthRequest } from '../middleware/auth'
 import { getStorage, getStorageByPoolId } from '../services/factory'
 import { Logger } from '../services/logger'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { safeEqual } from '../services/password'
 import {
   isJunkFile,
   isTemporaryUploadFile,
+  normalizeStoragePath,
 } from './files/shared'
 import { sendServerError } from './admin/shared'
 
@@ -45,18 +47,22 @@ const previewMimeTypes: Record<string, string> = {
   sh: 'text/x-shellscript; charset=utf-8',
 }
 
-function generateSignToken(username: string, signKey: string): { sign: string; timestamp: number } {
-  const timestamp = Math.floor(Date.now() / 1000)
-  const raw = username + signKey
-  const hash = crypto.createHash('md5').update(raw).digest('hex')
-  const sign = hash.slice(4, 12) + timestamp
-  return { sign, timestamp }
+// Signature binds the share to its secret sign_key via HMAC-SHA256. The timestamp is
+// kept in the URL for display/compatibility only and is intentionally not part of the
+// signature (the previous scheme let a client-supplied timestamp cancel itself out and
+// left only a 32-bit secret).
+function computeSign(username: string, signKey: string): string {
+  return crypto.createHmac('sha256', signKey).update(username).digest('hex')
 }
 
-function verifySignToken(username: string, signKey: string, sign: string, timestamp: number): boolean {
-  const expectedHash = crypto.createHash('md5').update(username + signKey).digest('hex')
-  const expectedSign = expectedHash.slice(4, 12) + timestamp
-  return sign === expectedSign
+function generateSignToken(username: string, signKey: string): { sign: string; timestamp: number } {
+  const timestamp = Math.floor(Date.now() / 1000)
+  return { sign: computeSign(username, signKey), timestamp }
+}
+
+function verifySignToken(username: string, signKey: string, sign: string, _timestamp: number): boolean {
+  if (!signKey || !sign) return false
+  return safeEqual(sign, computeSign(username, signKey))
 }
 
 async function getUsernameById(userId: number) {
@@ -176,7 +182,7 @@ router.get('/s/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) {
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) {
         return res.json({
           needPassword: true,
           fileType: share.file_type,
@@ -223,11 +229,16 @@ router.get('/list/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) return res.status(403).json({ error: 'share.incorrectPassword' })
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) return res.status(403).json({ error: 'share.incorrectPassword' })
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const subPath = (req.query.path as string) || ''
+    let subPath = ''
+    try {
+      subPath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
     const fullPath = share.file_path ? (subPath ? `${share.file_path}/${subPath}` : share.file_path) : subPath
 
     const files = await storage.list(fullPath)
@@ -265,7 +276,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) {
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) {
         return res.status(403).json({ error: 'share.incorrectPassword' })
       }
     }
@@ -282,7 +293,12 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const subPath = req.query.path as string
+    let subPath = ''
+    try {
+      subPath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
     const downloadPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
     const data = await storage.download(downloadPath)
     const fileName = downloadPath.split('/').pop() || 'download'
@@ -321,7 +337,7 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) {
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) {
         return res.status(403).json({ error: 'share.incorrectPassword' })
       }
     }
@@ -338,7 +354,12 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const subPath = req.query.path as string
+    let subPath = ''
+    try {
+      subPath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
     const previewPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
     const fileInfo = await storage.info(previewPath)
     if (fileInfo.type !== 'file') {

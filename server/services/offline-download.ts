@@ -1,6 +1,7 @@
 import { Readable } from 'stream'
 import db from '../db'
 import { getStorageByPoolId } from './factory'
+import { safeFetch } from './url-guard'
 
 type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
@@ -42,7 +43,7 @@ async function processTask(task: DownloadTaskRow) {
   await updateTask(task.id, { status: 'running', error_message: '', progress: 0, downloaded_bytes: 0 })
 
   try {
-    const response = await fetch(task.url)
+    const response = await safeFetch(task.url)
     if (!response.ok || !response.body) {
       throw new Error(`Download failed: ${response.status} ${response.statusText}`)
     }

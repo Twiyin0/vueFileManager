@@ -9,6 +9,7 @@ import {
   listOfflineDownloadTasks,
   retryOfflineDownloadTask
 } from '../../services/offline-download'
+import { assertPublicHttpUrl, safeFetch } from '../../services/url-guard'
 import { buildDirectUrl, getStorageForRequest, resolvePoolId } from './shared'
 
 interface NormalizedRemoteUploadRequest {
@@ -85,7 +86,7 @@ async function uploadRemoteFile(
   poolId?: string | number | null
 ): Promise<RemoteUploadResultItem> {
   const storage = poolId ? getStorageByPoolId(req.userId!, Number(poolId)) : getStorageForRequest(req)
-  const response = await fetch(url)
+  const response = await safeFetch(url)
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status} ${response.statusText}`)
   }
@@ -171,9 +172,20 @@ export function registerOfflineTaskRoutes(router: Router) {
       }
 
       const tasks: Array<{ taskId: number; url: string }> = []
+      const errors: Array<{ url: string; error: string }> = []
       for (const url of urls) {
+        try {
+          await assertPublicHttpUrl(url)
+        } catch (err: any) {
+          errors.push({ url, error: err.message || 'file.remoteUrlNotAllowed' })
+          continue
+        }
         const taskId = await createOfflineDownloadTask(req.userId!, resolvedPoolId, url, dirPath || '')
         tasks.push({ taskId, url })
+      }
+
+      if (tasks.length === 0) {
+        return res.status(400).json({ error: errors[0]?.error || 'file.remoteUrlNotAllowed', urls, errors })
       }
 
       res.json({
@@ -181,6 +193,7 @@ export function registerOfflineTaskRoutes(router: Router) {
         count: tasks.length,
         poolId: resolvedPoolId,
         tasks,
+        errors,
         taskId: tasks[0]?.taskId
       })
     } catch (err: any) {
