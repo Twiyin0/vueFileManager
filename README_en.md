@@ -45,6 +45,18 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - The input accepts one or more URLs separated by commas
 - Immediate mode downloads the remote resource and writes it into the selected storage pool right away
 - Offline mode creates background tasks that can be viewed and retried from the Offline Tasks page
+- For SSRF protection, only `http` / `https` URLs are allowed, and targets resolving to loopback, private, link-local (including the cloud metadata address `169.254.169.254`) or other reserved ranges are rejected; every redirect hop is re-validated
+
+## Security Notes
+
+- **JWT secret**: if `server.jwt_secret` in `config.yml` is empty or still the built-in default placeholder, the server generates a strong random secret on startup and writes it back to `config.yml`, so a publicly known default secret cannot be used to forge tokens
+- **Password hashing**: account passwords are stored with `bcrypt`; legacy unsalted MD5 hashes are transparently upgraded to bcrypt on the next successful login. The initial admin password in `config.yml` remains MD5-compatible and is upgraded on first login — change the default admin password right after deployment
+- **Login rate limiting**: the login, register and send-code endpoints are rate limited per client IP and return `429` when the threshold is exceeded
+- **Remote address validation**: remote upload and offline download reject URLs pointing to internal/reserved addresses (see above)
+- **Share signatures**: signed guest/public share links now use HMAC-SHA256. After upgrading, previously distributed share links must be re-copied from "My Shares"
+- **IP whitelist**: in whitelist mode, an internal error during the check rejects the request (fail-closed) so an outage cannot turn into an access bypass
+- **Security headers**: responses include `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy: no-referrer` (to avoid leaking access tokens embedded in direct URLs via the Referer header)
+- Always change the default admin credentials in production and place the service behind an HTTPS reverse proxy
 
 ## Runtime Requirements
 

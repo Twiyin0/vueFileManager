@@ -637,18 +637,6 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
     const trashPath = buildTrashPath(result.lastInsertRowid, fileName)
     await moveToTrash(storage, fullPath, trashPath, stat.type)
     return res.json({ message: 'guest.deleteSuccessful' })
-
-    try {
-      const data = await storage.download(fullPath)
-      await storage.upload(trashPath, data)
-    } catch {}
-
-    await db.prepare(
-      'INSERT INTO trash (user_id, original_path, file_name, file_type, storage_pool_id, deleted_by) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(user.id, fullPath, fileName, stat.type, share.storage_pool_id, `Guest: ${req.params.username}`)
-
-    await storage.remove(fullPath)
-    res.json({ message: 'guest.deleteSuccessful' })
   } catch (err: any) {
     if (err.message === 'common.fileNotFound' || err.code === 'ENOENT') {
       return res.status(404).json({ error: 'common.fileNotFound' })

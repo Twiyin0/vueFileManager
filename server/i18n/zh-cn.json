@@ -30,7 +30,8 @@
     "loginSuccessful": "登录成功",
     "invalidCredentials": "用户名或密码错误",
     "accountNotVerified": "账号未验证，请检查邮箱验证码或等待管理员处理",
-    "loggedOut": "已退出登录"
+    "loggedOut": "已退出登录",
+    "tooManyRequests": "请求过于频繁，请稍后再试"
   },
   "common": {
     "internalServerError": "服务器内部错误",
@@ -76,6 +77,10 @@
     "crossPoolMoveCompleted": "跨池移动完成",
     "remoteUploadCompleted": "远程上传已完成",
     "offlineTaskCreated": "离线下载任务已创建",
+    "invalidRemoteUrl": "远程链接无效",
+    "unsupportedRemoteProtocol": "不支持的远程链接协议，仅允许 http 和 https",
+    "remoteUrlNotAllowed": "该远程地址不被允许（禁止访问内网或保留地址）",
+    "tooManyRedirects": "远程链接重定向次数过多",
     "taskCancelled": "任务已取消",
     "taskRequeued": "任务已重新加入队列",
     "finishedTasksCleared": "已清空已结束任务",

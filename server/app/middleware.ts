@@ -47,6 +47,15 @@ function setStaticCacheHeaders(res: express.Response, filePath: string) {
 }
 
 export function registerAppMiddleware(app: express.Express, context: AppContext) {
+  // Baseline security headers. Referrer-Policy avoids leaking access tokens that are
+  // embedded in direct-media URLs through the Referer header.
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+    next()
+  })
+
   app.use((req, res, next) => {
     if (req.path === '/dav' || req.path.startsWith('/dav/')) {
       return next()

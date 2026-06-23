@@ -22,7 +22,8 @@ export class LocalStorage implements StorageProvider {
     const clean = subdir.replace(/^\/+/, '')
     if (!clean) return
     const full = path.resolve(this.basePath, clean)
-    if (full.startsWith(this.basePath)) {
+    const baseWithSlash = this.basePath.endsWith(path.sep) ? this.basePath : this.basePath + path.sep
+    if (full === this.basePath || full.startsWith(baseWithSlash)) {
       fsSync.mkdirSync(full, { recursive: true })
     }
   }
@@ -153,8 +154,9 @@ export class LocalStorage implements StorageProvider {
   async rename(oldPath: string, newName: string): Promise<void> {
     const fullOld = await this.resolvePath(oldPath)
     const parentDir = path.dirname(fullOld)
-    const fullNew = path.join(parentDir, newName)
-    if (!fullNew.startsWith(this.basePath)) throw new Error('Path escapes the storage root')
+    const fullNew = path.resolve(parentDir, newName)
+    const baseWithSlash = this.basePath.endsWith(path.sep) ? this.basePath : this.basePath + path.sep
+    if (fullNew !== this.basePath && !fullNew.startsWith(baseWithSlash)) throw new Error('Path escapes the storage root')
     await fs.rename(fullOld, fullNew)
   }
 

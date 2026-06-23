@@ -10,9 +10,12 @@ vite.config.d.ts
 .DS_Store
 .env
 package-lock.json
-yarn.lock
-.yarn
-.yarnrc.yml
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
 .idea
 .vscode
 .claude

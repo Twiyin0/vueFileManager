@@ -1,4 +1,5 @@
 import fs from 'fs'
+import crypto from 'crypto'
 import yaml from 'js-yaml'
 import { isMap, isSeq, parseDocument } from 'yaml'
 import { resolveFromRoot } from './runtime-paths'
@@ -6,6 +7,9 @@ import { resolveFromRoot } from './runtime-paths'
 const configPath = resolveFromRoot('config.yml')
 const envPath = resolveFromRoot('.env')
 let lastInternalConfigWriteAt = 0
+
+// The shipped default secret is public; any deployment using it can have JWTs forged.
+const INSECURE_DEFAULT_JWT_SECRET = 'vue-file-manager-secret-key-2024'
 
 export type AppLanguage = 'zh-CN' | 'en-US'
 
@@ -294,6 +298,29 @@ try {
   config = mergeConfig({})
 }
 
+/**
+ * Never run with the public default JWT secret. If it is missing or still the shipped
+ * placeholder, generate a strong random secret and persist it back to config.yml so all
+ * previously issued tokens (and any forged ones) become invalid.
+ */
+function ensureSecureJwtSecret() {
+  const current = config.server.jwt_secret
+  if (current && current !== INSECURE_DEFAULT_JWT_SECRET) return
+
+  const generated = crypto.randomBytes(48).toString('base64url')
+  config.server.jwt_secret = generated
+
+  try {
+    updateConfigFile((rawConfig) => {
+      rawConfig.server = rawConfig.server || {}
+      rawConfig.server.jwt_secret = generated
+    })
+    console.warn('[security] Insecure default jwt_secret detected. Generated a new random secret and wrote it to config.yml.')
+  } catch (err: any) {
+    console.warn(`[security] Insecure default jwt_secret detected but could not persist a new one (${err?.message || 'unknown error'}); using an in-memory random secret for this run.`)
+  }
+}
+
 function syncYamlNode(document: any, node: any, value: unknown): boolean {
   if (isMap(node) && isPlainObject(value)) {
     syncYamlMap(document, node, value)
@@ -360,6 +387,8 @@ export function updateConfigFile(mutator: (rawConfig: any) => void): Config {
   config = mergeConfig(existing)
   return config
 }
+
+ensureSecureJwtSecret()
 
 export default config
 export { configPath, envPath }

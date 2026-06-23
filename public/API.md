@@ -74,6 +74,8 @@ X-API-Key: <key>
 
 ## 认证接口
 
+> 安全提示：`send-code`、`register`、`login` 按客户端 IP 限流，超过阈值返回 `429`，错误码为 `auth.tooManyRequests`。
+
 ### `POST /api/auth/send-code`
 
 在启用 SMTP 时发送邮箱验证码。
@@ -96,7 +98,7 @@ X-API-Key: <key>
   
   - 管理员可全局关闭新用户注册
   - 只有在启用 SMTP 注册时才要求 `email` 和 `code`
-  - 当前实现中的密码仍以 MD5 存储
+  - 密码使用 bcrypt 存储；旧版无盐 MD5 哈希会在下次登录成功时自动升级为 bcrypt
   - 新用户首次初始化时会继承 `.env` 中的默认语言
   - 当注册被关闭时，接口返回 `403`，错误码为 `auth.userRegistrationDisabled`
 
@@ -270,6 +272,8 @@ API Key 的通用权限模型：
 
 以下接口都要求 JWT 或具备 `write` 权限的 API Key。
 
+> 安全提示：远程链接仅允许 `http` / `https`，且会拒绝指向回环、内网、链路本地（含云元数据 `169.254.169.254`）等保留地址的目标，重定向的每一跳都会重新校验。被拒绝的链接返回错误码 `file.remoteUrlNotAllowed` / `file.unsupportedRemoteProtocol` / `file.invalidRemoteUrl`。
+
 ### `POST /api/files/remote-upload`
 
 将一个或多个远程文件直接写入当前目录。
@@ -298,7 +302,7 @@ API Key 的通用权限模型：
 
 创建一个或多个后台离线下载任务。
 
-请求体支持与远程上传相同的 `url` / `urls` / 逗号分隔格式。
+请求体支持与远程上传相同的 `url` / `urls` / 逗号分隔格式。被拦截的链接会在 `errors` 中逐条返回；若全部被拦截则返回 `400`。
 
 ### `GET /api/files/offline-download/tasks`
 

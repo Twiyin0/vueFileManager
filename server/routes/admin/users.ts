@@ -1,9 +1,9 @@
 import { Router } from 'express'
-import crypto from 'crypto'
 import db, { syncStoragePoolsFromConfig } from '../../db'
 import { authMiddleware, adminMiddleware, type AuthRequest } from '../../middleware/auth'
 import { clearStorageCache } from '../../services/factory'
 import { getUserQuota } from '../../services/quota'
+import { hashPassword } from '../../services/password'
 import { sendServerError } from './shared'
 
 const router = Router()
@@ -121,7 +121,7 @@ router.post('/users', authMiddleware, adminMiddleware, async (req: AuthRequest, 
       return res.status(409).json({ error: 'auth.usernameAlreadyExists' })
     }
 
-    const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
+    const hashedPassword = await hashPassword(password)
     const result = await db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(
       username,
       hashedPassword,
@@ -197,7 +197,7 @@ router.put('/users/:id/password', authMiddleware, adminMiddleware, async (req: A
       return res.status(404).json({ error: 'auth.userNotFound' })
     }
 
-    const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
+    const hashedPassword = await hashPassword(password)
     await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, userId)
     res.json({ message: 'admin.passwordReset' })
   } catch (err) {
