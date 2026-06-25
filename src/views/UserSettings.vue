@@ -53,6 +53,14 @@ function formatDate(dateStr: string): string {
   return `${date.toLocaleDateString(language.value || 'zh-CN')} ${date.toLocaleTimeString(language.value || 'zh-CN', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+function getGuestShareName(share: any): string {
+  return share?.label || share?.folder_path || share?.pool_name || t('common.rootDirectory', 'Root directory')
+}
+
+function getGuestSharePathLabel(share: any): string {
+  return share?.folder_path || t('common.rootDirectory', 'Root directory')
+}
+
 async function loadGuestShares() {
   loadingShares.value = true
   try {
@@ -248,15 +256,23 @@ async function handleDeleteShare() {
                 <div v-else class="divide-y" style="border-color: var(--border-color)">
                   <div v-for="share in guestShares" :key="share.id" class="flex items-center justify-between px-4 py-3">
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium" style="color: var(--text-color)">{{ share.label || share.folder_path }}</p>
+                      <p class="truncate text-sm font-medium" style="color: var(--text-color)">{{ getGuestShareName(share) }}</p>
                       <p class="mt-0.5 text-xs" style="color: var(--text-secondary-color)">
-                        <span class="font-mono">{{ share.folder_path }}</span>
+                        <span class="font-mono">{{ getGuestSharePathLabel(share) }}</span>
                         <span class="mx-1">{{ t('common.separator', ' | ') }}</span>
                         {{ share.pool_name }}
                         <span class="mx-1">{{ t('common.separator', ' | ') }}</span>
                         {{ formatDate(share.created_at) }}
                       </p>
                       <div v-if="share.permissions" class="mt-1.5 flex flex-wrap gap-1">
+                        <span
+                          v-if="share.has_password"
+                          class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs"
+                          style="background-color: var(--hover-color); color: var(--text-secondary-color)"
+                        >
+                          <Icon name="lock" class="h-3 w-3" />
+                          {{ t('myShares.hasPassword', 'Password Protected') }}
+                        </span>
                         <span
                           v-for="permission in share.permissions.split(',')"
                           :key="permission"
@@ -310,7 +326,7 @@ async function handleDeleteShare() {
     <ConfirmDialog
       :show="deleteConfirm.show"
       :title="t('settings.cancelShare', 'Cancel Share')"
-      :message="t('settings.cancelShareMessage', 'Cancel guest share {name}?').replace('{name}', deleteConfirm.share?.label || deleteConfirm.share?.folder_path || '')"
+      :message="t('settings.cancelShareMessage', 'Cancel guest share {name}?').replace('{name}', getGuestShareName(deleteConfirm.share))"
       :confirm-text="t('settings.cancelShare', 'Cancel Share')"
       :danger="true"
       @confirm="handleDeleteShare"

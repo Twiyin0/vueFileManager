@@ -6,8 +6,23 @@ import { authMiddleware, type AuthRequest } from '../middleware/auth'
 import { Logger } from '../services/logger'
 import { getUserQuota, formatBytes } from '../services/quota'
 import { sendServerError } from './admin/shared'
+import { normalizeStoragePath } from './files/shared'
 
 const router = Router()
+
+function normalizeOptionalPassword(password: unknown) {
+  if (password === undefined) return undefined
+  const value = String(password || '').trim()
+  return value || null
+}
+
+function serializeGuestShare(share: any) {
+  return {
+    ...share,
+    has_password: !!share.password,
+    password: undefined
+  }
+}
 
 function normalizeLanguage(language: unknown): AppLanguage {
   return language === 'zh-CN' ? 'zh-CN' : 'en-US'
@@ -261,7 +276,7 @@ router.get('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respon
       ORDER BY gs.created_at DESC
     `).all(req.userId!)
 
-    res.json({ shares })
+    res.json({ shares: (shares as any[]).map(serializeGuestShare) })
   } catch (err) {
     await sendServerError(req, res, err, {
       source: 'api',
@@ -274,9 +289,16 @@ router.get('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respon
 
 router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { folderPath, storagePoolId, label, permissions } = req.body
-    if (!folderPath || !storagePoolId) {
+    const { folderPath, storagePoolId, label, permissions, password } = req.body
+    if (folderPath === undefined || folderPath === null || !storagePoolId) {
       return res.status(400).json({ error: 'common.missingFolderPathOrPoolId' })
+    }
+
+    let normalizedFolderPath = ''
+    try {
+      normalizedFolderPath = normalizeStoragePath(String(folderPath || ''))
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
     }
 
     const pool = await db.prepare('SELECT id, name FROM storage_pools WHERE id = ? AND user_id = ?').get(storagePoolId, req.userId!) as any
@@ -284,34 +306,69 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
       return res.status(404).json({ error: 'storagePool.notFound' })
     }
 
-    const existing = await db.prepare(`
-      SELECT id FROM guest_shares
-      WHERE user_id = ? AND folder_path = ? AND storage_pool_id = ?
-    `).get(req.userId!, folderPath, storagePoolId) as any
+    await ensureUserSettingsRow(req.userId!)
+    await db.prepare('UPDATE user_settings SET guest_enabled = 1 WHERE user_id = ?').run(req.userId!)
 
-    if (existing) {
-      return res.status(409).json({ error: 'guest.shareAlreadyExists' })
-    }
+    const existing = await db.prepare(`
+      SELECT * FROM guest_shares
+      WHERE user_id = ? AND folder_path = ? AND storage_pool_id = ?
+    `).get(req.userId!, normalizedFolderPath, storagePoolId) as any
 
     const perms = permissions || 'read'
-    const nextLabel = label || folderPath.split('/').pop() || 'Guest Folder'
+    const nextLabel = label || normalizedFolderPath.split('/').filter(Boolean).pop() || pool.name || 'Guest Folder'
+    const normalizedPassword = normalizeOptionalPassword(password)
+
+    if (existing) {
+      const updates = ['label = ?', 'permissions = ?']
+      const values: any[] = [nextLabel, perms]
+      if (normalizedPassword !== undefined) {
+        updates.push('password = ?')
+        values.push(normalizedPassword)
+      }
+      values.push(existing.id, req.userId!)
+
+      await db.prepare(`
+        UPDATE guest_shares
+        SET ${updates.join(', ')}
+        WHERE id = ? AND user_id = ?
+      `).run(...values)
+
+      const username = await getUsername(req.userId!)
+      await Logger.info('api', 'user.ts', `User ${username} updated existing guest share in poolID:#${storagePoolId} ${normalizedFolderPath || '/'}`)
+
+      return res.json({
+        message: 'guest.guestShareUpdated',
+        guestEnabled: true,
+        share: serializeGuestShare({
+          ...existing,
+          folder_path: normalizedFolderPath,
+          storage_pool_id: storagePoolId,
+          label: nextLabel,
+          permissions: perms,
+          password: normalizedPassword !== undefined ? normalizedPassword : existing.password
+        })
+      })
+    }
+
     const result = await db.prepare(`
-      INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(req.userId!, folderPath, storagePoolId, nextLabel, perms)
+      INSERT INTO guest_shares (user_id, folder_path, storage_pool_id, label, permissions, password)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(req.userId!, normalizedFolderPath, storagePoolId, nextLabel, perms, normalizedPassword ?? null)
 
     const username = await getUsername(req.userId!)
-    await Logger.info('api', 'user.ts', `User ${username} shared folder to guest mode in poolID:#${storagePoolId} ${folderPath}`)
+    await Logger.info('api', 'user.ts', `User ${username} shared folder to guest mode in poolID:#${storagePoolId} ${normalizedFolderPath || '/'}`)
 
     res.json({
       message: 'guest.sharedToGuestMode',
-      share: {
+      guestEnabled: true,
+      share: serializeGuestShare({
         id: result.lastInsertRowid,
-        folder_path: folderPath,
+        folder_path: normalizedFolderPath,
         storage_pool_id: storagePoolId,
         label: nextLabel,
-        permissions: perms
-      }
+        permissions: perms,
+        password: normalizedPassword
+      })
     })
   } catch (err) {
     await sendServerError(req, res, err, {
@@ -325,18 +382,27 @@ router.post('/guest-shares', authMiddleware, async (req: AuthRequest, res: Respo
 
 router.put('/guest-shares/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { label, permissions } = req.body
-    const share = await db.prepare('SELECT id, folder_path, storage_pool_id FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
+    const { label, permissions, password } = req.body
+    const share = await db.prepare('SELECT * FROM guest_shares WHERE id = ? AND user_id = ?').get(req.params.id, req.userId!) as any
 
     if (!share) {
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    const updates = ['label = ?', 'permissions = ?']
+    const values: any[] = [label || '', permissions || 'read']
+    const normalizedPassword = normalizeOptionalPassword(password)
+    if (normalizedPassword !== undefined) {
+      updates.push('password = ?')
+      values.push(normalizedPassword)
+    }
+    values.push(req.params.id, req.userId!)
+
     await db.prepare(`
       UPDATE guest_shares
-      SET label = ?, permissions = ?
+      SET ${updates.join(', ')}
       WHERE id = ? AND user_id = ?
-    `).run(label || '', permissions || 'read', req.params.id, req.userId!)
+    `).run(...values)
 
     const username = await getUsername(req.userId!)
     await Logger.info('api', 'user.ts', `User ${username} updated guest share in poolID:#${share.storage_pool_id} ${share.folder_path}`)

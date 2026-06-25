@@ -4,12 +4,14 @@ import chardet from 'chardet'
 import iconv from 'iconv-lite'
 import db from '../db'
 import { getStorageByPoolId } from '../services/factory'
+import { Logger } from '../services/logger'
+import { safeEqual } from '../services/password'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { getThumbnail, streamThumbnail } from '../services/thumbnail'
 import { buildTrashPath, moveToTrash } from '../services/trash'
 import config from '../config'
-import fs from 'fs/promises'
 import fsSync from 'fs'
-import { buildTemporaryUploadPath, normalizeStoragePath, sanitizeUploadFileName, isJunkFile } from './files/shared'
+import { buildTemporaryUploadPath, joinStoragePath, normalizeStoragePath, sanitizeUploadFileName, isJunkFile } from './files/shared'
 
 const router = Router()
 
@@ -21,7 +23,11 @@ const mimeTypes: Record<string, string> = {
   svg: 'image/svg+xml',
   webp: 'image/webp',
   mp4: 'video/mp4',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  mov: 'video/quicktime',
   webm: 'video/webm',
+  flv: 'video/x-flv',
   ogg: 'audio/ogg',
   mp3: 'audio/mpeg',
   wav: 'audio/wav',
@@ -162,6 +168,10 @@ function isPathSafe(targetPath: string): boolean {
   }
 }
 
+function normalizeShareBasePath(folderPath: string): string {
+  return normalizeStoragePath((folderPath || '').replace(/\\/g, '/'))
+}
+
 function isTemporaryUploadFile(filename: string): boolean {
   const name = filename.split('/').pop() || filename
   return name.startsWith('.temp_')
@@ -185,6 +195,33 @@ async function getGuestShare(userId: number, shareId: string | number) {
 
 function getShareIdParam(req: Request) {
   return String(req.params.shareId || '')
+}
+
+function getProvidedPassword(req: Request) {
+  const queryPassword = typeof req.query.password === 'string' ? req.query.password : ''
+  const bodyPassword = typeof (req.body as any)?.password === 'string' ? (req.body as any).password : ''
+  return queryPassword || bodyPassword
+}
+
+function hasSharePassword(share: any) {
+  return !!String(share?.password || '')
+}
+
+function verifySharePassword(req: Request, share: any) {
+  if (!hasSharePassword(share)) return true
+  const providedPassword = getProvidedPassword(req)
+  return !!providedPassword && safeEqual(providedPassword, String(share.password))
+}
+
+function appendPasswordIfNeeded(params: URLSearchParams, req: Request, share: any) {
+  const providedPassword = getProvidedPassword(req)
+  if (hasSharePassword(share) && providedPassword) {
+    params.set('password', providedPassword)
+  }
+}
+
+function sendIncorrectPassword(res: Response) {
+  return res.status(403).json({ error: 'guest.incorrectPassword' })
 }
 
 router.get('/', async (_req: Request, res: Response) => {
@@ -217,14 +254,21 @@ router.get('/:username/list', async (req: Request, res: Response) => {
     }
 
     const shares = await db.prepare(`
-      SELECT gs.id, gs.folder_path, gs.label, gs.permissions, gs.created_at, sp.name as pool_name
+      SELECT gs.id, gs.folder_path, gs.label, gs.permissions, gs.created_at, gs.password, sp.name as pool_name
       FROM guest_shares gs
       JOIN storage_pools sp ON gs.storage_pool_id = sp.id
       WHERE gs.user_id = ?
       ORDER BY gs.created_at DESC
     `).all(user.id)
 
-    res.json({ shares, owner: user.username })
+    res.json({
+      shares: (shares as any[]).map((share) => ({
+        ...share,
+        has_password: hasSharePassword(share),
+        password: undefined
+      })),
+      owner: user.username
+    })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -253,10 +297,27 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return res.json({
+        needPassword: true,
+        owner: user.username,
+        shareLabel: share.label,
+        sharePath: share.folder_path,
+        poolName: share.pool_name,
+        permissions: share.permissions
+      })
+    }
+
+    let relativePath = ''
+    try {
+      relativePath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
+
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const relativePath = (req.query.path as string) || ''
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? (relativePath ? `${basePath}/${relativePath}` : basePath) : relativePath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, relativePath)
 
     const files = await storage.list(fullPath)
     const prefix = basePath ? `${basePath}/` : ''
@@ -272,7 +333,9 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
       file.type === 'file' && ['readme.md', 'readme.markdown'].includes(file.name.toLowerCase()),
     )
     if (readmeFile) {
-      const previewUrl = `/api/guest/${encodeURIComponent(user.username)}/${share.id}/preview?path=${encodeURIComponent(readmeFile.path)}`
+      const previewParams = new URLSearchParams({ path: readmeFile.path })
+      appendPasswordIfNeeded(previewParams, req, share)
+      const previewUrl = `/api/guest/${encodeURIComponent(user.username)}/${share.id}/preview?${previewParams.toString()}`
       readme = {
         name: readmeFile.name,
         path: readmeFile.path,
@@ -282,9 +345,12 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
     }
 
     res.json({
+      needPassword: false,
       files: result,
       owner: user.username,
       shareLabel: share.label,
+      sharePath: share.folder_path,
+      poolName: share.pool_name,
       permissions: share.permissions,
       readme,
     })
@@ -310,6 +376,10 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
     if (!hasPermission(share.permissions, 'preview')) {
       return res.status(403).json({ error: 'guest.previewPermissionRequired' })
     }
@@ -323,17 +393,18 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
+    const normalizedRelativePath = normalizeStoragePath(relativePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? `${basePath}/${relativePath}` : relativePath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedRelativePath)
 
     const fileInfo = await storage.info(fullPath)
     if (fileInfo.type !== 'file') {
       return res.status(400).json({ error: 'guest.folderPreviewUnsupported' })
     }
 
-    const ext = relativePath.split('.').pop()?.toLowerCase() || ''
-    const fileName = relativePath.split('/').pop() || 'file'
+    const ext = normalizedRelativePath.split('.').pop()?.toLowerCase() || ''
+    const fileName = normalizedRelativePath.split('/').pop() || 'file'
     const contentType = mimeTypes[ext] || 'application/octet-stream'
 
     const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
@@ -428,6 +499,10 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
     if (!hasPermission(share.permissions, 'download')) {
       return res.status(403).json({ error: 'guest.downloadPermissionRequired' })
     }
@@ -441,11 +516,12 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
+    const normalizedRelativePath = normalizeStoragePath(relativePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = (share.folder_path || '').replace(/\\/g, '/')
-    const fullPath = basePath ? `${basePath}/${relativePath}` : relativePath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedRelativePath)
     const data = await storage.download(fullPath)
-    const fileName = relativePath.split('/').pop() || 'download'
+    const fileName = normalizedRelativePath.split('/').pop() || 'download'
 
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
     res.setHeader('Content-Type', 'application/octet-stream')
@@ -455,6 +531,99 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
       return res.status(404).json({ error: 'common.fileNotFound' })
     }
     res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/:username/:shareId/thumbnail', async (req: Request, res: Response) => {
+  try {
+    const user = await getUserByUsername(req.params.username as string)
+    if (!user) {
+      return res.status(404).json({ error: 'auth.userNotFound' })
+    }
+
+    const settings = await getGuestSettings(user.id)
+    if (!settings || !settings.guest_enabled) {
+      return res.status(403).json({ error: 'guest.guestModeDisabled' })
+    }
+
+    const share = await getGuestShare(user.id, getShareIdParam(req))
+    if (!share) {
+      return res.status(404).json({ error: 'guest.shareNotFound' })
+    }
+
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
+    if (!hasPermission(share.permissions, 'preview')) {
+      return res.status(403).json({ error: 'guest.previewPermissionRequired' })
+    }
+
+    const relativePath = req.query.path as string
+    if (!relativePath) {
+      return res.status(400).json({ error: 'common.missingFilePath' })
+    }
+
+    if (!isPathSafe(relativePath)) {
+      return res.status(403).json({ error: 'guest.pathAccessDenied' })
+    }
+
+    const normalizedRelativePath = normalizeStoragePath(relativePath)
+    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedRelativePath)
+    const result = await getThumbnail(
+      `guest:${user.username}:share:${share.id}`,
+      user.id,
+      share.storage_pool_id,
+      storage,
+      fullPath
+    )
+
+    if (result.status !== 'ready') {
+      return res.status(result.status === 'unsupported' ? 415 : 202).json({
+        status: result.status,
+        duration: result.duration
+      })
+    }
+
+    const stream = streamThumbnail(result)
+    if (!stream || !result.path) {
+      return res.status(202).json({ status: 'pending' })
+    }
+
+    const stat = fsSync.statSync(result.path)
+    const etag = `"${stat.size}-${stat.mtimeMs}"`
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end()
+      return
+    }
+
+    res.setHeader('Content-Type', result.mimeType || 'image/jpeg')
+    res.setHeader('Content-Length', stat.size)
+    res.setHeader('ETag', etag)
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    if (result.duration != null) {
+      res.setHeader('X-Video-Duration', String(result.duration))
+    }
+    stream.on('error', (streamError) => {
+      void Logger.error('api', 'guest.ts', 'Failed to stream guest thumbnail', streamError, {
+        username: req.params.username,
+        shareId: req.params.shareId,
+        path: req.query.path
+      })
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'file.thumbnailLoadFailed' })
+        return
+      }
+      res.destroy(streamError instanceof Error ? streamError : undefined)
+    })
+    stream.pipe(res)
+  } catch (err: any) {
+    if (err.message === 'common.fileNotFound' || err.code === 'ENOENT') {
+      return res.status(404).json({ error: 'common.fileNotFound' })
+    }
+    res.status(500).json({ error: err.message || 'file.thumbnailLoadFailed' })
   }
 })
 
@@ -473,6 +642,10 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
     const share = await getGuestShare(user.id, getShareIdParam(req))
     if (!share) {
       return res.status(404).json({ error: 'guest.shareNotFound' })
+    }
+
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
     }
 
     if (!hasPermission(share.permissions, 'upload')) {
@@ -504,10 +677,9 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
       return res.status(400).json({ error: 'file.invalidFileName' })
     }
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
-    const filePath = basePath
-      ? (dirPath ? `${basePath}/${dirPath}/${normalizedName}` : `${basePath}/${normalizedName}`)
-      : (dirPath ? `${dirPath}/${normalizedName}` : normalizedName)
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const relativePath = joinStoragePath(dirPath, normalizedName)
+    const filePath = joinStoragePath(basePath, relativePath)
 
     const pool = await db.prepare('SELECT storage_type FROM storage_pools WHERE id = ?').get(share.storage_pool_id) as any
     const uploadPath = shouldUseAtomicTempUpload(pool?.storage_type)
@@ -535,7 +707,6 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
       throw err
     }
 
-    const relativePath = basePath ? filePath.replace(`${basePath}/`, '').replace(basePath, '') : filePath
     res.json({ message: 'guest.uploadSuccessful', path: relativePath })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -559,6 +730,10 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
     if (!hasPermission(share.permissions, 'edit')) {
       return res.status(403).json({ error: 'guest.editPermissionRequired' })
     }
@@ -578,8 +753,8 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
 
     const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
-    const fullPath = basePath ? `${basePath}/${normalizedFilePath}` : normalizedFilePath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
     const buffer = Buffer.from(content, 'utf-8')
     await storage.upload(fullPath, buffer)
@@ -610,6 +785,10 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
     if (!hasPermission(share.permissions, 'delete')) {
       return res.status(403).json({ error: 'guest.deletePermissionRequired' })
     }
@@ -625,8 +804,8 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
 
     const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
-    const fullPath = basePath ? `${basePath}/${normalizedFilePath}` : normalizedFilePath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
     const stat = await storage.info(fullPath).catch(() => ({ type: 'file' as const }))
     const fileName = normalizedFilePath.split('/').pop() || normalizedFilePath
@@ -662,6 +841,10 @@ router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => 
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
     if (!hasPermission(share.permissions, 'upload')) {
       return res.status(403).json({ error: 'guest.writePermissionRequired' })
     }
@@ -677,8 +860,8 @@ router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => 
 
     const normalizedDirPath = normalizeStoragePath(dirPath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
-    const fullPath = basePath ? `${basePath}/${normalizedDirPath}` : normalizedDirPath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedDirPath)
 
     await storage.mkdir(fullPath)
     res.json({ message: 'guest.createSuccessful', path: normalizedDirPath })
@@ -704,6 +887,10 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
       return res.status(404).json({ error: 'guest.shareNotFound' })
     }
 
+    if (!verifySharePassword(req, share)) {
+      return sendIncorrectPassword(res)
+    }
+
     if (!hasPermission(share.permissions, 'rename')) {
       return res.status(403).json({ error: 'guest.editPermissionRequired' })
     }
@@ -723,8 +910,8 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
     }
     const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeStoragePath((share.folder_path || '').replace(/\\/g, '/'))
-    const fullPath = basePath ? `${basePath}/${normalizedFilePath}` : normalizedFilePath
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
     await storage.rename(fullPath, newName)
     res.json({ message: 'guest.renameSuccessful' })

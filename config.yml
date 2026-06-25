@@ -24,7 +24,7 @@ server:
   host: 0.0.0.0
   # JWT 密钥，用于 Token 签名，生产环境请务必修改
   # 安全说明：若此处为空或仍为下方默认占位值，服务启动时会自动生成一个随机密钥并写回本文件。
-  jwt_secret: vue-file-manager-secret-key-2024
+  jwt_secret: 4-TzEtZR7mhWmiDIS-ag4AhZ-F5Fyb3YB1F_N9C4nRxQ2QUrZUUOTqRP9MI4IPR9
   # 受信任反向代理 IP 列表
   # 只有当请求直接来自这些代理地址时，才会使用 X-Forwarded-For 解析真实客户端 IP
   # 留空表示忽略 X-Forwarded-For，直接使用 TCP 连接来源地址

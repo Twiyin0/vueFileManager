@@ -102,6 +102,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
         folder_path TEXT NOT NULL,
         storage_pool_id INTEGER NOT NULL,
         label TEXT DEFAULT '',
+        password TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
@@ -144,6 +145,26 @@ export async function createBaseTables(database: DatabaseAdapter) {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS thumbnail_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cache_key TEXT UNIQUE NOT NULL,
+        user_id INTEGER NOT NULL,
+        storage_pool_id INTEGER,
+        file_path TEXT NOT NULL,
+        file_modified TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        output_path TEXT DEFAULT '',
+        mime_type TEXT DEFAULT '',
+        duration INTEGER,
+        error TEXT DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
       );
     `)
     return
@@ -238,6 +259,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
         folder_path TEXT NOT NULL,
         storage_pool_id BIGINT NOT NULL,
         label TEXT,
+        password TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT fk_guest_shares_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_guest_shares_pool FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
@@ -280,6 +302,26 @@ export async function createBaseTables(database: DatabaseAdapter) {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT fk_offline_tasks_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         CONSTRAINT fk_offline_tasks_pool FOREIGN KEY (pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS thumbnail_cache (
+        id BIGINT PRIMARY KEY AUTO_INCREMENT,
+        cache_key VARCHAR(64) UNIQUE NOT NULL,
+        user_id BIGINT NOT NULL,
+        storage_pool_id BIGINT NULL,
+        file_path TEXT NOT NULL,
+        file_modified TEXT NOT NULL,
+        file_size BIGINT NOT NULL,
+        provider VARCHAR(64) NOT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'pending',
+        output_path TEXT,
+        mime_type VARCHAR(128),
+        duration BIGINT NULL,
+        error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_thumbnail_cache_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_thumbnail_cache_pool FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
       );
     `)
     return
@@ -365,6 +407,7 @@ export async function createBaseTables(database: DatabaseAdapter) {
       folder_path TEXT NOT NULL,
       storage_pool_id BIGINT NOT NULL REFERENCES storage_pools(id) ON DELETE CASCADE,
       label TEXT DEFAULT '',
+      password TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -398,6 +441,24 @@ export async function createBaseTables(database: DatabaseAdapter) {
       total_bytes BIGINT,
       downloaded_bytes BIGINT NOT NULL DEFAULT 0,
       error_message TEXT DEFAULT '',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS thumbnail_cache (
+      id BIGSERIAL PRIMARY KEY,
+      cache_key VARCHAR(64) UNIQUE NOT NULL,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      storage_pool_id BIGINT REFERENCES storage_pools(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      file_modified TEXT NOT NULL,
+      file_size BIGINT NOT NULL,
+      provider VARCHAR(64) NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'pending',
+      output_path TEXT DEFAULT '',
+      mime_type VARCHAR(128) DEFAULT '',
+      duration BIGINT,
+      error TEXT DEFAULT '',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -551,6 +612,10 @@ async function migrateGuestSharePermissions(db: DatabaseAdapter) {
   await addColumnIfMissing(db, 'guest_shares', 'permissions', "TEXT DEFAULT 'preview,download'")
 }
 
+async function migrateGuestSharePassword(db: DatabaseAdapter) {
+  await addColumnIfMissing(db, 'guest_shares', 'password', 'TEXT')
+}
+
 async function migrateTrashDeletedBy(db: DatabaseAdapter) {
   await addColumnIfMissing(db, 'trash', 'deleted_by', "TEXT DEFAULT ''")
 }
@@ -628,12 +693,90 @@ async function migrateCleanLocalPath(db: DatabaseAdapter) {
     try {
       const parsed = JSON.parse(pool.config || '{}')
       if (!parsed.localPath) continue
+      if (!parsed.path) {
+        parsed.path = parsed.localPath
+      }
       delete parsed.localPath
       await db.prepare('UPDATE storage_pools SET config = ? WHERE id = ?').run(JSON.stringify(parsed), pool.id)
     } catch {
       // ignore invalid config rows
     }
   }
+}
+
+async function migrateThumbnailCache(db: DatabaseAdapter) {
+  const hasTable = await db.tableExists('thumbnail_cache')
+  if (hasTable) return
+
+  if (db.dialect === 'mysql') {
+    await db.exec(`
+      CREATE TABLE thumbnail_cache (
+        id BIGINT PRIMARY KEY AUTO_INCREMENT,
+        cache_key VARCHAR(64) UNIQUE NOT NULL,
+        user_id BIGINT NOT NULL,
+        storage_pool_id BIGINT NULL,
+        file_path TEXT NOT NULL,
+        file_modified TEXT NOT NULL,
+        file_size BIGINT NOT NULL,
+        provider VARCHAR(64) NOT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'pending',
+        output_path TEXT,
+        mime_type VARCHAR(128),
+        duration BIGINT NULL,
+        error TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_thumbnail_cache_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_thumbnail_cache_pool FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
+      )
+    `)
+    return
+  }
+
+  if (db.dialect === 'postgres') {
+    await db.exec(`
+      CREATE TABLE thumbnail_cache (
+        id BIGSERIAL PRIMARY KEY,
+        cache_key VARCHAR(64) UNIQUE NOT NULL,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        storage_pool_id BIGINT REFERENCES storage_pools(id) ON DELETE CASCADE,
+        file_path TEXT NOT NULL,
+        file_modified TEXT NOT NULL,
+        file_size BIGINT NOT NULL,
+        provider VARCHAR(64) NOT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'pending',
+        output_path TEXT DEFAULT '',
+        mime_type VARCHAR(128) DEFAULT '',
+        duration BIGINT,
+        error TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    return
+  }
+
+  await db.exec(`
+    CREATE TABLE thumbnail_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cache_key TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL,
+      storage_pool_id INTEGER,
+      file_path TEXT NOT NULL,
+      file_modified TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      output_path TEXT DEFAULT '',
+      mime_type TEXT DEFAULT '',
+      duration INTEGER,
+      error TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (storage_pool_id) REFERENCES storage_pools(id) ON DELETE CASCADE
+    )
+  `)
 }
 
 async function ensureAdminUser(db: DatabaseAdapter) {
@@ -685,6 +828,7 @@ export async function initializeDatabase(db: DatabaseAdapter, options: Initializ
   await migrateStorageSettings(db)
   await migrateIpTables(db)
   await migrateGuestSharePermissions(db)
+  await migrateGuestSharePassword(db)
   await migrateTrashDeletedBy(db)
   await migrateGuestPermissionsV2(db)
   await migrateVerificationCodes(db)
@@ -694,6 +838,7 @@ export async function initializeDatabase(db: DatabaseAdapter, options: Initializ
   await migrateUploadConcurrency(db)
   await migrateUserLanguage(db)
   await migrateCleanLocalPath(db)
+  await migrateThumbnailCache(db)
   if (options.ensureAdmin !== false) {
     await ensureAdminUser(db)
   }

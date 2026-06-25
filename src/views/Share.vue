@@ -24,6 +24,7 @@ const currentSubPath = ref('')
 const shareCode = computed(() => route.params.code as string)
 const sign = computed(() => route.query.sign as string)
 const timestamp = computed(() => route.query.t as string)
+const shareDisplayName = computed(() => shareInfo.value?.fileName || t('common.rootDirectory', 'Root directory'))
 
 const fileIconMap: Record<string, { icon: string; color: string }> = {
   folder: { icon: 'folder', color: 'text-blue-500' },
@@ -243,7 +244,7 @@ onMounted(() => {
               style="color: var(--accent-color)"
               @click="fetchFolderContents()"
             >
-              {{ shareInfo.fileName }}
+              {{ shareDisplayName }}
             </button>
 
             <template v-for="(segment, index) in currentSubPath.split('/').filter(Boolean)" :key="`${segment}-${index}`">
@@ -312,7 +313,7 @@ onMounted(() => {
       <div v-else-if="shareInfo" class="mx-auto max-w-lg p-4 sm:p-8">
         <div class="mb-4 text-center sm:mb-6">
           <Icon name="file-alt" class="mx-auto mb-3 h-12 w-12 sm:mb-4 sm:h-16 sm:w-16" style="color: var(--accent-color)" />
-          <h2 class="mb-2 truncate px-4 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ shareInfo.fileName }}</h2>
+          <h2 class="mb-2 truncate px-4 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ shareDisplayName }}</h2>
           <p v-if="shareInfo.owner" class="text-sm" style="color: var(--text-secondary-color)">
             {{ t('sharePage.owner', 'Shared by: {owner}').replace('{owner}', shareInfo.owner) }}
           </p>

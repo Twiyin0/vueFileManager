@@ -6,6 +6,7 @@ import { flexibleAuth, type ApiKeyRequest, requirePermission } from '../middlewa
 import { getStorage, getStorageByPoolId } from '../services/factory'
 import { Logger } from '../services/logger'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { getThumbnail, streamThumbnail } from '../services/thumbnail'
 import { buildTrashPath, moveToTrash } from '../services/trash'
 import { sendServerError } from './admin/shared'
 import {
@@ -583,6 +584,72 @@ router.get('/preview', flexibleAuth, requirePermission('read'), async (req: ApiK
       source: 'api',
       fileName: 'files.ts',
       message: 'Failed to preview file',
+      context: { userId: req.userId, path: req.query.path, poolId: req.query.poolId }
+    })
+  }
+})
+
+router.get('/thumbnail', flexibleAuth, requirePermission('read'), async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const storage = getStorageForRequest(req)
+    const filePath = req.query.path as string
+    if (!filePath) {
+      return res.status(400).json({ error: 'common.missingFilePath' })
+    }
+
+    const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
+    const result = await getThumbnail(
+      `user:${req.userId}:pool:${resolvedPoolId || 'default'}`,
+      req.userId!,
+      resolvedPoolId,
+      storage,
+      filePath
+    )
+
+    if (result.status !== 'ready') {
+      return res.status(result.status === 'unsupported' ? 415 : 202).json({
+        status: result.status,
+        duration: result.duration
+      })
+    }
+
+    const stream = streamThumbnail(result)
+    if (!stream || !result.path) {
+      return res.status(202).json({ status: 'pending' })
+    }
+
+    const stat = fsSync.statSync(result.path)
+    const etag = `"${stat.size}-${stat.mtimeMs}"`
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end()
+      return
+    }
+
+    res.setHeader('Content-Type', result.mimeType || 'image/jpeg')
+    res.setHeader('Content-Length', stat.size)
+    res.setHeader('ETag', etag)
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    if (result.duration != null) {
+      res.setHeader('X-Video-Duration', String(result.duration))
+    }
+    stream.on('error', (streamError) => {
+      void Logger.error('api', 'files.ts', 'Failed to stream thumbnail', streamError, {
+        userId: req.userId,
+        path: req.query.path,
+        poolId: req.query.poolId
+      })
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'file.thumbnailLoadFailed' })
+        return
+      }
+      res.destroy(streamError instanceof Error ? streamError : undefined)
+    })
+    stream.pipe(res)
+  } catch (err) {
+    await sendServerError(req, res, err, {
+      source: 'api',
+      fileName: 'files.ts',
+      message: 'file.thumbnailLoadFailed',
       context: { userId: req.userId, path: req.query.path, poolId: req.query.poolId }
     })
   }

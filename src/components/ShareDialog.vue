@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
 import { useI18n } from '@/composables/useI18n'
@@ -27,6 +27,7 @@ const copied = ref(false)
 const copyType = ref<'link' | 'sign'>('link')
 
 const origin = window.location.origin
+const displayFileName = computed(() => props.fileName || t('common.rootDirectory', 'Root directory'))
 
 const expirationOptions = [
   { value: '', label: t('share.neverExpire', 'Never Expires') },
@@ -101,7 +102,7 @@ function close() {
         <template v-if="shareResult">
           <h3 class="dialog-title mb-2">{{ t('share.createdTitle', 'Share Link Created') }}</h3>
           <p class="dialog-description mb-4">
-            {{ t('share.fileLabel', 'File: {name}').replace('{name}', fileName) }}
+            {{ t('share.fileLabel', 'File: {name}').replace('{name}', displayFileName) }}
           </p>
 
           <div class="dialog-muted-block-strong mb-3">
@@ -137,7 +138,7 @@ function close() {
         <template v-else>
           <h3 class="dialog-title mb-2">{{ t('share.createTitle', 'Create Share Link') }}</h3>
           <p class="dialog-description mb-4">
-            {{ t('share.fileLabel', 'File: {name}').replace('{name}', fileName) }}
+            {{ t('share.fileLabel', 'File: {name}').replace('{name}', displayFileName) }}
           </p>
 
           <div class="space-y-4">

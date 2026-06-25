@@ -18,6 +18,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - Admin user management, quota control, ban or unban, and manual verification
 - Per-user multi-storage-pool management
 - File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search with optional `//` regex mode, and ZIP download
+- Medium List View with lazy video thumbnails backed by the server thumbnail cache
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`
 - Remote upload and background offline download tasks, including comma-separated batch URLs
@@ -169,6 +170,17 @@ Important fields:
   - Runtime database config for `sqlite`, `mysql`, and `postgres`
 - `storage_pools`
   - Preconfigured storage pools inherited by newly created users
+  - Local pools may set `config.path` to mount a server-local directory such as `/mnt/usb`; when omitted, the per-user directory under `storage_root` is used
+  - The shorthand `storages` form also accepts local entries like `{ name, type: local, path }` and is normalized into `storage_pools`
+
+## Thumbnails
+
+- Thumbnail cache directory: `data/thumbnails/`
+- Thumbnail metadata table: `thumbnail_cache`
+- Video thumbnails use `ffprobe` and `ffmpeg` in a small background queue and never block directory listing
+- Supported video extensions: `mp4`, `mkv`, `avi`, `mov`, `webm`, `ts`, `flv`
+- Cache keys include file path, modified time, and file size
+- WebP is generated first; JPG is used as a fallback
 
 Admins can update these from the admin panel:
 

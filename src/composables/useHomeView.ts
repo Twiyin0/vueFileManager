@@ -11,6 +11,8 @@ import { sortFiles, type FileSortDirection, type FileSortKey } from '@/utils/fil
 
 import 'aplayer/dist/APlayer.min.css'
 
+type ViewMode = 'list' | 'grid' | 'medium-list'
+
 export function useHomeView() {
   const route = useRoute()
   const router = useRouter()
@@ -46,7 +48,8 @@ export function useHomeView() {
   const selectedFiles = ref<Set<string>>(new Set())
   const isSelectMode = computed(() => selectedFiles.value.size > 0)
 
-  const viewMode = ref<'list' | 'grid'>((localStorage.getItem('viewMode') as 'list' | 'grid') || 'list')
+  const savedViewMode = localStorage.getItem('viewMode') as ViewMode | null
+  const viewMode = ref<ViewMode>(savedViewMode === 'grid' || savedViewMode === 'medium-list' ? savedViewMode : 'list')
   watch(viewMode, (value) => localStorage.setItem('viewMode', value))
   watch(sortKey, (value) => localStorage.setItem('fileSortKey', value))
   watch(sortDirection, (value) => localStorage.setItem('fileSortDirection', value))

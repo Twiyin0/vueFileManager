@@ -26,6 +26,7 @@ export interface FilePreviewProps {
   fileList?: PreviewFileListItem[]
   guestBaseUrl?: string
   guestSaveUrl?: string
+  guestAccessPassword?: string
   editable?: boolean
 }
 
@@ -37,7 +38,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     if (!props.filePath) return ''
     if (props.filePath.startsWith('/api/')) return props.filePath
     if (props.guestBaseUrl) {
-      return `${props.guestBaseUrl}?path=${encodeURIComponent(props.filePath)}`
+      return buildGuestUrl(props.guestBaseUrl, props.filePath)
     }
 
     const params = new URLSearchParams({ path: props.filePath })
@@ -53,7 +54,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     if (file.path.startsWith('/api/')) return file.path
     if (file.path.startsWith('/share')) return file.path
     if (props.guestBaseUrl) {
-      return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
+      return buildGuestUrl(props.guestBaseUrl, file.path)
     }
 
     const params = new URLSearchParams({ path: file.path })
@@ -78,6 +79,12 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
     if (['ppt', 'pptx'].includes(ext)) return 'ppt-legacy'
     return 'unknown'
   })
+
+  function buildGuestUrl(baseUrl: string, filePath: string) {
+    const params = new URLSearchParams({ path: filePath })
+    if (props.guestAccessPassword) params.set('password', props.guestAccessPassword)
+    return `${baseUrl}?${params.toString()}`
+  }
 
   const isDark = ref(document.documentElement.classList.contains('dark'))
   const themeObserver = new MutationObserver(() => {
@@ -287,7 +294,7 @@ export function useFilePreview(props: FilePreviewProps, emit: (event: 'close') =
         const response = await fetch(props.guestSaveUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: props.filePath, content: textContent.value })
+          body: JSON.stringify({ path: props.filePath, content: textContent.value, password: props.guestAccessPassword || undefined })
         })
 
         if (!response.ok) {

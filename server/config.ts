@@ -185,6 +185,36 @@ function toBoolean(value: unknown, fallback: boolean): boolean {
   return fallback
 }
 
+function normalizeStoragePools(loaded: any): StoragePoolConfig[] {
+  const rawPools = Array.isArray(loaded.storage_pools) && loaded.storage_pools.length > 0
+    ? loaded.storage_pools
+    : Array.isArray(loaded.storages) && loaded.storages.length > 0
+      ? loaded.storages
+      : defaultConfig.storage_pools
+
+  const hasDefault = rawPools.some((pool: any) => pool?.default === true)
+
+  return rawPools.map((pool: any, index: number) => {
+    const type = String(pool?.type || 'local')
+    const poolConfig = isPlainObject(pool?.config) ? { ...pool.config } : {}
+
+    if (type === 'local') {
+      if (typeof pool?.path === 'string' && pool.path.trim()) {
+        poolConfig.path = pool.path.trim()
+      } else if (typeof pool?.localPath === 'string' && pool.localPath.trim()) {
+        poolConfig.path = pool.localPath.trim()
+      }
+    }
+
+    return {
+      name: String(pool?.name || `Storage ${index + 1}`),
+      type,
+      default: hasDefault ? pool?.default === true : index === 0,
+      config: poolConfig
+    }
+  })
+}
+
 function isPlainObject(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
@@ -259,9 +289,7 @@ function mergeConfig(loaded: any): Config {
         port: toNumber(loaded.database?.postgres?.port, defaultConfig.database.postgres.port)
       }
     },
-    storage_pools: Array.isArray(loaded.storage_pools) && loaded.storage_pools.length > 0
-      ? loaded.storage_pools
-      : defaultConfig.storage_pools,
+    storage_pools: normalizeStoragePools(loaded),
     smtp: {
       ...defaultConfig.smtp,
       ...loaded.smtp,

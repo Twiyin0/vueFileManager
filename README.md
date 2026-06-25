@@ -18,6 +18,7 @@ VueFileManager 是一个基于 Vue 3、Express 和 TypeScript 的文件管理系
 - 管理员用户管理、配额控制、封禁与解封、手动验证
 - 每用户多存储池管理
 - 文件列表、上传、流式上传、断点续传、剪贴板粘贴上传（自动生成 16 位十六进制文件名）、下载、预览、搜索（支持 `//` 开头启用正则模式）、ZIP 批量下载
+- 中等列表视图，支持基于服务端缩略图缓存的懒加载视频缩略图
 - 跨存储池复制与移动
 - 跨池共享挂载，可将多个存储池目录统一挂载到 `/share`
 - 远程上传与后台离线下载任务，支持逗号分隔的多链接批量提交
@@ -169,6 +170,17 @@ node dist-server/index.js
   - 运行时数据库配置，支持 `sqlite`、`mysql`、`postgres`
 - `storage_pools`
   - 预配置存储池，新建用户会自动继承
+  - 本地存储池可通过 `config.path` 挂载服务器本地目录，例如 `/mnt/usb`；留空时使用 `storage_root` 下按用户名隔离的目录
+  - 也支持 `storages` 简写形式，例如 `{ name, type: local, path }`，启动时会归一化为 `storage_pools`
+
+## 缩略图
+
+- 缩略图缓存目录：`data/thumbnails/`
+- 缩略图元数据表：`thumbnail_cache`
+- 视频缩略图使用 `ffprobe` 和 `ffmpeg`，通过后台队列生成，不阻塞目录列表加载
+- 支持的视频扩展名：`mp4`、`mkv`、`avi`、`mov`、`webm`、`ts`、`flv`
+- 缓存键包含文件路径、修改时间和文件大小
+- 优先生成 WebP，失败时回退到 JPG
 
 管理员也可以在管理面板中修改：
 
