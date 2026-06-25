@@ -119,6 +119,9 @@ const { t } = useI18n()
               <button class="p-1.5 transition-colors" :class="state.viewMode === 'list' ? 'view-mode-active' : ''" :title="t('file.listView', 'List View')" @click="state.viewMode = 'list'">
                 <Icon name="list" class="h-4 w-4" />
               </button>
+              <button class="p-1.5 transition-colors" :class="state.viewMode === 'medium-list' ? 'view-mode-active' : ''" :title="t('file.mediumListView', 'Medium List View')" @click="state.viewMode = 'medium-list'">
+                <Icon name="video" class="h-4 w-4" />
+              </button>
               <button class="p-1.5 transition-colors" :class="state.viewMode === 'grid' ? 'view-mode-active' : ''" :title="t('file.gridView', 'Grid View')" @click="state.viewMode = 'grid'">
                 <Icon name="grid" class="h-4 w-4" />
               </button>

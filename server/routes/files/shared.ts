@@ -79,6 +79,13 @@ export function normalizeStoragePath(inputPath: string): string {
   return segments.join('/')
 }
 
+export function joinStoragePath(...parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => normalizeStoragePath(part || ''))
+    .filter(Boolean)
+    .join('/')
+}
+
 export function buildTemporaryUploadPath(filePath: string, suffix?: string): string {
   const normalized = filePath.replace(/\\/g, '/')
   const lastSlashIndex = normalized.lastIndexOf('/')

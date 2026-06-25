@@ -19,6 +19,8 @@ import { sortFiles, type FileSortDirection, type FileSortKey } from '@/utils/fil
 
 import 'aplayer/dist/APlayer.min.css'
 
+type ViewMode = 'list' | 'grid' | 'medium-list'
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -31,12 +33,19 @@ const error = ref('')
 const owner = ref('')
 const shares = ref<any[]>([])
 const shareLabel = ref('')
+const sharePath = ref('')
+const sharePoolName = ref('')
 const loadingShares = ref(false)
+const needPassword = ref(false)
+const accessPassword = ref('')
+const verifiedPassword = ref('')
+const passwordError = ref('')
 
 const showPreview = ref(false)
 const fileToPreview = ref<FileItem | null>(null)
 
-const viewMode = ref<'list' | 'grid'>((localStorage.getItem('guestViewMode') as 'list' | 'grid') || 'list')
+const savedViewMode = localStorage.getItem('guestViewMode') as ViewMode | null
+const viewMode = ref<ViewMode>(savedViewMode === 'grid' || savedViewMode === 'medium-list' ? savedViewMode : 'list')
 watch(viewMode, (value) => localStorage.setItem('guestViewMode', value))
 
 const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
@@ -96,6 +105,13 @@ const currentPath = computed(() => ((route.query.path as string) || '').replace(
 const pathSegments = computed(() => currentPath.value.split('/').filter(Boolean))
 const isFolderView = computed(() => !!shareId.value)
 const currentShare = computed(() => shares.value.find((share) => String(share.id) === shareId.value))
+const currentShareDisplayName = computed(() =>
+  getShareDisplayName(currentShare.value || {
+    label: shareLabel.value,
+    folder_path: sharePath.value,
+    pool_name: sharePoolName.value
+  })
+)
 const sortedFiles = computed(() => sortFiles(files.value, sortKey.value, sortDirection.value))
 const sortedSearchResults = computed(() => sortFiles(searchResults.value, sortKey.value, sortDirection.value))
 
@@ -122,9 +138,14 @@ const guestBaseUrl = computed(() => {
   return `/api/guest/${username.value}/${shareId.value}/preview`
 })
 
+const guestThumbnailBaseUrl = computed(() => {
+  if (!shareId.value) return undefined
+  return `/api/guest/${username.value}/${shareId.value}/thumbnail`
+})
+
 const guestSaveUrl = computed(() => {
   if (!shareId.value || !hasPermission('edit')) return undefined
-  return `/api/guest/${username.value}/${shareId.value}/write`
+  return buildGuestFullUrl('write')
 })
 
 const allowedContextMenuActions = computed(() => {
@@ -157,17 +178,38 @@ async function fetchFiles() {
   if (!shareId.value) return
   loading.value = true
   error.value = ''
+  passwordError.value = ''
   try {
     const params = new URLSearchParams()
     if (currentPath.value) params.set('path', currentPath.value)
+    if (verifiedPassword.value) params.set('password', verifiedPassword.value)
     const query = params.toString() ? `?${params}` : ''
-    const res = await api.get<{ files: FileItem[]; owner: string; shareLabel: string; permissions: string; readme?: DirectoryReadmeData | null }>(
+    const res = await api.get<{ needPassword?: boolean; files?: FileItem[]; owner: string; shareLabel: string; sharePath: string; poolName: string; permissions: string; readme?: DirectoryReadmeData | null }>(
       `/guest/${username.value}/${shareId.value}/list${query}`
     )
-    files.value = res.files
+    if (res.needPassword) {
+      needPassword.value = true
+      files.value = []
+      readme.value = null
+      owner.value = res.owner || owner.value
+      shareLabel.value = res.shareLabel || shareLabel.value
+      sharePath.value = res.sharePath || sharePath.value || ''
+      sharePoolName.value = res.poolName || sharePoolName.value || ''
+      sharePermissions.value = res.permissions || ''
+      if (verifiedPassword.value) {
+        passwordError.value = t('guest.incorrectPassword', 'Incorrect password')
+        verifiedPassword.value = ''
+      }
+      return
+    }
+    needPassword.value = false
+    accessPassword.value = verifiedPassword.value
+    files.value = res.files || []
     readme.value = res.readme || null
     owner.value = res.owner
     shareLabel.value = res.shareLabel
+    sharePath.value = res.sharePath || ''
+    sharePoolName.value = res.poolName || ''
     sharePermissions.value = res.permissions || ''
   } catch (err: any) {
     error.value = err.message
@@ -196,6 +238,10 @@ watch(shareId, () => {
   selectedFiles.value.clear()
   showSearch.value = false
   searchQuery.value = ''
+  needPassword.value = false
+  accessPassword.value = ''
+  verifiedPassword.value = ''
+  passwordError.value = ''
   if (shareId.value) fetchFiles()
   else fetchShares()
 })
@@ -215,6 +261,27 @@ function navigateToShare(id: number) {
   router.push({ path: `/guest/${username.value}/${id}` })
 }
 
+function getShareDisplayName(share: any): string {
+  return share?.label || share?.folder_path || share?.pool_name || t('common.rootDirectory', 'Root directory')
+}
+
+function buildGuestApiPath(action: string, params: Record<string, string> = {}) {
+  const searchParams = new URLSearchParams(params)
+  if (verifiedPassword.value) searchParams.set('password', verifiedPassword.value)
+  const query = searchParams.toString()
+  return `/guest/${username.value}/${shareId.value}/${action}${query ? `?${query}` : ''}`
+}
+
+function buildGuestFullUrl(action: string, params: Record<string, string> = {}) {
+  return `/api${buildGuestApiPath(action, params)}`
+}
+
+async function submitPassword() {
+  if (!accessPassword.value) return
+  verifiedPassword.value = accessPassword.value
+  await fetchFiles()
+}
+
 const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg']
 
 function isAudioFile(file: FileItem) {
@@ -223,7 +290,7 @@ function isAudioFile(file: FileItem) {
 }
 
 function getFilePreviewUrl(file: FileItem) {
-  return `/api/guest/${username.value}/${shareId.value}/preview?path=${encodeURIComponent(file.path)}`
+  return buildGuestFullUrl('preview', { path: file.path })
 }
 
 function buildAudioList() {
@@ -365,7 +432,7 @@ function goUp() {
 
 async function handleDownload(file: FileItem) {
   if (!hasPermission('download')) return
-  const response = await fetch(`/api/guest/${username.value}/${shareId.value}/download?path=${encodeURIComponent(file.path)}`)
+  const response = await fetch(buildGuestFullUrl('download', { path: file.path }))
   if (!response.ok) throw new Error(t('guest.downloadFailed', 'Download failed'))
   const blob = await response.blob()
   const link = document.createElement('a')
@@ -497,7 +564,7 @@ async function handleDelete() {
     const res = await fetch(`/api/guest/${username.value}/${shareId.value}/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: fileToDelete.value.path })
+      body: JSON.stringify({ path: fileToDelete.value.path, password: verifiedPassword.value || undefined })
     })
     if (!res.ok) {
       const data = await res.json()
@@ -517,7 +584,7 @@ async function handleRename() {
     const res = await fetch(`/api/guest/${username.value}/${shareId.value}/rename`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: fileToRename.value.path, newName: newFileName.value.trim() })
+      body: JSON.stringify({ path: fileToRename.value.path, newName: newFileName.value.trim(), password: verifiedPassword.value || undefined })
     })
     if (!res.ok) {
       const data = await res.json()
@@ -535,7 +602,7 @@ async function handleCreateFolder() {
   if (!newFolderName.value.trim()) return
   try {
     const dirPath = currentPath.value ? `${currentPath.value}/${newFolderName.value.trim()}` : newFolderName.value.trim()
-    await api.post(`/guest/${username.value}/${shareId.value}/mkdir`, { path: dirPath })
+    await api.post(buildGuestApiPath('mkdir'), { path: dirPath, password: verifiedPassword.value || undefined })
     showCreateFolder.value = false
     newFolderName.value = ''
     await fetchFiles()
@@ -566,6 +633,7 @@ async function handleUpload(filesToUpload: FileList | File[]) {
       activeUploads.value.push(xhr)
       const params = new URLSearchParams({ filename: file.name })
       if (currentPath.value) params.set('dirPath', currentPath.value)
+      if (verifiedPassword.value) params.set('password', verifiedPassword.value)
 
       await new Promise<void>((resolve, reject) => {
         xhr.upload.onprogress = (event) => {
@@ -714,6 +782,31 @@ const permLabels: Record<string, string> = {
           </svg>
         </div>
 
+        <div v-else-if="needPassword" class="mx-auto max-w-md p-4 sm:p-8">
+          <div class="mb-4 text-center sm:mb-6">
+            <Icon name="lock" class="mx-auto mb-3 h-12 w-12 sm:mb-4 sm:h-16 sm:w-16" style="color: var(--accent-color)" />
+            <h2 class="mb-2 text-lg font-semibold sm:text-xl" style="color: var(--text-color)">{{ t('sharePage.passwordRequiredTitle', 'Password Required') }}</h2>
+            <p class="text-sm" style="color: var(--text-secondary-color)">{{ t('guest.passwordRequiredDescription', 'This guest folder requires a password to access.') }}</p>
+            <p v-if="owner" class="mt-1 text-xs" style="color: var(--text-secondary-color)">
+              {{ t('sharePage.owner', 'Shared by: {owner}').replace('{owner}', owner) }}
+            </p>
+          </div>
+
+          <form class="space-y-3" @submit.prevent="submitPassword">
+            <input
+              v-model="accessPassword"
+              type="password"
+              class="input-field"
+              :placeholder="t('sharePage.passwordPlaceholder', 'Enter access password')"
+              autofocus
+            />
+            <p v-if="passwordError" class="text-sm text-red-500">{{ passwordError }}</p>
+            <button type="submit" class="btn-primary w-full" :disabled="loading || !accessPassword">
+              {{ loading ? t('sharePage.verifying', 'Verifying...') : t('sharePage.verify', 'Verify') }}
+            </button>
+          </form>
+        </div>
+
         <div v-else-if="error" class="px-4 pt-4">
           <div class="card p-6 text-center">
             <Icon name="exclamation" class="mx-auto mb-3 h-16 w-16 text-red-400" />
@@ -740,12 +833,20 @@ const permLabels: Record<string, string> = {
                 </div>
                 <div class="min-w-0 flex-1">
                   <h3 class="truncate font-medium transition-colors" style="color: var(--text-color)">
-                    {{ share.label || share.folder_path }}
+                    {{ getShareDisplayName(share) }}
                   </h3>
                   <p class="text-xs" style="color: var(--text-secondary-color)">
                     {{ share.pool_name }}{{ t('common.separator', ' | ') }}{{ formatDate(share.created_at) }}
                   </p>
                   <div v-if="share.permissions" class="mt-1.5 flex flex-wrap gap-1">
+                    <span
+                      v-if="share.has_password"
+                      class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs"
+                      style="background-color: var(--hover-color); color: var(--text-secondary-color)"
+                    >
+                      <Icon name="lock" class="h-3 w-3" />
+                      {{ t('myShares.hasPassword', 'Password Protected') }}
+                    </span>
                     <span
                       v-for="perm in share.permissions.split(',')"
                       :key="perm"
@@ -773,7 +874,7 @@ const permLabels: Record<string, string> = {
                     @click.stop="showShareDropdown = !showShareDropdown"
                   >
                     <Icon name="folder" class="h-4 w-4" />
-                    <span>{{ currentShare?.label || shareLabel || t('guest.folderFallback', 'Folder') }}</span>
+                    <span>{{ currentShareDisplayName || t('guest.folderFallback', 'Folder') }}</span>
                     <Icon name="chevron-down" class="h-3 w-3" />
                   </button>
                   <div
@@ -789,7 +890,7 @@ const permLabels: Record<string, string> = {
                       @click="navigateToShare(share.id); showShareDropdown = false"
                     >
                       <Icon name="folder" class="h-4 w-4" />
-                      {{ share.label || share.folder_path }}
+                      {{ getShareDisplayName(share) }}
                     </div>
                   </div>
                 </div>
@@ -832,6 +933,9 @@ const permLabels: Record<string, string> = {
                 <div class="view-mode-toggle flex items-center overflow-hidden rounded-lg border" style="border-color: var(--border-color)">
                   <button class="p-1.5 transition-colors" :class="viewMode === 'list' ? 'view-mode-active' : ''" @click="viewMode = 'list'">
                     <Icon name="list" class="h-4 w-4" />
+                  </button>
+                  <button class="p-1.5 transition-colors" :class="viewMode === 'medium-list' ? 'view-mode-active' : ''" :title="t('file.mediumListView', 'Medium List View')" @click="viewMode = 'medium-list'">
+                    <Icon name="video" class="h-4 w-4" />
                   </button>
                   <button class="p-1.5 transition-colors" :class="viewMode === 'grid' ? 'view-mode-active' : ''" @click="viewMode = 'grid'">
                     <Icon name="grid" class="h-4 w-4" />
@@ -924,6 +1028,8 @@ const permLabels: Record<string, string> = {
               :selected-files="selectedFiles"
               :view-mode="viewMode"
               :guest-base-url="guestBaseUrl"
+              :guest-thumbnail-base-url="guestThumbnailBaseUrl"
+              :guest-access-password="verifiedPassword"
               :sort-key="sortKey"
               :sort-direction="sortDirection"
               @open="openFile"
@@ -964,6 +1070,7 @@ const permLabels: Record<string, string> = {
         :file-name="fileToPreview.name"
         :guest-base-url="guestBaseUrl"
         :guest-save-url="guestSaveUrl"
+        :guest-access-password="verifiedPassword"
         :editable="hasPermission('edit')"
         :file-list="files"
         @close="showPreview = false; fileToPreview = null"

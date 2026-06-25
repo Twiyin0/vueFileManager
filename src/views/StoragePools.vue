@@ -17,6 +17,8 @@ interface StoragePool {
   createdAt: string
 }
 
+type ApiMessage = string | { error?: string; message?: string; params?: Record<string, string | number> }
+
 const { t, format } = useI18n()
 
 const loading = ref(false)
@@ -55,6 +57,7 @@ const defaultConfig = () => ({
   s3Bucket: '',
   s3Prefix: '',
   s3ForcePathStyle: true,
+  path: '',
   rootPath: '/'
 })
 
@@ -90,6 +93,15 @@ function showMsg(text: string, type: 'success' | 'error') {
   window.setTimeout(() => {
     if (message.value === text) message.value = ''
   }, 3000)
+}
+
+function formatApiMessage(message: ApiMessage | undefined, fallback = '') {
+  if (!message) return fallback
+  if (typeof message === 'string') {
+    return t(message, message)
+  }
+  const key = message.error || message.message || fallback
+  return format(key, key, message.params || {})
 }
 
 async function loadStorageInfo() {
@@ -221,11 +233,12 @@ async function deleteSelectedPools() {
   if (!window.confirm(format('storagePoolsPage.bulkDeleteConfirm', 'Delete {count} storage pools?', { count: deletableIds.length }))) return
 
   try {
-    const res = await api.post<{ message: string; errors?: string[] }>('/storage-pools/batch-delete', { ids: deletableIds })
+    const res = await api.post<{ message: string; params?: Record<string, string | number>; errors?: ApiMessage[] }>('/storage-pools/batch-delete', { ids: deletableIds })
     const firstError = res.errors?.[0]
+    const message = formatApiMessage({ message: res.message, params: res.params }, res.message)
     const text = firstError
-      ? format('storagePoolsPage.batchPartialFailure', '{message}. Partial failure: {error}', { message: res.message, error: firstError })
-      : res.message
+      ? format('storagePoolsPage.batchPartialFailure', '{message}. Partial failure: {error}', { message, error: formatApiMessage(firstError) })
+      : message
     showMsg(text, res.errors?.length === deletableIds.length ? 'error' : 'success')
     clearSelection()
     await loadPools()
@@ -247,8 +260,8 @@ async function setDefault(pool: StoragePool) {
 async function testConnection(pool: StoragePool) {
   testing.value = pool.id
   try {
-    const res = await api.post<{ success: boolean; message: string }>(`/storage-pools/${pool.id}/test`)
-    showMsg(res.message, res.success ? 'success' : 'error')
+    const res = await api.post<{ success: boolean; message: string; params?: Record<string, string | number> }>(`/storage-pools/${pool.id}/test`)
+    showMsg(formatApiMessage({ message: res.message, params: res.params }, res.message), res.success ? 'success' : 'error')
   } catch (err: any) {
     showMsg(err.message, 'error')
   } finally {
@@ -426,7 +439,12 @@ useKeepAliveRefresh(async () => {
 
             <div v-if="form.storageType === 'local'" class="space-y-3">
               <div class="dialog-muted-block text-sm">
-                {{ t('storagePoolsPage.localHint', 'Local storage automatically isolates directories by username. No extra disk path is required.') }}
+                {{ t('storagePoolsPage.localHint', 'Leave the disk path empty to use the per-user default directory, or set a server-local path such as /mnt/usb.') }}
+              </div>
+              <div>
+                <label class="dialog-form-label">{{ t('storagePoolsPage.localPath', 'Local Disk Path') }}</label>
+                <input v-model="form.config.path" type="text" class="input-field" :placeholder="t('storagePoolsPage.localPathPlaceholder', '/mnt/usb')" />
+                <p class="dialog-form-help">{{ t('storagePoolsPage.localPathHint', 'The server process must be able to read and write this path.') }}</p>
               </div>
               <div>
                 <label class="dialog-form-label">{{ t('storagePoolsPage.rootPath', 'Root Path Mapping') }}</label>

@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { FileItem } from '@/stores/files'
 import Icon from '@/components/Icon.vue'
 import { useI18n } from '@/composables/useI18n'
 import type { FileSortDirection, FileSortKey } from '@/utils/fileSort'
+
+type ViewMode = 'list' | 'grid' | 'medium-list'
+type ThumbnailStatus = 'idle' | 'loading' | 'ready' | 'pending' | 'unsupported' | 'failed'
+
+interface ThumbnailState {
+  status: ThumbnailStatus
+  url: string
+  duration?: number
+  retryCount: number
+}
 
 const { t, language } = useI18n()
 
@@ -19,11 +30,14 @@ const fileIconMap: Record<string, { icon: string; color: string }> = {
   file: { icon: 'file-alt', color: 'text-gray-400' },
 }
 
+const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp']
+const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'ts', 'flv']
+
 function getFileIcon(file: FileItem): string {
   if (file.type === 'folder') return 'folder'
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
-  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return 'image'
-  if (['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi'].includes(ext)) return 'video'
+  if (imageExts.includes(ext)) return 'image'
+  if (videoExts.includes(ext)) return 'video'
   if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg'].includes(ext)) return 'audio'
   if (['pdf'].includes(ext)) return 'pdf'
   if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive'
@@ -43,9 +57,11 @@ const props = withDefaults(defineProps<{
   readOnlyActions?: boolean
   selectMode?: boolean
   selectedFiles?: Set<string>
-  viewMode?: 'list' | 'grid'
+  viewMode?: ViewMode
   currentPoolId?: number
   guestBaseUrl?: string
+  guestThumbnailBaseUrl?: string
+  guestAccessPassword?: string
   sortKey?: FileSortKey
   sortDirection?: FileSortDirection
 }>(), {
@@ -65,6 +81,57 @@ const emit = defineEmits<{
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
 const longPressThreshold = 500
 const contextHighlighted = ref<string | null>(null)
+const mediumScrollTop = ref(0)
+const mediumViewportHeight = ref(520)
+const mediumContainer = ref<HTMLElement | null>(null)
+const thumbnailStates = ref<Record<string, ThumbnailState>>({})
+const thumbnailRetryTimers = new Map<string, number>()
+const thumbnailObjectUrls = new Set<string>()
+const queuedThumbnailKeys = new Set<string>()
+const thumbnailRequestQueue: Array<{ key: string; file: FileItem }> = []
+const gridVisibleThumbnailKeys = ref<Set<string>>(new Set())
+const gridObservedElements = new Map<Element, string>()
+const gridThumbnailElements = new Map<string, Element>()
+const mediumRowHeight = 92
+const mediumOverscan = 6
+const maxConcurrentThumbnailRequests = 4
+let activeThumbnailRequests = 0
+let gridObserver: IntersectionObserver | null = null
+
+const mediumStartIndex = computed(() => Math.max(0, Math.floor(mediumScrollTop.value / mediumRowHeight) - mediumOverscan))
+const mediumVisibleCount = computed(() => Math.ceil(mediumViewportHeight.value / mediumRowHeight) + mediumOverscan * 2)
+const mediumEndIndex = computed(() => Math.min(props.files.length, mediumStartIndex.value + mediumVisibleCount.value))
+const mediumVisibleFiles = computed(() => props.files.slice(mediumStartIndex.value, mediumEndIndex.value).map((file, index) => ({
+  file,
+  index: mediumStartIndex.value + index
+})))
+const mediumSpacerHeight = computed(() => `${props.files.length * mediumRowHeight}px`)
+
+watch(() => [props.files, props.currentPoolId, props.guestThumbnailBaseUrl] as const, () => {
+  mediumScrollTop.value = 0
+  pruneThumbnailStates()
+  void nextTick(updateMediumViewport)
+}, { deep: false })
+
+watch(() => props.viewMode, () => {
+  void nextTick(updateMediumViewport)
+  if (props.viewMode === 'medium-list') {
+    requestVisibleMediumThumbnails()
+  } else if (props.viewMode === 'grid') {
+    requestVisibleGridThumbnails()
+  }
+})
+
+watch(mediumVisibleFiles, () => {
+  if (props.viewMode !== 'medium-list') return
+  requestVisibleMediumThumbnails()
+}, { immediate: true })
+
+watch(() => props.guestAccessPassword, () => {
+  clearThumbnailStates()
+  if (props.viewMode === 'medium-list') requestVisibleMediumThumbnails()
+  if (props.viewMode === 'grid') requestVisibleGridThumbnails()
+})
 
 function handleTouchStart(e: TouchEvent, file: FileItem) {
   longPressTimer = setTimeout(() => {
@@ -119,11 +186,24 @@ function formatDate(dateStr: string): string {
   })}`
 }
 
+function formatDuration(seconds?: number): string {
+  if (!seconds || seconds <= 0) return ''
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(secs).padStart(2, '0')}`
+}
+
 function getPreviewUrl(file: FileItem): string {
   if (file.directUrl) return file.directUrl
   if (file.fileUrl) return file.fileUrl
   if (props.guestBaseUrl) {
-    return `${props.guestBaseUrl}?path=${encodeURIComponent(file.path)}`
+    const params = new URLSearchParams({ path: file.path })
+    if (props.guestAccessPassword) params.set('password', props.guestAccessPassword)
+    return `${props.guestBaseUrl}?${params.toString()}`
   }
   const params = new URLSearchParams({ path: file.path })
   const poolId = file.poolId || props.currentPoolId
@@ -131,6 +211,21 @@ function getPreviewUrl(file: FileItem): string {
   const token = localStorage.getItem('token')
   if (token) params.set('token', token)
   return `/api/files/preview?${params.toString()}`
+}
+
+function getThumbnailUrl(file: FileItem): string {
+  if (props.guestThumbnailBaseUrl) {
+    const params = new URLSearchParams({ path: file.path })
+    if (props.guestAccessPassword) params.set('password', props.guestAccessPassword)
+    return `${props.guestThumbnailBaseUrl}?${params.toString()}`
+  }
+
+  const params = new URLSearchParams({ path: file.path })
+  const poolId = file.poolId || props.currentPoolId
+  if (poolId) params.set('poolId', String(poolId))
+  const token = localStorage.getItem('token')
+  if (token) params.set('token', token)
+  return `/api/files/thumbnail?${params.toString()}`
 }
 
 function isActiveSort(key: FileSortKey) {
@@ -141,6 +236,320 @@ function sortIconName(key: FileSortKey) {
   if (!isActiveSort(key)) return 'chevron-down'
   return props.sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'
 }
+
+function updateMediumViewport() {
+  if (!mediumContainer.value) return
+  mediumViewportHeight.value = mediumContainer.value.clientHeight || 520
+}
+
+function handleMediumScroll(event: Event) {
+  const target = event.target as HTMLElement
+  mediumScrollTop.value = target.scrollTop
+  mediumViewportHeight.value = target.clientHeight || mediumViewportHeight.value
+}
+
+function ensureGridObserver() {
+  if (gridObserver || typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+    return gridObserver
+  }
+
+  gridObserver = new IntersectionObserver((entries) => {
+    let nextVisible = new Set(gridVisibleThumbnailKeys.value)
+    let changed = false
+
+    for (const entry of entries) {
+      const key = gridObservedElements.get(entry.target)
+      if (!key) continue
+
+      if (entry.isIntersecting) {
+        if (!nextVisible.has(key)) {
+          nextVisible.add(key)
+          changed = true
+        }
+        const file = props.files.find((item) => getThumbnailKey(item) === key)
+        if (file) requestThumbnailIfNeeded(file)
+      } else if (nextVisible.delete(key)) {
+        changed = true
+      }
+    }
+
+    if (changed) {
+      gridVisibleThumbnailKeys.value = nextVisible
+    }
+  }, {
+    root: null,
+    rootMargin: '160px 0px',
+    threshold: 0.01
+  })
+
+  return gridObserver
+}
+
+function setGridThumbnailRef(element: Element | ComponentPublicInstance | null, file: FileItem) {
+  const key = getThumbnailKey(file)
+  const existingElement = gridThumbnailElements.get(key)
+
+  if (existingElement && existingElement !== element) {
+    gridObserver?.unobserve(existingElement)
+    gridObservedElements.delete(existingElement)
+    gridThumbnailElements.delete(key)
+  }
+
+  if (!(element instanceof Element) || !isVideoFile(file)) {
+    if (!element && existingElement) {
+      removeGridVisibleThumbnailKey(key)
+    }
+    return
+  }
+
+  const observer = ensureGridObserver()
+  gridObservedElements.set(element, key)
+  gridThumbnailElements.set(key, element)
+
+  if (!observer) {
+    addGridVisibleThumbnailKey(key)
+    requestThumbnailIfNeeded(file)
+    return
+  }
+
+  observer.observe(element)
+}
+
+function addGridVisibleThumbnailKey(key: string) {
+  if (gridVisibleThumbnailKeys.value.has(key)) return
+  gridVisibleThumbnailKeys.value = new Set([...gridVisibleThumbnailKeys.value, key])
+}
+
+function removeGridVisibleThumbnailKey(key: string) {
+  if (!gridVisibleThumbnailKeys.value.has(key)) return
+  const next = new Set(gridVisibleThumbnailKeys.value)
+  next.delete(key)
+  gridVisibleThumbnailKeys.value = next
+}
+
+function requestVisibleMediumThumbnails() {
+  for (const item of mediumVisibleFiles.value) {
+    requestThumbnailIfNeeded(item.file)
+  }
+}
+
+function requestVisibleGridThumbnails() {
+  for (const file of props.files) {
+    const key = getThumbnailKey(file)
+    if (gridVisibleThumbnailKeys.value.has(key)) {
+      requestThumbnailIfNeeded(file)
+    }
+  }
+}
+
+function isVideoFile(file: FileItem) {
+  return file.type === 'file' && getFileIcon(file) === 'video'
+}
+
+function getThumbnailKey(file: FileItem) {
+  const scope = props.guestThumbnailBaseUrl || props.guestBaseUrl || file.poolId || props.currentPoolId || 'default'
+  return `${scope}:${file.path}:${file.modified}:${file.size}`
+}
+
+function getThumbnailState(file: FileItem) {
+  return thumbnailStates.value[getThumbnailKey(file)]
+}
+
+function hasThumbnailKey(thumbnailKey: string) {
+  return props.files.some((file) => getThumbnailKey(file) === thumbnailKey)
+}
+
+function isVisibleThumbnailFile(thumbnailKey: string) {
+  if (props.viewMode === 'medium-list') {
+    return mediumVisibleFiles.value.some((item) => getThumbnailKey(item.file) === thumbnailKey)
+  }
+  if (props.viewMode === 'grid') {
+    return gridVisibleThumbnailKeys.value.has(thumbnailKey)
+  }
+  return false
+}
+
+function clearThumbnailRetryTimer(thumbnailKey: string) {
+  const timer = thumbnailRetryTimers.get(thumbnailKey)
+  if (timer) window.clearTimeout(timer)
+  thumbnailRetryTimers.delete(thumbnailKey)
+}
+
+function setThumbnailState(thumbnailKey: string, state: ThumbnailState) {
+  if (!hasThumbnailKey(thumbnailKey)) return
+  thumbnailStates.value = {
+    ...thumbnailStates.value,
+    [thumbnailKey]: state
+  }
+}
+
+function enqueueThumbnailRequest(file: FileItem) {
+  const key = getThumbnailKey(file)
+  if (queuedThumbnailKeys.has(key)) return
+  queuedThumbnailKeys.add(key)
+  thumbnailRequestQueue.push({ key, file })
+  drainThumbnailQueue()
+}
+
+function drainThumbnailQueue() {
+  while (activeThumbnailRequests < maxConcurrentThumbnailRequests && thumbnailRequestQueue.length > 0) {
+    const { key, file } = thumbnailRequestQueue.shift()!
+    queuedThumbnailKeys.delete(key)
+
+    if (!hasThumbnailKey(key)) {
+      continue
+    }
+
+    if (!isVisibleThumbnailFile(key)) {
+      const state = thumbnailStates.value[key]
+      if (state?.status === 'loading') {
+        setThumbnailState(key, { ...state, status: 'idle' })
+      }
+      continue
+    }
+
+    activeThumbnailRequests += 1
+    void fetchThumbnail(key, file).finally(() => {
+      activeThumbnailRequests -= 1
+      drainThumbnailQueue()
+    })
+  }
+}
+
+function requestThumbnailIfNeeded(file: FileItem, force = false) {
+  if (!isVideoFile(file)) return
+  const key = getThumbnailKey(file)
+  if (!isVisibleThumbnailFile(key)) {
+    const current = thumbnailStates.value[key]
+    if (force && current?.status === 'pending') {
+      setThumbnailState(key, { ...current, status: 'idle' })
+    }
+    return
+  }
+
+  const current = thumbnailStates.value[key]
+  if (current && ['loading', 'ready', 'unsupported', 'failed'].includes(current.status)) return
+  if (!force && current?.status === 'pending') return
+
+  clearThumbnailRetryTimer(key)
+  setThumbnailState(key, {
+    status: 'loading',
+    url: current?.url || '',
+    duration: current?.duration,
+    retryCount: current?.retryCount || 0
+  })
+
+  enqueueThumbnailRequest(file)
+}
+
+async function fetchThumbnail(key: string, file: FileItem) {
+  const state = thumbnailStates.value[key]
+  const retryCount = state?.retryCount || 0
+
+  try {
+    const response = await fetch(getThumbnailUrl(file), { credentials: 'include' })
+    if (!hasThumbnailKey(key)) return
+
+    const durationHeader = response.headers.get('X-Video-Duration')
+    const duration = durationHeader ? Number(durationHeader) : state?.duration
+
+    if (response.status === 202) {
+      const nextRetry = retryCount + 1
+      setThumbnailState(key, { status: 'pending', url: state?.url || '', duration, retryCount: nextRetry })
+      if (nextRetry <= 8) {
+        clearThumbnailRetryTimer(key)
+        const timer = window.setTimeout(() => {
+          thumbnailRetryTimers.delete(key)
+          requestThumbnailIfNeeded(file, true)
+        }, Math.min(1000 + nextRetry * 750, 6000))
+        thumbnailRetryTimers.set(key, timer)
+      }
+      return
+    }
+
+    if (response.status === 415) {
+      setThumbnailState(key, { status: 'unsupported', url: '', duration, retryCount })
+      return
+    }
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const blob = await response.blob()
+    if (!hasThumbnailKey(key)) return
+
+    const url = URL.createObjectURL(blob)
+    thumbnailObjectUrls.add(url)
+    const currentState = thumbnailStates.value[key]
+    if (currentState?.url) {
+      URL.revokeObjectURL(currentState.url)
+      thumbnailObjectUrls.delete(currentState.url)
+    }
+    setThumbnailState(key, { status: 'ready', url, duration, retryCount })
+  } catch {
+    setThumbnailState(key, { status: 'failed', url: state?.url || '', duration: state?.duration, retryCount })
+  }
+}
+
+function pruneThumbnailStates() {
+  const keys = new Set(props.files.map((file) => getThumbnailKey(file)))
+  const next: Record<string, ThumbnailState> = {}
+  for (const [key, state] of Object.entries(thumbnailStates.value)) {
+    if (keys.has(key)) {
+      next[key] = state
+      continue
+    }
+    if (state.url) {
+      URL.revokeObjectURL(state.url)
+      thumbnailObjectUrls.delete(state.url)
+    }
+    const timer = thumbnailRetryTimers.get(key)
+    if (timer) window.clearTimeout(timer)
+    thumbnailRetryTimers.delete(key)
+    queuedThumbnailKeys.delete(key)
+    const element = gridThumbnailElements.get(key)
+    if (element) {
+      gridObserver?.unobserve(element)
+      gridObservedElements.delete(element)
+      gridThumbnailElements.delete(key)
+    }
+    removeGridVisibleThumbnailKey(key)
+  }
+  thumbnailStates.value = next
+}
+
+function clearThumbnailStates() {
+  for (const state of Object.values(thumbnailStates.value)) {
+    if (state.url) {
+      URL.revokeObjectURL(state.url)
+      thumbnailObjectUrls.delete(state.url)
+    }
+  }
+  for (const timer of thumbnailRetryTimers.values()) {
+    window.clearTimeout(timer)
+  }
+  thumbnailRetryTimers.clear()
+  queuedThumbnailKeys.clear()
+  thumbnailRequestQueue.length = 0
+  thumbnailStates.value = {}
+}
+
+onBeforeUnmount(() => {
+  for (const timer of thumbnailRetryTimers.values()) {
+    window.clearTimeout(timer)
+  }
+  thumbnailRetryTimers.clear()
+  for (const url of thumbnailObjectUrls) {
+    URL.revokeObjectURL(url)
+  }
+  thumbnailObjectUrls.clear()
+  queuedThumbnailKeys.clear()
+  thumbnailRequestQueue.length = 0
+  gridObserver?.disconnect()
+  gridObserver = null
+  gridObservedElements.clear()
+  gridThumbnailElements.clear()
+  gridVisibleThumbnailKeys.value = new Set()
+})
 </script>
 
 <template>
@@ -178,7 +587,7 @@ function sortIconName(key: FileSortKey) {
           @touchend="handleTouchEnd"
           @touchmove="handleTouchMove"
         >
-          <div class="thumb-container relative">
+          <div :ref="(element) => setGridThumbnailRef(element, file)" class="thumb-container relative">
             <div v-if="selectMode" class="absolute left-1.5 top-1.5 z-10" @click.stop>
               <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)" />
             </div>
@@ -192,13 +601,128 @@ function sortIconName(key: FileSortKey) {
               draggable="false"
             />
 
+            <img
+              v-else-if="getThumbnailState(file)?.status === 'ready'"
+              :src="getThumbnailState(file)?.url"
+              :alt="file.name"
+              class="thumb-img"
+              loading="lazy"
+              draggable="false"
+            />
+
             <div v-else class="thumb-icon">
               <Icon :name="getFileIconInfo(file).icon" :class="['h-10 w-10', getFileIconInfo(file).color]" />
             </div>
+
+            <span
+              v-if="formatDuration(getThumbnailState(file)?.duration)"
+              class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] leading-none text-white"
+            >
+              {{ formatDuration(getThumbnailState(file)?.duration) }}
+            </span>
           </div>
 
           <div class="px-2 py-1.5">
             <p class="truncate text-center text-xs" style="color: var(--text-color)" :title="file.name">{{ file.name }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-else-if="viewMode === 'medium-list'"
+      ref="mediumContainer"
+      class="max-h-[calc(100vh-14rem)] min-h-[22rem] overflow-auto"
+      @scroll="handleMediumScroll"
+    >
+      <div class="relative" :style="{ height: mediumSpacerHeight }">
+        <div
+          v-for="{ file, index } in mediumVisibleFiles"
+          :key="file.path"
+          class="file-row absolute left-0 right-0 flex cursor-pointer items-center gap-3 border-b px-3 py-3 transition-colors sm:px-4"
+          :class="[
+            selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
+            contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : ''
+          ]"
+          :style="{ top: `${index * mediumRowHeight}px`, height: `${mediumRowHeight}px`, borderColor: 'var(--border-color)', touchAction: 'manipulation' }"
+          @click.prevent="emit('open', file)"
+          @contextmenu.prevent.stop="handleItemContext($event, file)"
+          @touchstart.passive="handleTouchStart($event, file)"
+          @touchend="handleTouchEnd"
+          @touchmove="handleTouchMove"
+        >
+          <input
+            v-if="selectMode"
+            type="checkbox"
+            class="flex-shrink-0"
+            :checked="selectedFiles?.has(file.path)"
+            @change="emit('toggleSelect', file.path)"
+            @click.stop
+          />
+
+          <div class="relative flex h-[68px] w-[120px] flex-shrink-0 items-center justify-center overflow-hidden rounded-md" style="background-color: var(--surface-color)">
+            <img
+              v-if="getFileIcon(file) === 'image'"
+              :src="getPreviewUrl(file)"
+              :alt="file.name"
+              class="h-full w-full object-contain"
+              loading="lazy"
+              draggable="false"
+            />
+            <img
+              v-else-if="getThumbnailState(file)?.status === 'ready'"
+              :src="getThumbnailState(file)?.url"
+              :alt="file.name"
+              class="h-full w-full object-contain"
+              loading="lazy"
+              draggable="false"
+            />
+            <div v-else class="flex h-full w-full items-center justify-center">
+              <Icon :name="getFileIconInfo(file).icon" :class="['h-8 w-8', getFileIconInfo(file).color]" />
+            </div>
+            <span
+              v-if="formatDuration(getThumbnailState(file)?.duration)"
+              class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] leading-none text-white"
+            >
+              {{ formatDuration(getThumbnailState(file)?.duration) }}
+            </span>
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <p class="line-clamp-2 text-sm font-medium leading-5" style="color: var(--text-color)" :title="file.name">
+              {{ file.name }}
+            </p>
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style="color: var(--text-secondary-color)">
+              <span>{{ formatDate(file.modified) }}</span>
+              <span v-if="formatDuration(getThumbnailState(file)?.duration)">{{ formatDuration(getThumbnailState(file)?.duration) }}</span>
+              <span v-if="file.type === 'file'">{{ formatSize(file.size) }}</span>
+            </div>
+          </div>
+
+          <div v-if="showActions" class="flex flex-shrink-0 items-center gap-0.5" @click.stop>
+            <button
+              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+              :title="t('common.details', 'Details')"
+              @click="emit('detail', file)"
+            >
+              <Icon name="circle-information" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+            </button>
+            <button
+              v-if="file.type === 'file'"
+              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+              :title="t('file.download', 'Download')"
+              @click="emit('download', file)"
+            >
+              <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+            </button>
+            <button
+              v-if="!readOnlyActions"
+              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+              :title="t('common.delete', 'Delete')"
+              @click="emit('delete', file)"
+            >
+              <Icon name="trash" class="h-4 w-4 text-red-500" />
+            </button>
           </div>
         </div>
       </div>
@@ -260,31 +784,31 @@ function sortIconName(key: FileSortKey) {
           {{ formatDate(file.modified) }}
         </div>
 
-          <div v-if="showActions" class="col-span-4 flex items-center justify-end gap-0.5 sm:col-span-2 sm:gap-1" @click.stop>
-            <button
-              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-              :title="t('common.details', 'Details')"
-              @click="emit('detail', file)"
-            >
-              <Icon name="circle-information" class="h-4 w-4" style="color: var(--text-secondary-color)" />
-            </button>
+        <div v-if="showActions" class="col-span-4 flex items-center justify-end gap-0.5 sm:col-span-2 sm:gap-1" @click.stop>
+          <button
+            class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+            :title="t('common.details', 'Details')"
+            @click="emit('detail', file)"
+          >
+            <Icon name="circle-information" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+          </button>
 
-            <button
-              v-if="file.type === 'file'"
+          <button
+            v-if="file.type === 'file'"
             class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
             :title="t('file.download', 'Download')"
-              @click="emit('download', file)"
-            >
-              <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
-            </button>
+            @click="emit('download', file)"
+          >
+            <Icon name="download" class="h-4 w-4" style="color: var(--text-secondary-color)" />
+          </button>
 
-            <button
-              v-if="!readOnlyActions"
-              class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
-              :title="t('common.delete', 'Delete')"
-              @click="emit('delete', file)"
-            >
-              <Icon name="trash" class="h-4 w-4 text-red-500" />
+          <button
+            v-if="!readOnlyActions"
+            class="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-2 transition-colors hover:opacity-80 sm:p-1.5"
+            :title="t('common.delete', 'Delete')"
+            @click="emit('delete', file)"
+          >
+            <Icon name="trash" class="h-4 w-4 text-red-500" />
           </button>
         </div>
       </div>

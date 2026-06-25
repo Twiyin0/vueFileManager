@@ -262,6 +262,23 @@ Notes:
 - Audio and video preview responses support `Range`
 - Media preview uses server-side cache files when available
 
+### `GET /api/files/thumbnail`
+
+Returns a cached thumbnail for a supported file, or queues generation and returns `202`.
+
+Query parameters:
+
+- `path`: file path
+- `poolId`: optional storage pool ID
+
+Notes:
+
+- Video thumbnails are generated in the background with `ffprobe` / `ffmpeg`
+- Cache files are stored under `data/thumbnails/`
+- Cache metadata is stored in `thumbnail_cache`
+- `202` means generation is pending or processing; retry later
+- `415` means no thumbnail provider supports the file type
+
 ### `GET /api/files/storage-stats`
 
 Returns recursive storage statistics for the selected pool.
@@ -450,6 +467,24 @@ Examples:
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>`
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>&download=true`
 
+## Public Share Link Endpoints
+
+### `POST /api/share/create`
+
+Creates a public file or folder share link.
+
+Request body example:
+
+```json
+{ "filePath": "", "fileType": "folder", "storagePoolId": 1 }
+```
+
+Notes:
+
+- JWT auth is required
+- `fileType` accepts `file` or `folder`
+- For folder shares, `filePath: ""` represents the selected storage pool root
+
 ## User Endpoints
 
 ### `GET /api/user/info`
@@ -491,17 +526,46 @@ Deletes one API key.
 
 Returns guest folder shares owned by the current user.
 
+Each item includes `has_password` instead of returning the plaintext password.
+
 ### `POST /api/user/guest-shares`
 
-Creates one guest folder share.
+Creates one guest folder share. If the same folder is already shared in the same storage pool, the existing guest share is updated instead of returning a duplicate error. Creating or updating a guest share through this endpoint enables guest mode for the current user.
+
+Request body example:
+
+```json
+{ "folderPath": "", "storagePoolId": 1, "label": "USB", "permissions": "read,write", "password": "optional" }
+```
+
+Notes:
+
+- `folderPath: ""` represents the selected storage pool root
+- Guest access is still scoped to the selected storage pool
+- `password` is optional. Send an empty string to clear password protection.
 
 ### `PUT /api/user/guest-shares/:id`
 
-Updates one guest folder share.
+Updates one guest folder share. `password` is optional; omit it to keep the current password, send an empty string to clear it.
 
 ### `DELETE /api/user/guest-shares/:id`
 
 Deletes one guest folder share.
+
+## Guest Public Endpoints
+
+### `GET /api/guest/:username/:shareId/list`
+
+Lists a guest folder share. Password-protected guest shares accept `password` as a query parameter. When the password is missing or incorrect, the response contains `needPassword: true` and does not include files.
+
+### `GET /api/guest/:username/:shareId/thumbnail`
+
+Returns a cached thumbnail for a supported file in a guest share, or queues generation and returns `202`.
+
+Query parameters:
+
+- `path`: file path relative to the guest share root
+- `password`: optional guest share password
 
 ## Admin Endpoints
 

@@ -264,6 +264,23 @@ API Key 的通用权限模型：
 - 音视频预览支持 `Range`
 - 可命中的音视频预览会使用服务端缓存文件
 
+### `GET /api/files/thumbnail`
+
+返回支持文件的缓存缩略图；缓存不存在时会加入后台生成队列并返回 `202`。
+
+查询参数：
+
+- `path`：文件路径
+- `poolId`：可选的存储池 ID
+
+说明：
+
+- 视频缩略图通过 `ffprobe` / `ffmpeg` 在后台生成
+- 缓存文件存放在 `data/thumbnails/`
+- 缓存元数据存放在 `thumbnail_cache`
+- `202` 表示正在等待或生成，可稍后重试
+- `415` 表示当前文件类型没有可用缩略图 provider
+
 ### `GET /api/files/storage-stats`
 
 返回所选存储池的递归统计信息。
@@ -454,6 +471,24 @@ API Key 的通用权限模型：
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>`
 - `GET {baseUrl}/share/abc/test_2/demo.txt?apiKey=<key>&download=true`
 
+## 公开分享链接接口
+
+### `POST /api/share/create`
+
+创建一个公开文件或文件夹分享链接。
+
+请求体示例：
+
+```json
+{ "filePath": "", "fileType": "folder", "storagePoolId": 1 }
+```
+
+说明：
+
+- 需要 JWT 认证
+- `fileType` 支持 `file` 或 `folder`
+- 创建文件夹分享时，`filePath: ""` 表示所选存储池根目录
+
 ## 用户接口
 
 ### `GET /api/user/info`
@@ -499,6 +534,17 @@ API Key 的通用权限模型：
 
 创建一个访客文件夹分享。
 
+请求体示例：
+
+```json
+{ "folderPath": "", "storagePoolId": 1, "label": "USB", "permissions": "read,write" }
+```
+
+说明：
+
+- `folderPath: ""` 表示所选存储池根目录
+- 访客访问仍然限制在所选存储池范围内
+
 ### `PUT /api/user/guest-shares/:id`
 
 更新一个访客文件夹分享。
@@ -506,6 +552,15 @@ API Key 的通用权限模型：
 ### `DELETE /api/user/guest-shares/:id`
 
 删除一个访客文件夹分享。
+
+## 访客分享密码与缩略图说明
+
+- `GET /api/user/guest-shares` 返回 `has_password`，不会返回访客分享的明文密码。
+- `POST /api/user/guest-shares` 支持可选的 `password`。通过该接口创建或更新访客分享时，会自动为当前用户开启访客模式。
+- 如果相同 `folderPath` 和 `storagePoolId` 的访客分享已存在，`POST /api/user/guest-shares` 会更新现有分享，而不是返回重复错误。
+- `PUT /api/user/guest-shares/:id` 支持可选的 `password`；不传表示保留当前密码，传空字符串表示清除密码。
+- 带密码的访客公开接口可在 `list`、`preview`、`download`、`thumbnail` 的查询参数中传入 `password`，写入类操作也可在请求体中传入。
+- `GET /api/guest/:username/:shareId/thumbnail` 返回受支持文件的缓存缩略图；缓存不存在时会加入后台生成队列并返回 `202`。
 
 ## 管理接口
 
