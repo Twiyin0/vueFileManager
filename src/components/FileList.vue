@@ -88,24 +88,45 @@ const thumbnailStates = ref<Record<string, ThumbnailState>>({})
 const thumbnailRetryTimers = new Map<string, number>()
 const thumbnailObjectUrls = new Set<string>()
 const queuedThumbnailKeys = new Set<string>()
+const mediaAspectRatios = ref<Record<string, number>>({})
 const thumbnailRequestQueue: Array<{ key: string; file: FileItem }> = []
 const gridVisibleThumbnailKeys = ref<Set<string>>(new Set())
 const gridObservedElements = new Map<Element, string>()
 const gridThumbnailElements = new Map<string, Element>()
-const mediumRowHeight = 92
+const mediumDefaultRowHeight = 92
+const mediumRowVerticalPadding = 24
+const mediumThumbMaxWidth = 120
+const mediumThumbLandscapeMaxHeight = 92
+const mediumThumbPortraitMaxHeight = 148
 const mediumOverscan = 6
 const maxConcurrentThumbnailRequests = 4
 let activeThumbnailRequests = 0
 let gridObserver: IntersectionObserver | null = null
 
-const mediumStartIndex = computed(() => Math.max(0, Math.floor(mediumScrollTop.value / mediumRowHeight) - mediumOverscan))
-const mediumVisibleCount = computed(() => Math.ceil(mediumViewportHeight.value / mediumRowHeight) + mediumOverscan * 2)
-const mediumEndIndex = computed(() => Math.min(props.files.length, mediumStartIndex.value + mediumVisibleCount.value))
-const mediumVisibleFiles = computed(() => props.files.slice(mediumStartIndex.value, mediumEndIndex.value).map((file, index) => ({
-  file,
-  index: mediumStartIndex.value + index
-})))
-const mediumSpacerHeight = computed(() => `${props.files.length * mediumRowHeight}px`)
+const mediumRows = computed(() => {
+  let top = 0
+  const items = props.files.map((file, index) => {
+    const height = getMediumRowHeight(file)
+    const row = { file, index, top, height }
+    top += height
+    return row
+  })
+  return { items, totalHeight: top }
+})
+const mediumStartIndex = computed(() => findMediumStartIndex(mediumRows.value.items, mediumScrollTop.value))
+const mediumEndIndex = computed(() => {
+  const rows = mediumRows.value.items
+  const viewportBottom = mediumScrollTop.value + mediumViewportHeight.value
+  let index = mediumStartIndex.value
+
+  while (index < rows.length && rows[index].top < viewportBottom) {
+    index += 1
+  }
+
+  return Math.min(rows.length, index + mediumOverscan)
+})
+const mediumVisibleFiles = computed(() => mediumRows.value.items.slice(mediumStartIndex.value, mediumEndIndex.value))
+const mediumSpacerHeight = computed(() => `${mediumRows.value.totalHeight}px`)
 
 watch(() => [props.files, props.currentPoolId, props.guestThumbnailBaseUrl] as const, () => {
   mediumScrollTop.value = 0
@@ -346,9 +367,97 @@ function isVideoFile(file: FileItem) {
   return file.type === 'file' && getFileIcon(file) === 'video'
 }
 
+function isMediaThumbnailFile(file: FileItem) {
+  return file.type === 'file' && (getFileIcon(file) === 'image' || isVideoFile(file))
+}
+
 function getThumbnailKey(file: FileItem) {
   const scope = props.guestThumbnailBaseUrl || props.guestBaseUrl || file.poolId || props.currentPoolId || 'default'
   return `${scope}:${file.path}:${file.modified}:${file.size}`
+}
+
+function clampAspectRatio(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 1
+  return Math.min(2.4, Math.max(0.35, value))
+}
+
+function getDisplayAspectRatio(file: FileItem) {
+  if (!isMediaThumbnailFile(file)) return 1
+  const ratio = mediaAspectRatios.value[getThumbnailKey(file)]
+  if (ratio) return clampAspectRatio(ratio)
+  return isVideoFile(file) ? 16 / 9 : 1
+}
+
+function getGridThumbnailFrameStyle(file: FileItem) {
+  const ratio = getDisplayAspectRatio(file)
+  const width = Math.min(100, ratio * 100)
+  const height = Math.min(100, 100 / ratio)
+  return {
+    width: `${width}%`,
+    height: `${height}%`
+  }
+}
+
+function getMediumThumbnailSize(file: FileItem) {
+  const ratio = getDisplayAspectRatio(file)
+  const maxWidth = mediumThumbMaxWidth
+  const maxHeight = ratio < 1 ? mediumThumbPortraitMaxHeight : mediumThumbLandscapeMaxHeight
+  let width = maxWidth
+  let height = Math.round(maxWidth / ratio)
+
+  if (height > maxHeight) {
+    height = maxHeight
+    width = Math.round(maxHeight * ratio)
+  }
+
+  return { width, height }
+}
+
+function getMediumThumbnailFrameStyle(file: FileItem) {
+  const { width, height } = getMediumThumbnailSize(file)
+
+  return {
+    width: `${width}px`,
+    height: `${height}px`
+  }
+}
+
+function getMediumRowHeight(file: FileItem) {
+  if (!isMediaThumbnailFile(file)) return mediumDefaultRowHeight
+  const { height } = getMediumThumbnailSize(file)
+  return Math.max(mediumDefaultRowHeight, height + mediumRowVerticalPadding)
+}
+
+function findMediumStartIndex(rows: Array<{ top: number; height: number }>, scrollTop: number) {
+  if (rows.length === 0) return 0
+  let low = 0
+  let high = rows.length - 1
+  let result = 0
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    if (rows[mid].top + rows[mid].height < scrollTop) {
+      low = mid + 1
+    } else {
+      result = mid
+      high = mid - 1
+    }
+  }
+
+  return Math.max(0, result - mediumOverscan)
+}
+
+function handleThumbnailLoad(event: Event, file: FileItem) {
+  const image = event.target as HTMLImageElement
+  if (!image.naturalWidth || !image.naturalHeight) return
+  const ratio = image.naturalWidth / image.naturalHeight
+  if (!Number.isFinite(ratio) || ratio <= 0) return
+  const key = getThumbnailKey(file)
+  if (mediaAspectRatios.value[key] === ratio) return
+  mediaAspectRatios.value = {
+    ...mediaAspectRatios.value,
+    [key]: ratio
+  }
 }
 
 function getThumbnailState(file: FileItem) {
@@ -493,6 +602,7 @@ async function fetchThumbnail(key: string, file: FileItem) {
 function pruneThumbnailStates() {
   const keys = new Set(props.files.map((file) => getThumbnailKey(file)))
   const next: Record<string, ThumbnailState> = {}
+  const nextRatios: Record<string, number> = {}
   for (const [key, state] of Object.entries(thumbnailStates.value)) {
     if (keys.has(key)) {
       next[key] = state
@@ -514,6 +624,10 @@ function pruneThumbnailStates() {
     }
     removeGridVisibleThumbnailKey(key)
   }
+  for (const [key, ratio] of Object.entries(mediaAspectRatios.value)) {
+    if (keys.has(key)) nextRatios[key] = ratio
+  }
+  mediaAspectRatios.value = nextRatios
   thumbnailStates.value = next
 }
 
@@ -531,6 +645,7 @@ function clearThumbnailStates() {
   queuedThumbnailKeys.clear()
   thumbnailRequestQueue.length = 0
   thumbnailStates.value = {}
+  mediaAspectRatios.value = {}
 }
 
 onBeforeUnmount(() => {
@@ -549,6 +664,7 @@ onBeforeUnmount(() => {
   gridObservedElements.clear()
   gridThumbnailElements.clear()
   gridVisibleThumbnailKeys.value = new Set()
+  mediaAspectRatios.value = {}
 })
 </script>
 
@@ -592,34 +708,37 @@ onBeforeUnmount(() => {
               <input type="checkbox" :checked="selectedFiles?.has(file.path)" @change="emit('toggleSelect', file.path)" />
             </div>
 
-            <img
-              v-if="getFileIcon(file) === 'image'"
-              :src="getPreviewUrl(file)"
-              :alt="file.name"
-              class="thumb-img"
-              loading="lazy"
-              draggable="false"
-            />
+            <div v-if="getFileIcon(file) === 'image'" class="thumb-media-frame" :style="getGridThumbnailFrameStyle(file)">
+              <img
+                :src="getPreviewUrl(file)"
+                :alt="file.name"
+                class="thumb-img"
+                loading="lazy"
+                draggable="false"
+                @load="handleThumbnailLoad($event, file)"
+              />
+            </div>
 
-            <img
-              v-else-if="getThumbnailState(file)?.status === 'ready'"
-              :src="getThumbnailState(file)?.url"
-              :alt="file.name"
-              class="thumb-img"
-              loading="lazy"
-              draggable="false"
-            />
+            <div v-else-if="getThumbnailState(file)?.status === 'ready'" class="thumb-media-frame relative" :style="getGridThumbnailFrameStyle(file)">
+              <img
+                :src="getThumbnailState(file)?.url"
+                :alt="file.name"
+                class="thumb-img"
+                loading="lazy"
+                draggable="false"
+                @load="handleThumbnailLoad($event, file)"
+              />
+              <span
+                v-if="formatDuration(getThumbnailState(file)?.duration)"
+                class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] leading-none text-white"
+              >
+                {{ formatDuration(getThumbnailState(file)?.duration) }}
+              </span>
+            </div>
 
             <div v-else class="thumb-icon">
               <Icon :name="getFileIconInfo(file).icon" :class="['h-10 w-10', getFileIconInfo(file).color]" />
             </div>
-
-            <span
-              v-if="formatDuration(getThumbnailState(file)?.duration)"
-              class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] leading-none text-white"
-            >
-              {{ formatDuration(getThumbnailState(file)?.duration) }}
-            </span>
           </div>
 
           <div class="px-2 py-1.5">
@@ -637,14 +756,14 @@ onBeforeUnmount(() => {
     >
       <div class="relative" :style="{ height: mediumSpacerHeight }">
         <div
-          v-for="{ file, index } in mediumVisibleFiles"
+          v-for="{ file, top, height } in mediumVisibleFiles"
           :key="file.path"
           class="file-row absolute left-0 right-0 flex cursor-pointer items-center gap-3 border-b px-3 py-3 transition-colors sm:px-4"
           :class="[
             selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
             contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : ''
           ]"
-          :style="{ top: `${index * mediumRowHeight}px`, height: `${mediumRowHeight}px`, borderColor: 'var(--border-color)', touchAction: 'manipulation' }"
+          :style="{ top: `${top}px`, height: `${height}px`, borderColor: 'var(--border-color)', touchAction: 'manipulation' }"
           @click.prevent="emit('open', file)"
           @contextmenu.prevent.stop="handleItemContext($event, file)"
           @touchstart.passive="handleTouchStart($event, file)"
@@ -660,32 +779,36 @@ onBeforeUnmount(() => {
             @click.stop
           />
 
-          <div class="relative flex h-[68px] w-[120px] flex-shrink-0 items-center justify-center overflow-hidden rounded-md" style="background-color: var(--surface-color)">
-            <img
-              v-if="getFileIcon(file) === 'image'"
-              :src="getPreviewUrl(file)"
-              :alt="file.name"
-              class="h-full w-full object-contain"
-              loading="lazy"
-              draggable="false"
-            />
-            <img
-              v-else-if="getThumbnailState(file)?.status === 'ready'"
-              :src="getThumbnailState(file)?.url"
-              :alt="file.name"
-              class="h-full w-full object-contain"
-              loading="lazy"
-              draggable="false"
-            />
-            <div v-else class="flex h-full w-full items-center justify-center">
+          <div class="medium-thumb-slot flex w-[120px] flex-shrink-0 items-center justify-center self-stretch">
+            <div v-if="getFileIcon(file) === 'image'" class="medium-thumb-frame" :style="getMediumThumbnailFrameStyle(file)">
+              <img
+                :src="getPreviewUrl(file)"
+                :alt="file.name"
+                class="thumb-img"
+                loading="lazy"
+                draggable="false"
+                @load="handleThumbnailLoad($event, file)"
+              />
+            </div>
+            <div v-else-if="getThumbnailState(file)?.status === 'ready'" class="medium-thumb-frame relative" :style="getMediumThumbnailFrameStyle(file)">
+              <img
+                :src="getThumbnailState(file)?.url"
+                :alt="file.name"
+                class="thumb-img"
+                loading="lazy"
+                draggable="false"
+                @load="handleThumbnailLoad($event, file)"
+              />
+              <span
+                v-if="formatDuration(getThumbnailState(file)?.duration)"
+                class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] leading-none text-white"
+              >
+                {{ formatDuration(getThumbnailState(file)?.duration) }}
+              </span>
+            </div>
+            <div v-else class="medium-thumb-placeholder">
               <Icon :name="getFileIconInfo(file).icon" :class="['h-8 w-8', getFileIconInfo(file).color]" />
             </div>
-            <span
-              v-if="formatDuration(getThumbnailState(file)?.duration)"
-              class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] leading-none text-white"
-            >
-              {{ formatDuration(getThumbnailState(file)?.duration) }}
-            </span>
           </div>
 
           <div class="min-w-0 flex-1">
