@@ -88,6 +88,12 @@ yarn dev:client
 yarn dev:server
 ```
 
+开发服务默认仅监听 `localhost`。如需让局域网设备访问前端开发服务，可显式传入 Vite 的 host 参数：
+
+```bash
+yarn dev --host 0.0.0.0
+```
+
 开发模式下，后台通过管理接口写回 `config.yml` 时会跳过一次多余的热重启，不再额外生成配置写入标记文件。
 
 ## 构建

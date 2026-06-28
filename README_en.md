@@ -88,6 +88,12 @@ yarn dev:client
 yarn dev:server
 ```
 
+The development server listens on `localhost` by default. To expose the frontend dev server to your LAN, pass Vite's host option explicitly:
+
+```bash
+yarn dev --host 0.0.0.0
+```
+
 In development mode, when the backend writes `config.yml` through admin APIs, it skips the redundant hot restart and no longer creates an extra config-write marker file.
 
 ## Build

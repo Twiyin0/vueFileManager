@@ -1,8 +1,9 @@
 import { spawn } from 'child_process'
 
 const isWin = process.platform === 'win32'
+const viteArgs = ['vite', ...process.argv.slice(2)]
 
-const vite = spawn('npx', ['vite'], { stdio: 'inherit', shell: isWin })
+const vite = spawn('npx', viteArgs, { stdio: 'inherit', shell: isWin })
 const server = spawn('npx', ['tsx', 'watch', 'server/index.ts'], { stdio: 'inherit', shell: isWin })
 
 function cleanup() {
