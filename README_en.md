@@ -18,7 +18,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - Admin user management, quota control, ban or unban, and manual verification
 - Per-user multi-storage-pool management
 - File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search with optional `//` regex mode, and ZIP download
-- Medium List View with lazy video thumbnails backed by the server thumbnail cache
+- Medium List View with lazy video thumbnails backed by the server thumbnail cache and adaptive list height
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`
 - Remote upload and background offline download tasks, including comma-separated batch URLs
@@ -284,7 +284,7 @@ If your old deployment contains:
 - `data/filemanager.db-wal`
 - `data/filemanager.db-shm`
 
-merge the WAL log back into the main database before switching to the current runtime.
+merge the WAL log back into the main database before switching to the current runtime. If `PRAGMA wal_checkpoint(TRUNCATE);` leaves behind only a 0-byte or tiny placeholder `*.db-wal` file, the current runtime will ignore and clean up that stub automatically.
 
 Stop the old service, then run:
 

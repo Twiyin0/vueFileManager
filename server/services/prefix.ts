@@ -23,11 +23,14 @@ export class PrefixStorage implements StorageProvider {
   }
 
   private stripPrefix(filePath: string): string {
+    let stripped = filePath
     if (this.prefix && filePath.startsWith(this.prefix)) {
       const rest = filePath.slice(this.prefix.length)
-      return rest.startsWith('/') ? rest : `/${rest}`
+      stripped = rest.startsWith('/') ? rest.slice(1) : rest
+    } else if (filePath.startsWith('/')) {
+      stripped = filePath.slice(1)
     }
-    return filePath
+    return normalizeStoragePath(stripped)
   }
 
   async list(prefix: string): Promise<FileInfo[]> {

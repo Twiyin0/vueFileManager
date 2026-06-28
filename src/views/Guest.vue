@@ -930,14 +930,14 @@ const permLabels: Record<string, string> = {
                   <Icon name="arrow-up" class="h-4 w-4" />
                 </button>
 
-                <div class="view-mode-toggle flex items-center overflow-hidden rounded-lg border" style="border-color: var(--border-color)">
-                  <button class="p-1.5 transition-colors" :class="viewMode === 'list' ? 'view-mode-active' : ''" @click="viewMode = 'list'">
+                <div class="view-mode-toggle overflow-hidden rounded-lg">
+                  <button :class="viewMode === 'list' ? 'view-mode-active' : ''" @click="viewMode = 'list'">
                     <Icon name="list" class="h-4 w-4" />
                   </button>
-                  <button class="p-1.5 transition-colors" :class="viewMode === 'medium-list' ? 'view-mode-active' : ''" :title="t('file.mediumListView', 'Medium List View')" @click="viewMode = 'medium-list'">
+                  <button :class="viewMode === 'medium-list' ? 'view-mode-active' : ''" :title="t('file.mediumListView', 'Medium List View')" @click="viewMode = 'medium-list'">
                     <Icon name="video" class="h-4 w-4" />
                   </button>
-                  <button class="p-1.5 transition-colors" :class="viewMode === 'grid' ? 'view-mode-active' : ''" @click="viewMode = 'grid'">
+                  <button :class="viewMode === 'grid' ? 'view-mode-active' : ''" @click="viewMode = 'grid'">
                     <Icon name="grid" class="h-4 w-4" />
                   </button>
                 </div>

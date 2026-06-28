@@ -669,17 +669,35 @@ select.input-field {
 
 /* ---- 视图模式切换按钮 ---- */
 .view-mode-toggle {
-  background-color: var(--surface-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  min-height: 42px;
+  background-color: var(--hover-color);
+  border: 1px solid var(--border-color);
 }
 .view-mode-toggle button {
+  @apply flex items-center justify-center rounded-md transition-colors duration-150;
+  width: 36px;
+  height: 36px;
   color: var(--text-secondary-color);
 }
 .view-mode-toggle button:hover {
-  background-color: var(--hover-color);
+  background-color: var(--surface-color);
+  color: var(--text-color);
 }
 .view-mode-active {
-  background-color: var(--accent-soft-color) !important;
-  color: var(--accent-color) !important;
+  background-color: var(--accent-soft-color);
+  color: var(--accent-color);
+}
+
+.dark .view-mode-toggle {
+  background-color: var(--card-color);
+}
+
+.dark .view-mode-toggle button:hover {
+  background-color: var(--hover-color);
 }
 
 .toolbar-select-group {

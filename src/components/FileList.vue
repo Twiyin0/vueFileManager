@@ -82,7 +82,7 @@ let longPressTimer: ReturnType<typeof setTimeout> | null = null
 const longPressThreshold = 500
 const contextHighlighted = ref<string | null>(null)
 const mediumScrollTop = ref(0)
-const mediumViewportHeight = ref(520)
+const mediumViewportHeight = ref(0)
 const mediumContainer = ref<HTMLElement | null>(null)
 const thumbnailStates = ref<Record<string, ThumbnailState>>({})
 const thumbnailRetryTimers = new Map<string, number>()
@@ -126,7 +126,15 @@ const mediumEndIndex = computed(() => {
   return Math.min(rows.length, index + mediumOverscan)
 })
 const mediumVisibleFiles = computed(() => mediumRows.value.items.slice(mediumStartIndex.value, mediumEndIndex.value))
-const mediumSpacerHeight = computed(() => `${mediumRows.value.totalHeight}px`)
+const mediumContentHeight = computed(() => mediumRows.value.totalHeight)
+const mediumSpacerHeight = computed(() => `${mediumContentHeight.value}px`)
+const mediumContainerStyle = computed(() => {
+  const minHeight = Math.min(mediumContentHeight.value, 352)
+  return {
+    minHeight: `${Math.max(minHeight, mediumDefaultRowHeight)}px`,
+    maxHeight: 'calc(100vh - 14rem)'
+  }
+})
 
 watch(() => [props.files, props.currentPoolId, props.guestThumbnailBaseUrl] as const, () => {
   mediumScrollTop.value = 0
@@ -260,13 +268,13 @@ function sortIconName(key: FileSortKey) {
 
 function updateMediumViewport() {
   if (!mediumContainer.value) return
-  mediumViewportHeight.value = mediumContainer.value.clientHeight || 520
+  mediumViewportHeight.value = mediumContainer.value.clientHeight || mediumContentHeight.value || mediumDefaultRowHeight
 }
 
 function handleMediumScroll(event: Event) {
   const target = event.target as HTMLElement
   mediumScrollTop.value = target.scrollTop
-  mediumViewportHeight.value = target.clientHeight || mediumViewportHeight.value
+  mediumViewportHeight.value = target.clientHeight || mediumContentHeight.value || mediumViewportHeight.value
 }
 
 function ensureGridObserver() {
@@ -751,7 +759,8 @@ onBeforeUnmount(() => {
     <div
       v-else-if="viewMode === 'medium-list'"
       ref="mediumContainer"
-      class="max-h-[calc(100vh-14rem)] min-h-[22rem] overflow-auto"
+      class="overflow-auto"
+      :style="mediumContainerStyle"
       @scroll="handleMediumScroll"
     >
       <div class="relative" :style="{ height: mediumSpacerHeight }">
