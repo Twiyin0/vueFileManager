@@ -21,7 +21,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - Medium List View with lazy video thumbnails backed by the server thumbnail cache and adaptive list height
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`
-- Remote upload and background offline download tasks, including comma-separated batch URLs
+- Remote upload and background offline download tasks, including batch URLs separated by commas, vertical bars, or new lines
 - Directory sorting by name, modified time, file type, or size in ascending or descending order
 - Recycle bin, favourites, guest folder shares, and public shares
 - WebDAV with basic auth, JWT, and API key support
@@ -43,7 +43,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 ## Remote Upload and Offline Tasks
 
 - File Manager supports direct remote upload and server-side offline download
-- The input accepts one or more URLs separated by commas
+- The input accepts one or more URLs separated by commas, vertical bars, or new lines
 - Immediate mode downloads the remote resource and writes it into the selected storage pool right away
 - Offline mode creates background tasks that can be viewed and retried from the Offline Tasks page
 - For SSRF protection, only `http` / `https` URLs are allowed, and targets resolving to loopback, private, link-local (including the cloud metadata address `169.254.169.254`) or other reserved ranges are rejected; every redirect hop is re-validated

@@ -309,6 +309,10 @@ API Key 的通用权限模型：
 { "url": "https://example.com/a.zip, https://example.com/b.zip", "dirPath": "demo", "poolId": 1 }
 ```
 
+```json
+{ "url": "https://example.com/a.zip\nhttps://example.com/b.zip", "dirPath": "demo", "poolId": 1 }
+```
+
 返回说明：
 
 - `count` 表示成功上传数量
@@ -319,7 +323,7 @@ API Key 的通用权限模型：
 
 创建一个或多个后台离线下载任务。
 
-请求体支持与远程上传相同的 `url` / `urls` / 逗号分隔格式。被拦截的链接会在 `errors` 中逐条返回；若全部被拦截则返回 `400`。
+请求体支持与远程上传相同的 `url` / `urls` / 逗号、竖线或换行分隔格式。被拦截的链接会在 `errors` 中逐条返回；若全部被拦截则返回 `400`。
 
 ### `GET /api/files/offline-download/tasks`
 

@@ -28,19 +28,21 @@ interface RemoteUploadResultItem {
   fileUrl: string
 }
 
+function splitRemoteUrlInput(value: string): string[] {
+  return value
+    .split(/[\r\n,，|｜]+/u)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 function extractUrls(input: unknown): string[] {
   if (Array.isArray(input)) {
     return input
-      .flatMap((item) => String(item ?? '').split(','))
-      .map((item) => item.trim())
-      .filter(Boolean)
+      .flatMap((item) => splitRemoteUrlInput(String(item ?? '')))
   }
 
   if (typeof input === 'string') {
-    return input
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
+    return splitRemoteUrlInput(input)
   }
 
   return []

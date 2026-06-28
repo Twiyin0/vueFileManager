@@ -103,8 +103,10 @@ file:
   remoteUploadOffline: Offline Download
   remoteUploadInstantHint: The server will request the remote resource and write it to storage immediately.
   remoteUploadOfflineHint: The server will download in the background and write into the current directory.
-  remoteUploadPlaceholder: "https://example.com/file-a.zip, https://example.com/file-b.zip"
-  remoteUploadUrlHint: Enter one or more remote URLs separated by commas.
+  remoteUploadPlaceholder: |-
+    https://example.com/file-a.zip
+    https://example.com/file-b.zip
+  remoteUploadUrlHint: Enter one or more remote URLs separated by commas, vertical bars, or new lines.
   remoteUploadEmpty: Please enter at least one remote URL
   remoteUploadSuccess: Remote upload completed
   remoteUploadBatchSuccess: Uploaded {count} remote files

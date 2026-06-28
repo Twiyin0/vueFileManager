@@ -693,7 +693,7 @@ export function useHomeView() {
   function parseRemoteUrls(value: string) {
     return Array.from(new Set(
       value
-        .split(',')
+        .split(/[\r\n,，|｜]+/u)
         .map((item) => item.trim())
         .filter(Boolean)
     ))

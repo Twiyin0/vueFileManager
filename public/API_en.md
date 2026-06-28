@@ -305,6 +305,10 @@ Request body examples:
 { "url": "https://example.com/a.zip, https://example.com/b.zip", "dirPath": "demo", "poolId": 1 }
 ```
 
+```json
+{ "url": "https://example.com/a.zip\nhttps://example.com/b.zip", "dirPath": "demo", "poolId": 1 }
+```
+
 Response notes:
 
 - `count` is the number of successful uploads
@@ -315,7 +319,7 @@ Response notes:
 
 Creates one or more background offline download tasks.
 
-Request body accepts the same `url` / `urls` / comma-separated formats as remote upload.
+Request body accepts the same `url` / `urls` / comma-, vertical bar-, or newline-separated formats as remote upload.
 
 ### `GET /api/files/offline-download/tasks`
 
