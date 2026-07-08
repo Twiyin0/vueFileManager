@@ -63,15 +63,16 @@ const themeLabelMap: Record<string, string> = {
     />
 
     <Teleport to="body">
-      <div v-if="state.showAddIpDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showAddIpDialog = false" />
-        <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
-          <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">
+      <div v-if="state.showAddIpDialog" class="dialog-overlay">
+        <div class="dialog-backdrop" @click="state.showAddIpDialog = false" />
+        <div class="dialog-panel dialog-panel-scroll dialog-panel-md">
+          <div class="dialog-section">
+          <h3 class="dialog-title mb-4">
             {{ t('admin.addIpEntry', 'Add IP Entry') }}
           </h3>
           <div class="space-y-3">
             <div>
-              <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.ipPattern', 'IP or CIDR') }}</label>
+              <label class="dialog-form-label">{{ t('admin.ipPattern', 'IP or CIDR') }}</label>
               <input
                 v-model="state.ipForm.ip_pattern"
                 type="text"
@@ -80,7 +81,7 @@ const themeLabelMap: Record<string, string> = {
               />
             </div>
             <div>
-              <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('admin.reasonOptional', 'Reason (optional)') }}</label>
+              <label class="dialog-form-label">{{ t('admin.reasonOptional', 'Reason (optional)') }}</label>
               <input
                 v-model="state.ipForm.reason"
                 type="text"
@@ -90,30 +91,32 @@ const themeLabelMap: Record<string, string> = {
             </div>
             <p v-if="state.ipError" class="text-sm text-red-500">{{ state.ipError }}</p>
           </div>
-          <div class="mt-5 flex justify-end gap-3">
+          <div class="dialog-footer mt-5">
             <button class="btn-secondary text-sm" @click="state.showAddIpDialog = false">{{ t('common.cancel', 'Cancel') }}</button>
             <button class="btn-primary text-sm" @click="state.handleAddIp">{{ t('common.save', 'Save') }}</button>
+          </div>
           </div>
         </div>
       </div>
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="state.showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-        <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showCreateDialog = false" />
-        <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
-          <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">{{ t('admin.createUser', 'Create User') }}</h3>
+      <div v-if="state.showCreateDialog" class="dialog-overlay">
+        <div class="dialog-backdrop" @click="state.showCreateDialog = false" />
+        <div class="dialog-panel dialog-panel-scroll dialog-panel-md">
+          <div class="dialog-section">
+          <h3 class="dialog-title mb-4">{{ t('admin.createUser', 'Create User') }}</h3>
           <div class="space-y-3">
             <div>
-              <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.username', 'Username') }}</label>
+              <label class="dialog-form-label">{{ t('common.username', 'Username') }}</label>
               <input v-model="state.createForm.username" type="text" placeholder="3-20" class="input-field" />
             </div>
             <div>
-              <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.password', 'Password') }}</label>
+              <label class="dialog-form-label">{{ t('common.password', 'Password') }}</label>
               <input v-model="state.createForm.password" type="password" placeholder="6+" class="input-field" />
             </div>
             <div>
-              <label class="mb-1 block text-sm" style="color: var(--text-secondary-color)">{{ t('common.role', 'Role') }}</label>
+              <label class="dialog-form-label">{{ t('common.role', 'Role') }}</label>
               <select v-model="state.createForm.role" class="input-field">
                 <option value="user">{{ t('settings.roleUser', 'User') }}</option>
                 <option value="admin">{{ t('settings.roleAdmin', 'Admin') }}</option>
@@ -121,11 +124,12 @@ const themeLabelMap: Record<string, string> = {
             </div>
             <p v-if="state.createError" class="text-sm text-red-500">{{ state.createError }}</p>
           </div>
-          <div class="mt-5 flex justify-end gap-3">
+          <div class="dialog-footer mt-5">
             <button class="btn-secondary text-sm" @click="state.showCreateDialog = false">{{ t('common.cancel', 'Cancel') }}</button>
             <button class="btn-primary text-sm" :disabled="state.creating" @click="state.handleCreate">
               {{ state.creating ? t('admin.saving', 'Saving...') : t('common.create', 'Create') }}
             </button>
+          </div>
           </div>
         </div>
       </div>

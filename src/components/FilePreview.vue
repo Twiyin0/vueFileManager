@@ -15,6 +15,7 @@ const props = defineProps<{
   fileList?: { path: string; name: string; poolId?: number }[]
   guestBaseUrl?: string
   guestSaveUrl?: string
+  guestAccessPassword?: string
   editable?: boolean
 }>()
 

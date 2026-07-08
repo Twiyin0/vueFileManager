@@ -6,9 +6,12 @@ import { authMiddleware, type AuthRequest } from '../middleware/auth'
 import { getStorage, getStorageByPoolId } from '../services/factory'
 import { Logger } from '../services/logger'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { safeEqual } from '../services/password'
 import {
   isJunkFile,
   isTemporaryUploadFile,
+  joinStoragePath,
+  normalizeStoragePath,
 } from './files/shared'
 import { sendServerError } from './admin/shared'
 
@@ -45,18 +48,22 @@ const previewMimeTypes: Record<string, string> = {
   sh: 'text/x-shellscript; charset=utf-8',
 }
 
-function generateSignToken(username: string, signKey: string): { sign: string; timestamp: number } {
-  const timestamp = Math.floor(Date.now() / 1000)
-  const raw = username + signKey
-  const hash = crypto.createHash('md5').update(raw).digest('hex')
-  const sign = hash.slice(4, 12) + timestamp
-  return { sign, timestamp }
+// Signature binds the share to its secret sign_key via HMAC-SHA256. The timestamp is
+// kept in the URL for display/compatibility only and is intentionally not part of the
+// signature (the previous scheme let a client-supplied timestamp cancel itself out and
+// left only a 32-bit secret).
+function computeSign(username: string, signKey: string): string {
+  return crypto.createHmac('sha256', signKey).update(username).digest('hex')
 }
 
-function verifySignToken(username: string, signKey: string, sign: string, timestamp: number): boolean {
-  const expectedHash = crypto.createHash('md5').update(username + signKey).digest('hex')
-  const expectedSign = expectedHash.slice(4, 12) + timestamp
-  return sign === expectedSign
+function generateSignToken(username: string, signKey: string): { sign: string; timestamp: number } {
+  const timestamp = Math.floor(Date.now() / 1000)
+  return { sign: computeSign(username, signKey), timestamp }
+}
+
+function verifySignToken(username: string, signKey: string, sign: string, _timestamp: number): boolean {
+  if (!signKey || !sign) return false
+  return safeEqual(sign, computeSign(username, signKey))
 }
 
 async function getUsernameById(userId: number) {
@@ -64,11 +71,23 @@ async function getUsernameById(userId: number) {
   return row?.username || `#${userId}`
 }
 
+function getShareFileName(filePath: string): string {
+  return filePath.split('/').filter(Boolean).pop() || ''
+}
+
 router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { filePath, fileType, password, expiresIn, maxDownloads, storagePoolId } = req.body
-    if (!filePath) {
+    const normalizedFileType = fileType === 'folder' ? 'folder' : 'file'
+    if ((filePath === undefined || filePath === null || filePath === '') && normalizedFileType !== 'folder') {
       return res.status(400).json({ error: 'common.missingFilePath' })
+    }
+
+    let normalizedFilePath = ''
+    try {
+      normalizedFilePath = normalizeStoragePath(String(filePath || ''))
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
     }
 
     const shareCode = crypto.randomBytes(8).toString('hex')
@@ -81,13 +100,13 @@ router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) =
     await db.prepare(`
       INSERT INTO shares (user_id, file_path, file_type, share_code, password, expires_at, max_downloads, sign_key, storage_pool_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(req.userId!, filePath, fileType || 'file', shareCode, password || null, expiresAt, maxDownloads || null, signKey, storagePoolId || null)
+    `).run(req.userId!, normalizedFilePath, normalizedFileType, shareCode, password || null, expiresAt, maxDownloads || null, signKey, storagePoolId || null)
 
     const username = await getUsernameById(req.userId!)
     const { sign } = generateSignToken(username, signKey)
     const signUrl = `/s/${shareCode}?sign=${sign}&t=${Math.floor(Date.now() / 1000)}`
 
-    await Logger.info('api', 'share.ts', `User ${username} shared a file in poolID:#${storagePoolId || 'default'} ${filePath}`)
+    await Logger.info('api', 'share.ts', `User ${username} shared a ${normalizedFileType} in poolID:#${storagePoolId || 'default'} ${normalizedFilePath || '/'}`)
 
     res.json({
       message: 'share.linkCreated',
@@ -176,11 +195,11 @@ router.get('/s/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) {
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) {
         return res.json({
           needPassword: true,
           fileType: share.file_type,
-          fileName: share.file_path.split('/').pop(),
+          fileName: getShareFileName(share.file_path),
           owner: share.username
         })
       }
@@ -190,7 +209,7 @@ router.get('/s/:code', async (req: Request, res: Response) => {
       needPassword: false,
       fileType: share.file_type,
       filePath: share.file_path,
-      fileName: share.file_path.split('/').pop(),
+      fileName: getShareFileName(share.file_path),
       owner: share.username,
       shareCode: share.share_code
     })
@@ -223,12 +242,17 @@ router.get('/list/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) return res.status(403).json({ error: 'share.incorrectPassword' })
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) return res.status(403).json({ error: 'share.incorrectPassword' })
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const subPath = (req.query.path as string) || ''
-    const fullPath = share.file_path ? (subPath ? `${share.file_path}/${subPath}` : share.file_path) : subPath
+    let subPath = ''
+    try {
+      subPath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
+    const fullPath = joinStoragePath(share.file_path, subPath)
 
     const files = await storage.list(fullPath)
     const filteredFiles = files.filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
@@ -265,7 +289,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) {
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) {
         return res.status(403).json({ error: 'share.incorrectPassword' })
       }
     }
@@ -282,8 +306,16 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const subPath = req.query.path as string
-    const downloadPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
+    let subPath = ''
+    try {
+      subPath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
+    const downloadPath = joinStoragePath(share.file_path, subPath)
+    if (!downloadPath) {
+      return res.status(400).json({ error: 'common.missingFilePath' })
+    }
     const data = await storage.download(downloadPath)
     const fileName = downloadPath.split('/').pop() || 'download'
 
@@ -321,7 +353,7 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
 
     if (share.password) {
       const providedPassword = req.query.password as string
-      if (!providedPassword || providedPassword !== share.password) {
+      if (!providedPassword || !safeEqual(providedPassword, share.password)) {
         return res.status(403).json({ error: 'share.incorrectPassword' })
       }
     }
@@ -338,14 +370,22 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     }
 
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
-    const subPath = req.query.path as string
-    const previewPath = subPath ? `${share.file_path}/${subPath}` : share.file_path
+    let subPath = ''
+    try {
+      subPath = normalizeStoragePath((req.query.path as string) || '')
+    } catch {
+      return res.status(400).json({ error: 'common.invalidPath' })
+    }
+    const previewPath = joinStoragePath(share.file_path, subPath)
+    if (!previewPath) {
+      return res.status(400).json({ error: 'common.missingFilePath' })
+    }
     const fileInfo = await storage.info(previewPath)
     if (fileInfo.type !== 'file') {
       return res.status(400).json({ error: 'share.folderPreviewUnsupported' })
     }
 
-    const fileName = previewPath.split('/').pop() || share.file_path.split('/').pop() || 'file'
+    const fileName = getShareFileName(previewPath) || getShareFileName(share.file_path) || 'file'
     const ext = fileName.split('.').pop()?.toLowerCase() || ''
     const contentType = previewMimeTypes[ext] || 'application/octet-stream'
     const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')

@@ -12,6 +12,22 @@ function assertNoPendingWal(filePath: string) {
   const walStat = fs.statSync(walPath)
   if (walStat.size <= 0) return
 
+  // sqlite3 may leave behind a tiny placeholder WAL file after a successful
+  // checkpoint/TRUNCATE. There is no pending frame data in that case, so we
+  // treat it as safe and remove the stub to avoid blocking sql.js startup.
+  if (walStat.size <= 32) {
+    try {
+      const header = fs.readFileSync(walPath)
+      const hasNonZeroByte = header.some((byte) => byte !== 0)
+      if (!hasNonZeroByte) {
+        fs.rmSync(walPath, { force: true })
+        return
+      }
+    } catch {
+      // Fall through to the hard error below if the file cannot be inspected.
+    }
+  }
+
   throw new Error(
     [
       `Detected pending SQLite WAL data at ${walPath}.`,

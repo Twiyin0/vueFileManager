@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
 import { useI18n } from '@/composables/useI18n'
@@ -27,6 +27,7 @@ const copied = ref(false)
 const copyType = ref<'link' | 'sign'>('link')
 
 const origin = window.location.origin
+const displayFileName = computed(() => props.fileName || t('common.rootDirectory', 'Root directory'))
 
 const expirationOptions = [
   { value: '', label: t('share.neverExpire', 'Never Expires') },
@@ -94,21 +95,22 @@ function close() {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="close" />
-      <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
+    <div v-if="show" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="close" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-md">
+        <div class="dialog-section">
         <template v-if="shareResult">
-          <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('share.createdTitle', 'Share Link Created') }}</h3>
-          <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
-            {{ t('share.fileLabel', 'File: {name}').replace('{name}', fileName) }}
+          <h3 class="dialog-title mb-2">{{ t('share.createdTitle', 'Share Link Created') }}</h3>
+          <p class="dialog-description mb-4">
+            {{ t('share.fileLabel', 'File: {name}').replace('{name}', displayFileName) }}
           </p>
 
-          <div class="mb-3 rounded-lg p-3" style="background-color: var(--hover-color)">
+          <div class="dialog-muted-block-strong mb-3">
             <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.signedLink', 'Share link (signed access required)') }}</p>
             <p class="break-all font-mono text-sm" style="color: var(--text-color)">{{ origin }}{{ shareResult.signUrl }}</p>
           </div>
 
-          <div class="mb-3 rounded-lg p-3" style="background-color: var(--hover-color)">
+          <div class="dialog-muted-block-strong mb-3">
             <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.signKey', 'Signature key (signKey)') }}</p>
             <p class="font-mono text-sm" style="color: var(--text-color)">{{ shareResult.signKey }}</p>
             <p class="mt-1 text-xs" style="color: var(--text-secondary-color)">
@@ -116,12 +118,12 @@ function close() {
             </p>
           </div>
 
-          <div v-if="usePassword && password" class="mb-3 rounded-lg p-3" style="background-color: var(--hover-color)">
+          <div v-if="usePassword && password" class="dialog-muted-block-strong mb-3">
             <p class="mb-1 text-xs" style="color: var(--text-secondary-color)">{{ t('share.accessPassword', 'Access Password') }}</p>
             <p class="font-mono text-sm" style="color: var(--text-color)">{{ password }}</p>
           </div>
 
-          <div class="flex justify-end gap-3">
+          <div class="dialog-footer mt-0">
             <button class="btn-secondary flex items-center gap-1 text-sm" @click="copyLink('link')">
               <Icon v-if="copied && copyType === 'link'" name="circle-check" class="h-4 w-4" />
               <span>{{ copied && copyType === 'link' ? t('share.copied', 'Copied') : t('share.copyLink', 'Copy Link') }}</span>
@@ -134,9 +136,9 @@ function close() {
         </template>
 
         <template v-else>
-          <h3 class="mb-2 text-lg font-semibold" style="color: var(--text-color)">{{ t('share.createTitle', 'Create Share Link') }}</h3>
-          <p class="mb-4 text-sm" style="color: var(--text-secondary-color)">
-            {{ t('share.fileLabel', 'File: {name}').replace('{name}', fileName) }}
+          <h3 class="dialog-title mb-2">{{ t('share.createTitle', 'Create Share Link') }}</h3>
+          <p class="dialog-description mb-4">
+            {{ t('share.fileLabel', 'File: {name}').replace('{name}', displayFileName) }}
           </p>
 
           <div class="space-y-4">
@@ -158,7 +160,7 @@ function close() {
             </div>
 
             <div>
-              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('share.expiration', 'Expiration') }}</label>
+              <label class="dialog-form-label">{{ t('share.expiration', 'Expiration') }}</label>
               <select v-model="expiresIn" class="input-field">
                 <option v-for="option in expirationOptions" :key="option.label" :value="option.value">
                   {{ option.label }}
@@ -167,7 +169,7 @@ function close() {
             </div>
 
             <div>
-              <label class="mb-1.5 block text-sm font-medium" style="color: var(--text-color)">{{ t('share.maxDownloads', 'Max Downloads') }}</label>
+              <label class="dialog-form-label">{{ t('share.maxDownloads', 'Max Downloads') }}</label>
               <input
                 v-model="maxDownloads"
                 type="number"
@@ -178,7 +180,7 @@ function close() {
             </div>
           </div>
 
-          <div class="mt-6 flex justify-end gap-3">
+          <div class="dialog-footer">
             <button class="btn-secondary text-sm" @click="close">{{ t('common.cancel', 'Cancel') }}</button>
             <button class="btn-primary text-sm" :disabled="loading" @click="createShare">
               <span v-if="loading">{{ t('share.creating', 'Creating...') }}</span>
@@ -186,6 +188,7 @@ function close() {
             </button>
           </div>
         </template>
+        </div>
       </div>
     </div>
   </Teleport>

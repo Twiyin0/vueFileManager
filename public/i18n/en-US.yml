@@ -52,6 +52,7 @@ common:
   yes: Yes
   no: No
   default: Default
+  rootDirectory: Root directory
   backToTop: Back to top
   expand: Expand
   collapse: Collapse
@@ -67,11 +68,13 @@ theme:
 search:
   shortcutHint: Ctrl+K Search
   resultsCount: "Search results: {count} items"
+  invalidRegex: Invalid regular expression
 spotlight:
-  placeholder: Search files and folders... (Ctrl+K)
+  placeholder: Search files and folders... (Ctrl+K, //regex)
   loading: Searching...
   noResults: No matching results
   emptyHint: Type keywords to search files and folders
+  regexHint: Prefix with // to enable regular expression search
 file:
   open: Open
   preview: Preview
@@ -87,6 +90,7 @@ file:
   allPools: All Storage Pools
   goUp: Up
   listView: List View
+  mediumListView: Medium List View
   gridView: Grid View
   newFolder: New Folder
   newFolderShort: New
@@ -99,8 +103,10 @@ file:
   remoteUploadOffline: Offline Download
   remoteUploadInstantHint: The server will request the remote resource and write it to storage immediately.
   remoteUploadOfflineHint: The server will download in the background and write into the current directory.
-  remoteUploadPlaceholder: "https://example.com/file-a.zip, https://example.com/file-b.zip"
-  remoteUploadUrlHint: Enter one or more remote URLs separated by commas.
+  remoteUploadPlaceholder: |-
+    https://example.com/file-a.zip
+    https://example.com/file-b.zip
+  remoteUploadUrlHint: Enter one or more remote URLs separated by commas, vertical bars, or new lines.
   remoteUploadEmpty: Please enter at least one remote URL
   remoteUploadSuccess: Remote upload completed
   remoteUploadBatchSuccess: Uploaded {count} remote files
@@ -133,6 +139,15 @@ file:
   name: Name
   size: Size
   modified: Modified
+  sortCurrent: "Sorted by {field} ({direction})"
+  sortField:
+    name: Name
+    modified: Modified
+    type: Type
+    size: Size
+  sortDirection:
+    asc: Ascending
+    desc: Descending
 shareMount:
   menu: Cross-Pool Mount
   batchMenu: Batch Cross-Pool Mount
@@ -164,6 +179,10 @@ upload:
   busyHint: Upload is in progress. You can close this window and keep watching progress at the bottom-right corner.
   dropHint: Click or drag files here to upload
   dropOverlay: Drop files here to upload
+  clipboardHint: While this window is open, press {shortcut} to upload files or screenshots from the system clipboard
+  readClipboard: Read Clipboard
+  clipboardEmpty: No uploadable files were found in the system clipboard
+  clipboardReadFailed: Unable to read the system clipboard. You can still try {shortcut} after copying a file or screenshot
   limitHint: Single file size is controlled by the server upload limit
   queue: Upload Queue
   pendingFiles: Pending Files
@@ -253,6 +272,8 @@ guestShare:
   writeHint: (upload files and create folders)
   deleteHint: (delete files and folders)
   editHint: (edit file content and rename)
+  passwordPlaceholderEdit: Leave blank to keep current password
+  passwordUnchangedHint: Leave the password blank to keep the current password.
   saving: Saving...
   sharing: Sharing...
   confirmShare: Confirm Share
@@ -515,6 +536,8 @@ guest:
   uploadFailed: Upload failed
   uploadCancelled: Upload cancelled
   dragUploadOverlay: Drop files here to upload
+  passwordRequiredDescription: This guest folder requires a password to access.
+  incorrectPassword: Incorrect password
   noSharedFolders: No shared folders yet
   folderFallback: Folder
   searchPlaceholder: Search...
@@ -601,7 +624,10 @@ storagePoolsPage:
   name: Storage Pool Name
   namePlaceholder: "Example: Primary Storage, Backup Storage"
   type: Storage Type
-  localHint: Local storage automatically isolates directories by username. No extra disk path is required.
+  localHint: Leave the disk path empty to use the per-user default directory, or set a server-local path such as /mnt/usb.
+  localPath: Local Disk Path
+  localPathPlaceholder: /mnt/usb
+  localPathHint: The server process must be able to read and write this path.
   rootPath: Root Path Mapping
   operatorPlaceholder: Operator
   passwordPlaceholderEdit: Password (leave blank to keep unchanged)

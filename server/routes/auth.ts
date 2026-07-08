@@ -1,15 +1,20 @@
 import { Router, type Request, type Response } from 'express'
-import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import db, { syncStoragePoolsFromConfig } from '../db'
 import config from '../config'
 import { generateToken, type AuthRequest, getClientIp, authMiddleware } from '../middleware/auth'
 import { Logger } from '../services/logger'
 import { sendVerificationCode, verifyCode } from '../services/mail'
+import { hashPassword, verifyPassword } from '../services/password'
+import { rateLimit } from '../middleware/rate-limit'
 import { sendServerError } from './admin/shared'
 
 const JWT_SECRET = config.server.jwt_secret
 const router = Router()
+
+// Throttle credential and verification endpoints to slow brute-force attempts.
+const authRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 })
+const codeRateLimit = rateLimit({ windowMs: 10 * 60 * 1000, max: 5 })
 
 function normalizeLanguage(language: unknown) {
   return language === 'zh-CN' ? 'zh-CN' : 'en-US'
@@ -19,7 +24,7 @@ function getDefaultLanguage() {
   return normalizeLanguage(config.default_language)
 }
 
-router.post('/send-code', async (req: Request, res: Response) => {
+router.post('/send-code', codeRateLimit, async (req: Request, res: Response) => {
   try {
     if (!config.smtp.enabled) {
       return res.status(400).json({ error: 'auth.emailRegistrationDisabled' })
@@ -52,7 +57,7 @@ router.post('/send-code', async (req: Request, res: Response) => {
   }
 })
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', authRateLimit, async (req: Request, res: Response) => {
   try {
     if (!config.allow_user_registration) {
       return res.status(403).json({ error: 'auth.userRegistrationDisabled' })
@@ -91,7 +96,7 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     }
 
-    const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
+    const hashedPassword = await hashPassword(password)
     const ip = getClientIp(req)
     const verified = (config.smtp.enabled && email && code) ? 1 : (config.smtp.enabled ? 0 : 1)
 
@@ -125,7 +130,7 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 })
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authRateLimit, async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body
 
@@ -139,10 +144,18 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'auth.invalidCredentials' })
     }
 
-    const hashedPassword = crypto.createHash('md5').update(password).digest('hex')
-    if (hashedPassword !== user.password) {
+    const { valid, needsRehash } = await verifyPassword(password, user.password)
+    if (!valid) {
       await Logger.info('web', 'auth.ts', `Failed login for user ${username}`)
       return res.status(401).json({ error: 'auth.invalidCredentials' })
+    }
+
+    if (needsRehash) {
+      try {
+        await db.prepare('UPDATE users SET password = ? WHERE id = ?').run(await hashPassword(password), user.id)
+      } catch (err) {
+        await Logger.error('web', 'auth.ts', 'Failed to upgrade legacy password hash', err)
+      }
     }
 
     if (user.banned) {

@@ -5,10 +5,22 @@ import config from '../config'
 import { Logger } from '../services/logger'
 import { getRequestTranslator } from '../services/server-i18n'
 
+function normalizeIp(ip: string): string {
+  return ip.replace(/^::ffff:/, '').trim()
+}
+
+function isTrustedProxy(remoteIp: string): boolean {
+  const normalizedRemote = normalizeIp(remoteIp)
+  return config.server.trusted_proxies.includes(normalizedRemote)
+}
+
 export function getClientIp(req: Request): string {
+  const remoteIp = normalizeIp(req.socket.remoteAddress || 'unknown')
   const forwarded = req.headers['x-forwarded-for']
-  if (forwarded) return (forwarded as string).split(',')[0].trim()
-  return req.socket.remoteAddress || 'unknown'
+  if (forwarded && isTrustedProxy(remoteIp)) {
+    return normalizeIp((forwarded as string).split(',')[0].trim())
+  }
+  return remoteIp
 }
 
 function ipToInt(ip: string): number {
@@ -17,7 +29,7 @@ function ipToInt(ip: string): number {
 }
 
 function matchIp(clientIp: string, pattern: string): boolean {
-  const cleanIp = clientIp.replace(/^::ffff:/, '')
+  const cleanIp = normalizeIp(clientIp)
   const cleanPattern = pattern.trim()
 
   if (cleanPattern.includes('/')) {
@@ -108,13 +120,23 @@ export function ipBlacklistMiddleware(req: Request, res: Response, next: NextFun
 
       return next()
     } catch (err: any) {
-      await Logger.error('system', 'auth.ts', 'IP list middleware fallback to allow request', err)
-      return next()
+      await Logger.error('system', 'auth.ts', 'IP list middleware failed', err)
+      return failOpenOrClosed(req, res, next)
     }
   })().catch(async (err: any) => {
     await Logger.error('system', 'auth.ts', 'IP list middleware unexpected failure', err)
-    return next()
+    return failOpenOrClosed(req, res, next)
   })
+}
+
+// On internal errors, fail open for blacklist mode (do not lock everyone out) but
+// fail closed for whitelist mode (an outage must not become an access bypass).
+function failOpenOrClosed(req: Request, res: Response, next: NextFunction) {
+  if (config.ip_list_mode === 'whitelist') {
+    const t = getRequestTranslator(req)
+    return res.status(403).json({ error: t('auth.ipNotInWhitelist', 'IP address is not in the whitelist') })
+  }
+  return next()
 }
 
 const JWT_SECRET = config.server.jwt_secret

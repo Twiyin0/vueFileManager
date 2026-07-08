@@ -52,6 +52,7 @@ common:
   yes: 是
   no: 否
   default: 默认
+  rootDirectory: 根目录
   backToTop: 回到顶部
   expand: 展开
   collapse: 收起
@@ -67,11 +68,13 @@ theme:
 search:
   shortcutHint: Ctrl+K 搜索
   resultsCount: 搜索结果：{count} 项
+  invalidRegex: 正则表达式无效
 spotlight:
-  placeholder: 搜索文件和文件夹... (Ctrl+K)
+  placeholder: 搜索文件和文件夹... (Ctrl+K, //正则)
   loading: 搜索中...
   noResults: 未找到匹配结果
   emptyHint: 输入关键词搜索文件和文件夹
+  regexHint: 使用 // 开头可启用正则表达式搜索
 file:
   open: 打开
   preview: 预览
@@ -87,6 +90,7 @@ file:
   allPools: 全部存储池
   goUp: 上级
   listView: 列表模式
+  mediumListView: 中等列表模式
   gridView: 网格模式
   newFolder: 新建文件夹
   newFolderShort: 新建
@@ -99,8 +103,10 @@ file:
   remoteUploadOffline: 离线下载
   remoteUploadInstantHint: 当前会直接请求远程资源并立即写入存储池。
   remoteUploadOfflineHint: 服务器会在后台下载并写入当前目录。
-  remoteUploadPlaceholder: "https://example.com/file-a.zip, https://example.com/file-b.zip"
-  remoteUploadUrlHint: 输入一个或多个远程链接，使用逗号分隔。
+  remoteUploadPlaceholder: |-
+    https://example.com/file-a.zip
+    https://example.com/file-b.zip
+  remoteUploadUrlHint: 输入一个或多个远程链接，支持逗号、竖线或一行一个。
   remoteUploadEmpty: 请至少输入一个远程链接
   remoteUploadSuccess: 远程上传已完成
   remoteUploadBatchSuccess: 已上传 {count} 个远程文件
@@ -133,6 +139,15 @@ file:
   name: 名称
   size: 大小
   modified: 修改时间
+  sortCurrent: 当前排序：{field}（{direction}）
+  sortField:
+    name: 名称
+    modified: 修改时间
+    type: 类型
+    size: 大小
+  sortDirection:
+    asc: 升序
+    desc: 降序
 shareMount:
   menu: 跨池挂载
   batchMenu: 批量跨池挂载
@@ -164,6 +179,10 @@ upload:
   busyHint: 上传任务进行中，可关闭此窗口，右下角会继续显示进度
   dropHint: 点击或拖拽文件到此处上传
   dropOverlay: 拖放文件到此处上传
+  clipboardHint: 打开此窗口后，可按 {shortcut} 从系统剪贴板上传文件或截图
+  readClipboard: 读取剪贴板
+  clipboardEmpty: 系统剪贴板中没有可上传的文件
+  clipboardReadFailed: 无法读取系统剪贴板。复制文件或截图后，仍可尝试按 {shortcut}
   limitHint: 单文件大小受服务端上传限制控制
   queue: 上传队列
   pendingFiles: 待上传文件
@@ -253,6 +272,8 @@ guestShare:
   writeHint: （上传文件、创建文件夹）
   deleteHint: （删除文件与文件夹）
   editHint: （编辑文件内容、重命名）
+  passwordPlaceholderEdit: 留空则保留当前密码
+  passwordUnchangedHint: 留空表示保留当前密码。
   saving: 保存中...
   sharing: 分享中...
   confirmShare: 确认分享
@@ -515,6 +536,8 @@ guest:
   uploadFailed: 上传失败
   uploadCancelled: 上传已取消
   dragUploadOverlay: 拖放文件到此处上传
+  passwordRequiredDescription: 此访客目录需要密码才能访问。
+  incorrectPassword: 密码错误
   noSharedFolders: 暂无分享的文件夹
   folderFallback: 文件夹
   searchPlaceholder: 搜索...
@@ -601,7 +624,10 @@ storagePoolsPage:
   name: 存储池名称
   namePlaceholder: 例如：主存储、备份存储
   type: 存储类型
-  localHint: 本地存储会自动按用户名隔离目录，无需单独填写磁盘路径。
+  localHint: 磁盘路径留空时使用按用户名隔离的默认目录，也可以填写服务器本地路径，例如 /mnt/usb。
+  localPath: 本地磁盘路径
+  localPathPlaceholder: /mnt/usb
+  localPathHint: 服务器进程必须拥有该路径的读写权限。
   rootPath: 根路径映射
   operatorPlaceholder: 操作员
   passwordPlaceholderEdit: 密码，编辑时留空表示不修改

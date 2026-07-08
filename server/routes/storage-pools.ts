@@ -55,6 +55,43 @@ function validateStorageConfig(storageType: string, storageConfig: Record<string
   }
 }
 
+function joinMappedPath(basePath: string, rootPath?: string) {
+  const base = path.resolve(basePath)
+  const normalizedRoot = typeof rootPath === 'string'
+    ? rootPath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+    : ''
+
+  if (!normalizedRoot) {
+    return base
+  }
+
+  const segments = normalizedRoot.split('/').filter(Boolean)
+  if (segments.some((segment) => segment === '.' || segment === '..' || /[\u0000-\u001f]/.test(segment))) {
+    throw new Error('common.invalidPath')
+  }
+
+  const resolved = path.resolve(base, ...segments)
+  const baseWithSlash = base.endsWith(path.sep) ? base : `${base}${path.sep}`
+  if (resolved !== base && !resolved.startsWith(baseWithSlash)) {
+    throw new Error('common.invalidPath')
+  }
+  return resolved
+}
+
+async function resolveLocalPoolPath(userId: number, poolConfig: Record<string, any>) {
+  const configuredPath = [poolConfig.path, poolConfig.localPath]
+    .find((value) => typeof value === 'string' && value.trim())
+    ?.trim() || ''
+
+  if (configuredPath) {
+    return joinMappedPath(path.resolve(configuredPath), poolConfig.rootPath)
+  }
+
+  const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
+  const username = user?.username || ''
+  return joinMappedPath(path.resolve(config.storage_root || './uploads', username), poolConfig.rootPath)
+}
+
 async function getUsername(userId: number) {
   const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as any
   return user?.username || `#${userId}`
@@ -69,18 +106,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       ORDER BY is_default DESC, created_at ASC
     `).all(req.userId!) as any[]
 
-    const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
-    const username = user?.username || ''
-
-    const safePools = pools.map(pool => {
+    const safePools = await Promise.all(pools.map(async (pool) => {
       const cfg = maskSecrets(JSON.parse(pool.config || '{}'))
       let resolvedPath = ''
 
       if (pool.storage_type === 'local') {
-        const base = path.resolve(config.storage_root || './uploads', username)
-        resolvedPath = cfg.rootPath && cfg.rootPath !== '/'
-          ? path.join(base, cfg.rootPath)
-          : base
+        resolvedPath = await resolveLocalPoolPath(req.userId!, cfg)
       }
 
       return {
@@ -92,7 +123,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         resolvedPath,
         createdAt: pool.created_at
       }
-    })
+    }))
 
     res.json({ pools: safePools })
   } catch (err) {
@@ -346,13 +377,13 @@ router.post('/:id/test', authMiddleware, async (req: AuthRequest, res: Response)
 
     if (pool.storage_type === 'local') {
       const fs = await import('fs/promises')
-      const user = await db.prepare('SELECT username FROM users WHERE id = ?').get(req.userId!) as any
-      const localPath = path.resolve(config.storage_root || './uploads', user?.username || '')
+      const localPath = await resolveLocalPoolPath(req.userId!, poolConfig)
       try {
+        await fs.mkdir(localPath, { recursive: true })
         await fs.access(localPath)
-        return res.json({ success: true, message: `Local path is accessible: ${localPath}` })
+        return res.json({ success: true, message: 'storagePool.localPathAccessible', params: { path: localPath } })
       } catch {
-        return res.json({ success: false, message: `Local path is not accessible: ${localPath}` })
+        return res.json({ success: false, message: 'storagePool.localPathInaccessible', params: { path: localPath } })
       }
     }
 

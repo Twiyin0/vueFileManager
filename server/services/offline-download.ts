@@ -1,7 +1,8 @@
 import { Readable } from 'stream'
 import db from '../db'
-import { getStorageByPoolId } from './factory'
 import { resolveRemoteUrlThroughPlugins } from '../plugins/loader'
+import { getStorageByPoolId } from './factory'
+import { safeFetch } from './url-guard'
 
 type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
@@ -50,7 +51,7 @@ async function processTask(task: DownloadTaskRow) {
       poolId: task.pool_id,
       dirPath: task.dir_path || ''
     })
-    const response = await fetch(remoteUrl)
+    const response = await safeFetch(remoteUrl)
     if (!response.ok || !response.body) {
       throw new Error(`Download failed: ${response.status} ${response.statusText}`)
     }

@@ -42,15 +42,60 @@ export function shouldUseAtomicTempUpload(storageType?: string) {
   return storageType === 'local' || storageType === 'ftp'
 }
 
-export function buildTemporaryUploadPath(filePath: string): string {
+export function sanitizeUploadFileName(fileName: string): string {
+  const normalized = fileName
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .pop()
+    ?.trim()
+    .normalize('NFC') || ''
+
+  return normalized.replace(/[\u0000-\u001f]/g, '')
+}
+
+export function normalizeStoragePath(inputPath: string): string {
+  const normalized = (inputPath || '')
+    .replace(/\\/g, '/')
+    .normalize('NFC')
+
+  if (!normalized) return ''
+
+  const segments: string[] = []
+  for (const segment of normalized.split('/')) {
+    const trimmed = segment.trim()
+    if (!trimmed || trimmed === '.') {
+      continue
+    }
+    if (trimmed === '..') {
+      throw new Error('common.invalidPath')
+    }
+    if (/[\u0000-\u001f]/.test(trimmed)) {
+      throw new Error('common.invalidPath')
+    }
+    segments.push(trimmed)
+  }
+
+  return segments.join('/')
+}
+
+export function joinStoragePath(...parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => normalizeStoragePath(part || ''))
+    .filter(Boolean)
+    .join('/')
+}
+
+export function buildTemporaryUploadPath(filePath: string, suffix?: string): string {
   const normalized = filePath.replace(/\\/g, '/')
   const lastSlashIndex = normalized.lastIndexOf('/')
+  const marker = suffix ? `${TEMP_UPLOAD_PREFIX}${suffix}_` : TEMP_UPLOAD_PREFIX
   if (lastSlashIndex === -1) {
-    return `${TEMP_UPLOAD_PREFIX}${normalized}`
+    return `${marker}${normalized}`
   }
   const dir = normalized.slice(0, lastSlashIndex)
   const name = normalized.slice(lastSlashIndex + 1)
-  return `${dir}/${TEMP_UPLOAD_PREFIX}${name}`
+  return `${dir}/${marker}${name}`
 }
 
 export async function finalizeAtomicUpload(storage: Awaited<ReturnType<typeof getStorageForRequest>>, tempPath: string, finalPath: string) {

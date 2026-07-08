@@ -115,12 +115,43 @@ const { t } = useI18n()
               <span class="hidden sm:inline">{{ t('file.goUp', 'Up') }}</span>
             </button>
 
-            <div class="view-mode-toggle flex items-center overflow-hidden rounded-lg border" style="border-color: var(--border-color)">
-              <button class="p-1.5 transition-colors" :class="state.viewMode === 'list' ? 'view-mode-active' : ''" :title="t('file.listView', 'List View')" @click="state.viewMode = 'list'">
+            <div class="view-mode-toggle overflow-hidden rounded-lg">
+              <button :class="state.viewMode === 'list' ? 'view-mode-active' : ''" :title="t('file.listView', 'List View')" @click="state.viewMode = 'list'">
                 <Icon name="list" class="h-4 w-4" />
               </button>
-              <button class="p-1.5 transition-colors" :class="state.viewMode === 'grid' ? 'view-mode-active' : ''" :title="t('file.gridView', 'Grid View')" @click="state.viewMode = 'grid'">
+              <button :class="state.viewMode === 'medium-list' ? 'view-mode-active' : ''" :title="t('file.mediumListView', 'Medium List View')" @click="state.viewMode = 'medium-list'">
+                <Icon name="video" class="h-4 w-4" />
+              </button>
+              <button :class="state.viewMode === 'grid' ? 'view-mode-active' : ''" :title="t('file.gridView', 'Grid View')" @click="state.viewMode = 'grid'">
                 <Icon name="grid" class="h-4 w-4" />
+              </button>
+            </div>
+
+            <div class="toolbar-select-group">
+              <span class="toolbar-select-label hidden sm:inline">
+                {{ t('file.sortShort', 'Sort') }}
+              </span>
+              <div class="relative flex min-w-[5.5rem] items-center">
+                <select
+                  class="toolbar-select-native"
+                  :value="state.sortKey"
+                  :title="t('file.sortShort', 'Sort')"
+                  @change="state.updateSort(($event.target as HTMLSelectElement).value as any)"
+                >
+                  <option value="name">{{ t('file.sortField.name', 'Name') }}</option>
+                  <option value="modified">{{ t('file.sortField.modified', 'Modified') }}</option>
+                  <option value="type">{{ t('file.sortField.type', 'Type') }}</option>
+                  <option value="size">{{ t('file.sortField.size', 'Size') }}</option>
+                </select>
+                <Icon name="chevron-down" class="toolbar-select-caret pointer-events-none absolute right-0 h-4 w-4" />
+              </div>
+              <span class="toolbar-select-divider" />
+              <button
+                class="toolbar-select-action"
+                :title="t(`file.sortDirection.${state.sortDirection}`, state.sortDirection)"
+                @click="state.updateSort(state.sortKey)"
+              >
+                <Icon :name="state.sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'" class="h-4 w-4" />
               </button>
             </div>
 
@@ -195,7 +226,7 @@ const { t } = useI18n()
         <div v-if="state.showSearch" class="mb-4">
           <div class="mb-2 flex items-center justify-between">
             <h3 class="text-sm font-medium" style="color: var(--text-color)">
-              {{ t('search.resultsCount', 'Search results: {count} items').replace('{count}', String(state.searchResults.length)) }}
+              {{ t('search.resultsCount', 'Search results: {count} items').replace('{count}', String(state.sortedSearchResults.length)) }}
             </h3>
             <button class="text-xs hover:underline" style="color: var(--accent-color)" @click="state.showSearch = false; state.searchQuery = ''">
               {{ t('file.clear', 'Clear') }}
@@ -228,19 +259,22 @@ const { t } = useI18n()
         />
 
         <FileList
-          :files="state.showSearch ? state.searchResults : state.filesStore.files"
+          :files="state.showSearch ? state.sortedSearchResults : state.sortedFiles"
           :loading="state.filesStore.loading || state.isSearching"
           :show-actions="true"
           :select-mode="!!state.currentPoolId"
           :selected-files="state.selectedFiles"
           :view-mode="state.viewMode"
           :current-pool-id="state.currentPoolId"
+          :sort-key="state.sortKey"
+          :sort-direction="state.sortDirection"
           @open="state.openFile"
           @download="state.handleDownload"
           @delete="state.confirmDelete"
           @contextmenu="state.handleContextMenu"
           @toggle-select="state.toggleSelectFile"
           @detail="state.showDetail"
+          @sort="state.updateSort"
         />
 
         <div v-if="state.filesStore.error" class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
@@ -263,7 +297,7 @@ const { t } = useI18n()
   />
 
   <FileDetailPanel :visible="state.showDetailPanel" :item="state.detailItem" @close="state.showDetailPanel = false" @favourite="state.toggleFavourite" />
-  <SpotlightSearch @navigate="state.handleSpotlightNavigate" />
+  <SpotlightSearch :current-path="state.currentPath" :current-pool-id="state.currentPoolId" @navigate="state.handleSpotlightNavigate" />
 
   <UploadDialog
     :show="state.showUpload"
@@ -281,42 +315,39 @@ const { t } = useI18n()
   />
 
   <Teleport to="body">
-    <div v-if="state.showRemoteUpload" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRemoteUpload = false" />
-      <div class="card relative max-h-[90vh] w-full max-w-md overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.remoteUploadTitle', 'Remote URL Upload') }}</h3>
+    <div v-if="state.showRemoteUpload" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="state.showRemoteUpload = false" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-md">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-4">{{ t('file.remoteUploadTitle', 'Remote URL Upload') }}</h3>
         <textarea
           v-model="state.remoteUrl"
           class="input-field mb-2 min-h-[120px] resize-y"
           :placeholder="t('file.remoteUploadPlaceholder', 'https://example.com/file-a.zip, https://example.com/file-b.zip')"
           spellcheck="false"
         />
-        <p class="mb-4 text-xs" style="color: var(--text-secondary-color)">
+        <p class="dialog-form-help mb-4 mt-0">
           {{ t('file.remoteUploadUrlHint', 'Enter one or more remote URLs separated by commas.') }}
         </p>
         <div class="mb-4">
-          <label class="mb-1.5 block text-sm" style="color: var(--text-secondary-color)">{{ t('file.remoteUploadMode', 'Upload Mode') }}</label>
+          <label class="dialog-form-label">{{ t('file.remoteUploadMode', 'Upload Mode') }}</label>
           <div class="grid grid-cols-2 gap-2">
             <button
-              class="rounded-lg border px-3 py-2 text-sm transition-colors"
-              :style="state.remoteUploadMode === 'instant'
-                ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
-                : 'border-color: var(--border-color); color: var(--text-color)'"
+              class="dialog-choice-card"
+              :class="state.remoteUploadMode === 'instant' ? 'dialog-choice-card-active' : ''"
               @click="state.remoteUploadMode = 'instant'"
             >
               {{ t('file.remoteUploadInstant', 'Upload Now') }}
             </button>
             <button
-              class="rounded-lg border px-3 py-2 text-sm transition-colors"
-              :style="state.remoteUploadMode === 'offline'
-                ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color); color: var(--accent-color)'
-                : 'border-color: var(--border-color); color: var(--text-color)'"
+              class="dialog-choice-card"
+              :class="state.remoteUploadMode === 'offline' ? 'dialog-choice-card-active' : ''"
               @click="state.remoteUploadMode = 'offline'"
             >
               {{ t('file.remoteUploadOffline', 'Offline Download') }}
             </button>
           </div>
-          <p class="mt-2 text-xs" style="color: var(--text-secondary-color)">
+          <p class="dialog-form-help">
             {{
               state.remoteUploadMode === 'offline'
                 ? t('file.remoteUploadOfflineHint', 'The server will download in the background and write into the current directory.')
@@ -324,39 +355,44 @@ const { t } = useI18n()
             }}
           </p>
         </div>
-        <div class="flex justify-end gap-3">
+        <div class="dialog-footer mt-0">
           <button class="btn-secondary text-sm" @click="state.showRemoteUpload = false">{{ t('common.cancel', 'Cancel') }}</button>
           <button class="btn-primary text-sm" :disabled="state.remoteUploading" @click="state.handleRemoteUpload">
             {{ state.remoteUploading ? t('upload.uploading', 'Uploading...') : t('upload.start', 'Start Upload') }}
           </button>
         </div>
-      </div>
-    </div>
-  </Teleport>
-
-  <Teleport to="body">
-    <div v-if="state.showCreateFolder" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showCreateFolder = false" />
-      <div class="card relative max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.newFolder', 'New Folder') }}</h3>
-        <input v-model="state.newFolderName" type="text" class="input-field mb-4" :placeholder="t('file.newFolderPlaceholder', 'Folder name')" @keyup.enter="state.handleCreateFolder" />
-        <div class="flex justify-end gap-3">
-          <button class="btn-secondary text-sm" @click="state.showCreateFolder = false">{{ t('common.cancel', 'Cancel') }}</button>
-          <button class="btn-primary text-sm" @click="state.handleCreateFolder">{{ t('common.create', 'Create') }}</button>
         </div>
       </div>
     </div>
   </Teleport>
 
   <Teleport to="body">
-    <div v-if="state.showRename" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="state.showRename = false" />
-      <div class="card relative max-h-[90vh] w-full max-w-sm overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold dark:text-dark-text">{{ t('file.rename', 'Rename') }}</h3>
+    <div v-if="state.showCreateFolder" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="state.showCreateFolder = false" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-sm">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-4">{{ t('file.newFolder', 'New Folder') }}</h3>
+        <input v-model="state.newFolderName" type="text" class="input-field mb-4" :placeholder="t('file.newFolderPlaceholder', 'Folder name')" @keyup.enter="state.handleCreateFolder" />
+        <div class="dialog-footer mt-0">
+          <button class="btn-secondary text-sm" @click="state.showCreateFolder = false">{{ t('common.cancel', 'Cancel') }}</button>
+          <button class="btn-primary text-sm" @click="state.handleCreateFolder">{{ t('common.create', 'Create') }}</button>
+        </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div v-if="state.showRename" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="state.showRename = false" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-sm">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-4">{{ t('file.rename', 'Rename') }}</h3>
         <input v-model="state.newFileName" type="text" class="input-field mb-4" :placeholder="t('file.renamePlaceholder', 'New name')" @keyup.enter="state.handleRename" />
-        <div class="flex justify-end gap-3">
+        <div class="dialog-footer mt-0">
           <button class="btn-secondary text-sm" @click="state.showRename = false">{{ t('common.cancel', 'Cancel') }}</button>
           <button class="btn-primary text-sm" @click="state.handleRename">{{ t('common.confirm', 'Confirm') }}</button>
+        </div>
         </div>
       </div>
     </div>

@@ -198,6 +198,127 @@ select.input-field {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.dialog-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4;
+}
+
+.dialog-overlay-top {
+  @apply fixed inset-0 z-[100] flex items-start justify-center p-2 sm:p-4;
+}
+
+.dialog-backdrop {
+  @apply absolute inset-0 bg-black/40 dark:bg-black/60;
+}
+
+.dialog-panel {
+  @apply relative w-full overflow-hidden rounded-2xl border;
+  background-color: var(--card-color);
+  border-color: color-mix(in srgb, var(--text-color) 10%, var(--border-color) 90%);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
+}
+
+.dark .dialog-panel {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.dialog-panel-scroll {
+  max-height: min(90vh, 52rem);
+  overflow-y: auto;
+}
+
+.dialog-panel-sm {
+  max-width: 24rem;
+}
+
+.dialog-panel-md {
+  max-width: 28rem;
+}
+
+.dialog-panel-lg {
+  max-width: 32rem;
+}
+
+.dialog-panel-xl {
+  max-width: 40rem;
+}
+
+.dialog-panel-2xl {
+  max-width: 48rem;
+}
+
+.dialog-section {
+  padding: 1.5rem;
+}
+
+.dialog-header {
+  @apply mb-5 flex items-start justify-between gap-3;
+}
+
+.dialog-title {
+  @apply text-lg font-semibold;
+  color: var(--text-color);
+}
+
+.dialog-description {
+  @apply text-sm;
+  color: var(--text-secondary-color);
+}
+
+.dialog-footer {
+  @apply mt-6 flex justify-end gap-3;
+}
+
+.dialog-close {
+  @apply rounded-lg p-2 transition-colors duration-150;
+  color: var(--text-secondary-color);
+}
+
+.dialog-close:hover {
+  background-color: var(--hover-color);
+  color: var(--text-color);
+}
+
+.dialog-muted-block {
+  @apply rounded-xl border px-3 py-3;
+  background-color: color-mix(in srgb, var(--accent-color) 5%, var(--surface-color) 95%);
+  border-color: color-mix(in srgb, var(--accent-color) 12%, var(--border-color) 88%);
+  color: var(--text-secondary-color);
+}
+
+.dialog-muted-block-strong {
+  @apply rounded-xl border px-3 py-3;
+  background-color: var(--hover-color);
+  border-color: var(--border-color);
+  color: var(--text-secondary-color);
+}
+
+.dialog-choice-card {
+  @apply rounded-xl border px-3 py-2.5 text-sm transition-colors duration-150;
+  border-color: var(--border-color);
+  color: var(--text-color);
+  background-color: transparent;
+}
+
+.dialog-choice-card:hover {
+  background-color: var(--hover-color);
+}
+
+.dialog-choice-card-active {
+  border-color: var(--accent-color);
+  background-color: var(--accent-soft-color);
+  color: var(--accent-color);
+}
+
+.dialog-form-label {
+  @apply mb-1.5 block text-sm font-medium;
+  color: var(--text-color);
+}
+
+.dialog-form-help {
+  @apply mt-1 text-xs;
+  color: var(--text-secondary-color);
+}
+
 /* 缩略图网格模式 */
 .thumb-container {
   aspect-ratio: 1;
@@ -206,7 +327,23 @@ select.input-field {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--surface-color);
+  padding: 0.5rem;
+  background-color: transparent;
+}
+
+.thumb-media-frame,
+.medium-thumb-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.45rem;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface-color) 92%, var(--accent-color) 8%),
+    color-mix(in srgb, var(--hover-color) 96%, var(--accent-color) 4%)
+  );
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
 .thumb-img {
@@ -228,6 +365,33 @@ select.input-field {
   -webkit-user-select: none;
   width: 100%;
   height: 100%;
+}
+
+.medium-thumb-slot {
+  border-radius: 0.5rem;
+  background-color: transparent;
+}
+
+.medium-thumb-frame {
+  flex-shrink: 0;
+}
+
+.medium-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.dark .thumb-media-frame,
+.dark .medium-thumb-frame {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface-color) 90%, var(--accent-color) 10%),
+    color-mix(in srgb, var(--hover-color) 95%, var(--accent-color) 5%)
+  );
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
 }
 
 /* =============================================
@@ -505,17 +669,91 @@ select.input-field {
 
 /* ---- 视图模式切换按钮 ---- */
 .view-mode-toggle {
-  background-color: var(--surface-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  min-height: 42px;
+  background-color: var(--hover-color);
+  border: 1px solid var(--border-color);
 }
 .view-mode-toggle button {
+  @apply flex items-center justify-center rounded-md transition-colors duration-150;
+  width: 36px;
+  height: 36px;
   color: var(--text-secondary-color);
 }
 .view-mode-toggle button:hover {
-  background-color: var(--hover-color);
+  background-color: var(--surface-color);
+  color: var(--text-color);
 }
 .view-mode-active {
-  background-color: var(--accent-soft-color) !important;
-  color: var(--accent-color) !important;
+  background-color: var(--accent-soft-color);
+  color: var(--accent-color);
+}
+
+.dark .view-mode-toggle {
+  background-color: var(--card-color);
+}
+
+.dark .view-mode-toggle button:hover {
+  background-color: var(--hover-color);
+}
+
+.toolbar-select-group {
+  @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150;
+  min-height: 42px;
+  background-color: var(--hover-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.toolbar-select-label {
+  color: var(--text-secondary-color);
+}
+
+.toolbar-select-native {
+  @apply min-w-0 appearance-none bg-transparent p-0 pr-6 text-sm font-medium outline-none;
+  color: inherit;
+}
+
+.toolbar-select-native option {
+  color: var(--text-color);
+  background-color: var(--card-color);
+}
+
+.toolbar-select-caret {
+  color: var(--text-secondary-color);
+}
+
+.toolbar-select-divider {
+  width: 1px;
+  align-self: stretch;
+  background-color: var(--border-color);
+  opacity: 0.7;
+}
+
+.toolbar-select-action {
+  @apply flex items-center justify-center rounded-md transition-colors duration-150;
+  width: 24px;
+  color: var(--text-color);
+}
+
+.toolbar-select-action:hover {
+  background-color: var(--surface-color);
+}
+
+.dark .toolbar-select-group {
+  background-color: var(--card-color);
+  color: var(--text-secondary-color);
+}
+
+.dark .toolbar-select-native {
+  color: var(--text-color);
+}
+
+.dark .toolbar-select-action:hover {
+  background-color: var(--hover-color);
 }
 
 /* ---- 移动端全局适配 ---- */

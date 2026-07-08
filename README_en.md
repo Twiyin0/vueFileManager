@@ -17,10 +17,12 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - User registration, login, JWT auth, and API keys
 - Admin user management, quota control, ban or unban, and manual verification
 - Per-user multi-storage-pool management
-- File listing, upload, stream upload, resumable upload, download, preview, search, and ZIP download
+- File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search with optional `//` regex mode, and ZIP download
+- Medium List View with lazy video thumbnails backed by the server thumbnail cache and adaptive list height
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`
-- Remote upload and background offline download tasks, including comma-separated batch URLs
+- Remote upload and background offline download tasks, including batch URLs separated by commas, vertical bars, or new lines
+- Directory sorting by name, modified time, file type, or size in ascending or descending order
 - Recycle bin, favourites, guest folder shares, and public shares
 - WebDAV with basic auth, JWT, and API key support
 - Theme and plugin discovery from `plugins/`
@@ -41,9 +43,21 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 ## Remote Upload and Offline Tasks
 
 - File Manager supports direct remote upload and server-side offline download
-- The input accepts one or more URLs separated by commas
+- The input accepts one or more URLs separated by commas, vertical bars, or new lines
 - Immediate mode downloads the remote resource and writes it into the selected storage pool right away
 - Offline mode creates background tasks that can be viewed and retried from the Offline Tasks page
+- For SSRF protection, only `http` / `https` URLs are allowed, and targets resolving to loopback, private, link-local (including the cloud metadata address `169.254.169.254`) or other reserved ranges are rejected; every redirect hop is re-validated
+
+## Security Notes
+
+- **JWT secret**: if `server.jwt_secret` in `config.yml` is empty or still the built-in default placeholder, the server generates a strong random secret on startup and writes it back to `config.yml`, so a publicly known default secret cannot be used to forge tokens
+- **Password hashing**: account passwords are stored with `bcrypt`; legacy unsalted MD5 hashes are transparently upgraded to bcrypt on the next successful login. The initial admin password in `config.yml` remains MD5-compatible and is upgraded on first login — change the default admin password right after deployment
+- **Login rate limiting**: the login, register and send-code endpoints are rate limited per client IP and return `429` when the threshold is exceeded
+- **Remote address validation**: remote upload and offline download reject URLs pointing to internal/reserved addresses (see above)
+- **Share signatures**: signed guest/public share links now use HMAC-SHA256. After upgrading, previously distributed share links must be re-copied from "My Shares"
+- **IP whitelist**: in whitelist mode, an internal error during the check rejects the request (fail-closed) so an outage cannot turn into an access bypass
+- **Security headers**: responses include `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy: no-referrer` (to avoid leaking access tokens embedded in direct URLs via the Referer header)
+- Always change the default admin credentials in production and place the service behind an HTTPS reverse proxy
 
 ## Runtime Requirements
 
@@ -73,6 +87,14 @@ Or run frontend and backend separately:
 yarn dev:client
 yarn dev:server
 ```
+
+The development server listens on `localhost` by default. To expose the frontend dev server to your LAN, pass Vite's host option explicitly:
+
+```bash
+yarn dev --host 0.0.0.0
+```
+
+In development mode, when the backend writes `config.yml` through admin APIs, it skips the redundant hot restart and no longer creates an extra config-write marker file.
 
 ## Build
 
@@ -140,6 +162,10 @@ Important fields:
   - Single file upload limit in MB
 - `max_concurrent_uploads`
   - Default max number of concurrent uploads
+- `server.trusted_proxies`
+  - Trusted reverse-proxy IP list
+  - `X-Forwarded-For` is only honored when the direct peer IP is in this list
+  - Leave it empty to ignore proxy headers and use the TCP peer address directly
 - `log_level`
   - Log verbosity level
   - `1 = error`
@@ -150,6 +176,17 @@ Important fields:
   - Runtime database config for `sqlite`, `mysql`, and `postgres`
 - `storage_pools`
   - Preconfigured storage pools inherited by newly created users
+  - Local pools may set `config.path` to mount a server-local directory such as `/mnt/usb`; when omitted, the per-user directory under `storage_root` is used
+  - The shorthand `storages` form also accepts local entries like `{ name, type: local, path }` and is normalized into `storage_pools`
+
+## Thumbnails
+
+- Thumbnail cache directory: `data/thumbnails/`
+- Thumbnail metadata table: `thumbnail_cache`
+- Video thumbnails use `ffprobe` and `ffmpeg` in a small background queue and never block directory listing
+- Supported video extensions: `mp4`, `mkv`, `avi`, `mov`, `webm`, `ts`, `flv`
+- Cache keys include file path, modified time, and file size
+- WebP is generated first; JPG is used as a fallback
 
 Admins can update these from the admin panel:
 
@@ -247,7 +284,7 @@ If your old deployment contains:
 - `data/filemanager.db-wal`
 - `data/filemanager.db-shm`
 
-merge the WAL log back into the main database before switching to the current runtime.
+merge the WAL log back into the main database before switching to the current runtime. If `PRAGMA wal_checkpoint(TRUNCATE);` leaves behind only a 0-byte or tiny placeholder `*.db-wal` file, the current runtime will ignore and clean up that stub automatically.
 
 Stop the old service, then run:
 

@@ -93,6 +93,10 @@ function isExpired(share: Share): boolean {
 function isMaxedOut(share: Share): boolean {
   return share.max_downloads ? share.download_count >= share.max_downloads : false
 }
+
+function getShareDisplayName(share?: Share | null): string {
+  return share?.file_path.split('/').filter(Boolean).pop() || t('common.rootDirectory', 'Root directory')
+}
 </script>
 
 <template>
@@ -116,7 +120,7 @@ function isMaxedOut(share: Share): boolean {
           <div class="min-w-0 flex-1">
             <div class="mb-1 flex items-center gap-2">
               <h3 class="truncate font-medium text-light-text dark:text-dark-text">
-                {{ share.file_path.split('/').pop() }}
+                {{ getShareDisplayName(share) }}
               </h3>
               <span
                 v-if="isExpired(share)"
@@ -179,7 +183,7 @@ function isMaxedOut(share: Share): boolean {
   <ConfirmDialog
     :show="showDeleteConfirm"
     :title="t('myShares.deleteTitle', 'Delete Share')"
-    :message="t('myShares.deleteMessage', 'Delete the share link for {name}?').replace('{name}', shareToDelete?.file_path.split('/').pop() || '')"
+    :message="t('myShares.deleteMessage', 'Delete the share link for {name}?').replace('{name}', getShareDisplayName(shareToDelete))"
     :confirm-text="t('common.delete', 'Delete')"
     :danger="true"
     @confirm="handleDelete"

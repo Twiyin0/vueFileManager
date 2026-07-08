@@ -1,7 +1,7 @@
 import type { Response, Router } from 'express'
 import db from '../../db'
 import { ApiKeyRequest, flexibleAuth, requirePermission } from '../../middleware/apikey'
-import { getStorageByPoolId } from '../../services/factory'
+import { resolveRemoteUrlThroughPlugins } from '../../plugins/loader'
 import {
   cancelOfflineDownloadTask,
   clearFinishedOfflineDownloadTasks,
@@ -9,7 +9,8 @@ import {
   listOfflineDownloadTasks,
   retryOfflineDownloadTask
 } from '../../services/offline-download'
-import { resolveRemoteUrlThroughPlugins } from '../../plugins/loader'
+import { getStorageByPoolId } from '../../services/factory'
+import { assertPublicHttpUrl, safeFetch } from '../../services/url-guard'
 import { buildDirectUrl, getStorageForRequest, resolvePoolId } from './shared'
 
 interface NormalizedRemoteUploadRequest {
@@ -28,19 +29,20 @@ interface RemoteUploadResultItem {
   fileUrl: string
 }
 
+function splitRemoteUrlInput(value: string): string[] {
+  return value
+    .split(/[\r\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 function extractUrls(input: unknown): string[] {
   if (Array.isArray(input)) {
-    return input
-      .flatMap((item) => String(item ?? '').split(','))
-      .map((item) => item.trim())
-      .filter(Boolean)
+    return input.flatMap((item) => splitRemoteUrlInput(String(item ?? '')))
   }
 
   if (typeof input === 'string') {
-    return input
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
+    return splitRemoteUrlInput(input)
   }
 
   return []
@@ -94,7 +96,7 @@ async function uploadRemoteFile(
     poolId: resolvedPoolId,
     dirPath
   })
-  const response = await fetch(remoteUrl)
+  const response = await safeFetch(remoteUrl)
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status} ${response.statusText}`)
   }
@@ -179,9 +181,26 @@ export function registerOfflineTaskRoutes(router: Router) {
       }
 
       const tasks: Array<{ taskId: number; url: string }> = []
+      const errors: Array<{ url: string; error: string }> = []
+
       for (const url of urls) {
+        try {
+          await assertPublicHttpUrl(url)
+        } catch (err: any) {
+          errors.push({ url, error: err.message || 'file.remoteUrlNotAllowed' })
+          continue
+        }
+
         const taskId = await createOfflineDownloadTask(req.userId!, resolvedPoolId, url, dirPath || '')
         tasks.push({ taskId, url })
+      }
+
+      if (tasks.length === 0) {
+        return res.status(400).json({
+          error: errors[0]?.error || 'file.remoteUrlNotAllowed',
+          urls,
+          errors
+        })
       }
 
       res.json({
@@ -189,6 +208,7 @@ export function registerOfflineTaskRoutes(router: Router) {
         count: tasks.length,
         poolId: resolvedPoolId,
         tasks,
+        errors,
         taskId: tasks[0]?.taskId
       })
     } catch (err: any) {

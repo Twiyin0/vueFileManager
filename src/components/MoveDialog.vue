@@ -94,13 +94,14 @@ function handleConfirm() {
 
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="emit('close')" />
-      <div class="relative card max-h-[90vh] w-full max-w-lg overflow-y-auto" style="padding: 1.5rem">
-        <h3 class="mb-4 text-lg font-semibold" style="color: var(--text-color)">{{ t('move.title', 'Move To') }}</h3>
+    <div v-if="show" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="emit('close')" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-lg">
+        <div class="dialog-section">
+        <h3 class="dialog-title mb-4">{{ t('move.title', 'Move To') }}</h3>
 
         <div class="mb-3">
-          <label class="mb-1 block text-xs" style="color: var(--text-secondary-color)">{{ t('move.targetPool', 'Target Storage Pool') }}</label>
+          <label class="dialog-form-label text-xs">{{ t('move.targetPool', 'Target Storage Pool') }}</label>
           <select v-model="selectedPoolId" class="input-field text-sm">
             <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.name }}</option>
           </select>
@@ -119,7 +120,7 @@ function handleConfirm() {
           </button>
         </div>
 
-        <div class="mb-4 max-h-60 overflow-y-auto rounded-lg border" style="border-color: var(--border-color)">
+        <div class="dialog-muted-block-strong mb-4 max-h-60 overflow-y-auto !p-0">
           <div v-if="loadingFolders" class="flex items-center justify-center py-8">
             <svg class="h-5 w-5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -144,7 +145,7 @@ function handleConfirm() {
           </div>
         </div>
 
-        <div class="mb-4 rounded p-2 text-xs" style="background-color: var(--hover-color); color: var(--text-secondary-color)">
+        <div class="dialog-muted-block mb-4 text-xs">
           {{ t('move.targetSummary', 'Target: {pool} / {path}')
             .replace('{pool}', currentPoolName || '-')
             .replace('{path}', navigatePath || t('upload.rootPath', 'Root Directory')) }}
@@ -157,11 +158,12 @@ function handleConfirm() {
           </button>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="dialog-footer mt-0">
           <button class="btn-secondary text-sm" @click="emit('close')">{{ t('common.cancel', 'Cancel') }}</button>
           <button class="btn-primary text-sm" :disabled="!selectedPoolId" @click="handleConfirm">
             {{ t('move.confirmHere', 'Move Here') }}
           </button>
+        </div>
         </div>
       </div>
     </div>

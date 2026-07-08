@@ -179,18 +179,19 @@ function formatDate(dateStr: string): string {
   </div>
 
   <Teleport to="body">
-    <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 dark:bg-black/60" @click="closeCreate" />
-      <div class="relative card max-h-[90vh] w-full max-w-md overflow-y-auto p-6">
+    <div v-if="showCreate" class="dialog-overlay">
+      <div class="dialog-backdrop" @click="closeCreate" />
+      <div class="dialog-panel dialog-panel-scroll dialog-panel-md">
+        <div class="dialog-section">
         <template v-if="createdKey">
-          <h3 class="mb-2 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('apiKeys.createdTitle', 'API Key Created') }}</h3>
-          <p class="mb-4 text-sm text-gray-500 dark:text-dark-text-secondary">
+          <h3 class="dialog-title mb-2">{{ t('apiKeys.createdTitle', 'API Key Created') }}</h3>
+          <p class="dialog-description mb-4">
             {{ t('apiKeys.createdHint', 'Save this key securely. After closing, the full value cannot be viewed again.') }}
           </p>
-          <div class="break-all rounded-lg bg-gray-50 p-3 font-mono text-sm text-light-text dark:bg-dark-surface dark:text-dark-text">
+          <div class="dialog-muted-block-strong break-all font-mono text-sm" style="color: var(--text-color)">
             {{ createdKey }}
           </div>
-          <div class="mt-4 flex justify-end">
+          <div class="dialog-footer mt-4">
             <button class="btn-primary text-sm" @click="copyKey(createdKey, -1); closeCreate()">
               {{ copiedId === -1 ? t('share.copied', 'Copied') : t('apiKeys.copyAndClose', 'Copy and Close') }}
             </button>
@@ -198,22 +199,22 @@ function formatDate(dateStr: string): string {
         </template>
 
         <template v-else>
-          <h3 class="mb-4 text-lg font-semibold text-light-text dark:text-dark-text">{{ t('apiKeys.createTitle', 'Create API Key') }}</h3>
+          <h3 class="dialog-title mb-4">{{ t('apiKeys.createTitle', 'Create API Key') }}</h3>
           <div class="space-y-4">
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('apiKeys.name', 'Name') }}</label>
+              <label class="dialog-form-label">{{ t('apiKeys.name', 'Name') }}</label>
               <input v-model="newKeyName" type="text" class="input-field" :placeholder="t('apiKeys.namePlaceholder', 'Example: My App')" />
             </div>
             <div>
-              <label class="mb-2 block text-sm font-medium text-light-text dark:text-dark-text">{{ t('apiKeys.permissions', 'Permissions') }}</label>
+              <label class="dialog-form-label mb-2">{{ t('apiKeys.permissions', 'Permissions') }}</label>
               <div class="space-y-2">
                 <label
                   v-for="option in permissionOptions"
                   :key="option.value"
-                  class="flex cursor-pointer items-start gap-3 rounded-lg p-3"
-                  :class="newKeyPermissions.includes(option.value)
-                    ? 'border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20'
-                    : 'border border-light-border hover:bg-gray-50 dark:border-dark-border dark:hover:bg-dark-hover'"
+                  class="dialog-muted-block-strong flex cursor-pointer items-start gap-3"
+                  :style="newKeyPermissions.includes(option.value)
+                    ? 'border-color: var(--accent-color); background-color: var(--accent-soft-color)'
+                    : ''"
                 >
                   <input
                     v-model="newKeyPermissions"
@@ -222,20 +223,21 @@ function formatDate(dateStr: string): string {
                     class="mt-0.5 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-dark-border"
                   />
                   <div>
-                    <p class="text-sm font-medium text-light-text dark:text-dark-text">{{ option.label }}</p>
-                    <p class="text-xs text-gray-500 dark:text-dark-text-secondary">{{ option.desc }}</p>
+                    <p class="text-sm font-medium" style="color: var(--text-color)">{{ option.label }}</p>
+                    <p class="text-xs" style="color: var(--text-secondary-color)">{{ option.desc }}</p>
                   </div>
                 </label>
               </div>
             </div>
           </div>
-          <div class="mt-6 flex justify-end gap-3">
+          <div class="dialog-footer">
             <button class="btn-secondary text-sm" @click="closeCreate">{{ t('common.cancel', 'Cancel') }}</button>
             <button class="btn-primary text-sm" :disabled="!newKeyName.trim() || creating" @click="createKey">
               {{ creating ? t('apiKeys.creating', 'Creating...') : t('common.create', 'Create') }}
             </button>
           </div>
         </template>
+        </div>
       </div>
     </div>
   </Teleport>

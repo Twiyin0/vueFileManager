@@ -7,8 +7,11 @@ import { useI18n } from '@/composables/useI18n'
 import { useFilesStore, type FileItem } from '@/stores/files'
 import { useAuthStore } from '@/stores/auth'
 import APlayer from 'aplayer'
+import { sortFiles, type FileSortDirection, type FileSortKey } from '@/utils/fileSort'
 
 import 'aplayer/dist/APlayer.min.css'
+
+type ViewMode = 'list' | 'grid' | 'medium-list'
 
 export function useHomeView() {
   const route = useRoute()
@@ -38,13 +41,18 @@ export function useHomeView() {
   const searchResults = ref<FileItem[]>([])
   const isSearching = ref(false)
   const showSearch = ref(false)
+  const sortKey = ref<FileSortKey>((localStorage.getItem('fileSortKey') as FileSortKey) || 'name')
+  const sortDirection = ref<FileSortDirection>((localStorage.getItem('fileSortDirection') as FileSortDirection) || 'asc')
 
   const contextMenu = ref({ visible: false, x: 0, y: 0, item: null as any })
   const selectedFiles = ref<Set<string>>(new Set())
   const isSelectMode = computed(() => selectedFiles.value.size > 0)
 
-  const viewMode = ref<'list' | 'grid'>((localStorage.getItem('viewMode') as 'list' | 'grid') || 'list')
+  const savedViewMode = localStorage.getItem('viewMode') as ViewMode | null
+  const viewMode = ref<ViewMode>(savedViewMode === 'grid' || savedViewMode === 'medium-list' ? savedViewMode : 'list')
   watch(viewMode, (value) => localStorage.setItem('viewMode', value))
+  watch(sortKey, (value) => localStorage.setItem('fileSortKey', value))
+  watch(sortDirection, (value) => localStorage.setItem('fileSortDirection', value))
 
   const showDetailPanel = ref(false)
   const detailItem = ref<any>(null)
@@ -137,6 +145,8 @@ export function useHomeView() {
     const pool = pools.value.find((item) => item.id === currentPoolId.value)
     return pool?.name || ''
   })
+  const sortedFiles = computed(() => sortFiles(filesStore.files, sortKey.value, sortDirection.value))
+  const sortedSearchResults = computed(() => sortFiles(searchResults.value, sortKey.value, sortDirection.value))
   const canUseRemoteUpload = computed(() => !!currentPoolId.value)
   let hasInitialized = false
   let hasActivatedOnce = false
@@ -683,7 +693,7 @@ export function useHomeView() {
   function parseRemoteUrls(value: string) {
     return Array.from(new Set(
       value
-        .split(',')
+        .split(/[\r\n,，|｜]+/u)
         .map((item) => item.trim())
         .filter(Boolean)
     ))
@@ -1036,6 +1046,15 @@ export function useHomeView() {
     }
   }
 
+  function updateSort(nextKey: FileSortKey) {
+    if (sortKey.value === nextKey) {
+      sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+      return
+    }
+    sortKey.value = nextKey
+    sortDirection.value = nextKey === 'modified' || nextKey === 'size' ? 'desc' : 'asc'
+  }
+
   function startRename(file: FileItem) {
     fileToRename.value = file
     newFileName.value = file.name
@@ -1133,7 +1152,7 @@ export function useHomeView() {
         handleBatchZipDownload()
         break
       case 'batch-copy': {
-        const allFiles = showSearch.value ? searchResults.value : filesStore.files
+        const allFiles = showSearch.value ? sortedSearchResults.value : sortedFiles.value
         handleCopy(Array.from(selectedFiles.value).map((path) => {
           const file = allFiles.find((item) => item.path === path)
           return { path, name: file?.name, poolId: currentPoolId.value }
@@ -1141,7 +1160,7 @@ export function useHomeView() {
         break
       }
       case 'batch-move': {
-        const allFiles = showSearch.value ? searchResults.value : filesStore.files
+        const allFiles = showSearch.value ? sortedSearchResults.value : sortedFiles.value
         handleMove(Array.from(selectedFiles.value).map((path) => {
           const file = allFiles.find((item) => item.path === path)
           return { path, name: file?.name, poolId: currentPoolId.value }
@@ -1149,7 +1168,7 @@ export function useHomeView() {
         break
       }
       case 'batch-share-mount': {
-        const allFiles = showSearch.value ? searchResults.value : filesStore.files
+        const allFiles = showSearch.value ? sortedSearchResults.value : sortedFiles.value
         const folders = Array.from(selectedFiles.value)
           .map((path) => allFiles.find((item) => item.path === path))
           .filter((item): item is FileItem => !!item && item.type === 'folder')
@@ -1214,8 +1233,12 @@ export function useHomeView() {
     filesToShareMount,
     searchQuery,
     searchResults,
+    sortedFiles,
+    sortedSearchResults,
     isSearching,
     showSearch,
+    sortKey,
+    sortDirection,
     contextMenu,
     selectedFiles,
     isSelectMode,
@@ -1298,6 +1321,7 @@ export function useHomeView() {
     handleDelete,
     handleDownload,
     handleSearch,
+    updateSort,
     startRename,
     handleRename,
     startShare,

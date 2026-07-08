@@ -1,5 +1,5 @@
 import express from 'express'
-import config, { configWriteMarkerPath } from '../config'
+import config, { wasRecentInternalConfigWrite } from '../config'
 import { bootstrapApp } from './bootstrap'
 import { createPublicPlatformRouter } from './features'
 import { registerAppMiddleware } from './middleware'
@@ -18,7 +18,7 @@ export function createServerApp() {
 
   watchConfigFile(rootDir, serverEntryPath, {
     enabled: watchEnabled,
-    internalWriteMarkerPath: configWriteMarkerPath
+    shouldSkipRestart: () => wasRecentInternalConfigWrite()
   })
 
   registerAppMiddleware(app, { rootDir })

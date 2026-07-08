@@ -28,7 +28,10 @@ function createStorageInstance(pool: any, username?: string): StorageProvider {
   } else if (pool.storage_type === 's3') {
     storage = new S3Storage(config)
   } else {
-    storage = new LocalStorage(appConfig.storage_root || './uploads', username)
+    const configuredPath = [config.path, config.localPath]
+      .find((value) => typeof value === 'string' && value.trim())
+      ?.trim() || ''
+    storage = new LocalStorage(configuredPath || appConfig.storage_root || './uploads', configuredPath ? undefined : username)
   }
 
   if (config.rootPath && config.rootPath !== '/' && config.rootPath !== '') {
