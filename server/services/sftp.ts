@@ -1,7 +1,7 @@
 import path from 'path'
 import { Readable } from 'stream'
 import SftpClient from 'ssh2-sftp-client'
-import { StorageProvider, FileInfo } from './storage'
+import { StorageProvider, FileInfo, StorageCapabilities } from './storage'
 
 interface SftpListItem {
   name: string
@@ -212,6 +212,15 @@ export class SftpStorage implements StorageProvider {
       return results
     } finally {
       await client.end()
+    }
+  }
+
+  async getCapabilities(): Promise<StorageCapabilities> {
+    return {
+      nativeDirectoryRename: true,
+      nativeDirectoryMove: true,
+      nativeDirectoryCopy: false,
+      recommendedAsyncTreeThreshold: 200,
     }
   }
 }

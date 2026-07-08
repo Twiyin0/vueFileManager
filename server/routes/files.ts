@@ -6,6 +6,7 @@ import { flexibleAuth, type ApiKeyRequest, requirePermission } from '../middlewa
 import { getStorage, getStorageByPoolId } from '../services/factory'
 import { Logger } from '../services/logger'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { copyStorageEntry, moveStorageEntry, renameStorageEntry } from '../services/storage-ops'
 import { getThumbnail, streamThumbnail } from '../services/thumbnail'
 import { buildTrashPath, moveToTrash } from '../services/trash'
 import { sendServerError } from './admin/shared'
@@ -17,6 +18,7 @@ import {
   normalizeStoragePath,
   processConcurrently,
   resolvePoolId,
+  sanitizeUploadFileName,
   withDirectUrl,
 } from './files/shared'
 import { registerOfflineTaskRoutes } from './files/offline-routes'
@@ -280,7 +282,7 @@ router.post('/batch-move', flexibleAuth, requirePermission('write'), async (req:
       try {
         const fileName = srcPath.split('/').pop() || ''
         const destPath = dest ? `${dest}/${fileName}` : fileName
-        await storage.move(srcPath, destPath)
+        await moveStorageEntry(storage, srcPath, destPath)
       } catch (err: any) {
         errors.push(`${srcPath}: ${err.message}`)
       }
@@ -328,8 +330,11 @@ router.post('/rename', flexibleAuth, requirePermission('write'), async (req: Api
       return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
 
-    const newName = rawNewName.normalize('NFC')
-    await storage.rename(filePath, newName)
+    const newName = sanitizeUploadFileName(rawNewName)
+    if (!newName || newName === '.' || newName === '..') {
+      return res.status(400).json({ error: 'file.invalidFileName' })
+    }
+    await renameStorageEntry(storage, filePath, newName)
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} renamed a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${filePath} -> ${newName}`)
@@ -351,7 +356,7 @@ router.post('/move', flexibleAuth, requirePermission('write'), async (req: ApiKe
     if (!src || !dest) {
       return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
-    await storage.move(src, dest)
+    await moveStorageEntry(storage, src, dest)
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} moved a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${src} -> ${dest}`)
@@ -373,7 +378,7 @@ router.post('/copy', flexibleAuth, requirePermission('write'), async (req: ApiKe
     if (!src || !dest) {
       return res.status(400).json({ error: 'common.missingRequiredParameters' })
     }
-    await storage.copy(src, dest)
+    await copyStorageEntry(storage, src, dest)
     const username = await getUsername(req.userId!)
     const poolId = await resolvePoolId(req.userId!, req.body?.poolId)
     await Logger.info('api', 'files.ts', `User ${username} copied a file in poolID:#${poolId || getPoolLabel(req.body?.poolId)} ${src} -> ${dest}`)

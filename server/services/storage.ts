@@ -8,6 +8,13 @@ export interface FileInfo {
   path: string
 }
 
+export interface StorageCapabilities {
+  nativeDirectoryRename: boolean
+  nativeDirectoryMove: boolean
+  nativeDirectoryCopy: boolean
+  recommendedAsyncTreeThreshold: number
+}
+
 export interface StorageProvider {
   // List files.
   list(prefix: string): Promise<FileInfo[]>
@@ -33,5 +40,6 @@ export interface StorageProvider {
   copy(srcPath: string, destPath: string): Promise<void>
   // Search recursively.
   search(prefix: string, keyword: string): Promise<FileInfo[]>
+  getCapabilities?(): Promise<StorageCapabilities>
   resolveLocalPath?(filePath: string): Promise<string | null>
 }

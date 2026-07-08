@@ -8,9 +8,9 @@
 
 set -e
 
-REMOTE="root@10.10.1.9"
+REMOTE="root@wa.zroxp.cn"
 REMOTE_DIR="/opt/node/vueFileManager"
-CONTAINER="vueFile"
+CONTAINER="vueFileManager"
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
 SSH_SOCKET="/tmp/vfm-deploy-$$"
 

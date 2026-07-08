@@ -80,6 +80,16 @@ function createDeferredStorage(getter: () => Promise<StorageProvider>): StorageP
     move: (srcPath, destPath) => getter().then((storage) => storage.move(srcPath, destPath)),
     copy: (srcPath, destPath) => getter().then((storage) => storage.copy(srcPath, destPath)),
     search: (prefix, keyword) => getter().then((storage) => storage.search(prefix, keyword)),
+    getCapabilities: () => getter().then((storage) => (
+      storage.getCapabilities
+        ? storage.getCapabilities()
+        : {
+            nativeDirectoryRename: true,
+            nativeDirectoryMove: true,
+            nativeDirectoryCopy: true,
+            recommendedAsyncTreeThreshold: 200,
+          }
+    )),
     resolveLocalPath: (filePath) => getter().then((storage) => storage.resolveLocalPath ? storage.resolveLocalPath(filePath) : null),
   }
 }

@@ -190,14 +190,18 @@ Creates a directory.
 ### `POST /api/files/rename`
 
 Renames a file or directory.
+The `newName` field should contain only the new name, not a full destination path.
+For storage backends without native directory rename support, the server automatically falls back to a recursive tree operation.
 
 ### `POST /api/files/move`
 
 Moves a file or directory within the same pool.
+For storage backends without native directory move support, the server automatically falls back to a recursive tree operation.
 
 ### `POST /api/files/copy`
 
 Copies a file or directory within the same pool.
+For storage backends without native directory copy support, the server automatically falls back to a recursive tree operation.
 
 ### `POST /api/files/batch-move`
 

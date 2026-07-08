@@ -1,7 +1,7 @@
 import * as ftp from 'basic-ftp'
 import path from 'path'
 import { PassThrough, Readable } from 'stream'
-import { StorageProvider, FileInfo } from './storage'
+import { StorageProvider, FileInfo, StorageCapabilities } from './storage'
 
 export class FtpStorage implements StorageProvider {
   private config: {
@@ -229,6 +229,15 @@ export class FtpStorage implements StorageProvider {
       }
     } catch {
       // Ignore inaccessible directories.
+    }
+  }
+
+  async getCapabilities(): Promise<StorageCapabilities> {
+    return {
+      nativeDirectoryRename: true,
+      nativeDirectoryMove: true,
+      nativeDirectoryCopy: false,
+      recommendedAsyncTreeThreshold: 120,
     }
   }
 }

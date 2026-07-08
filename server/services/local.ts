@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import fsSync from 'fs'
 import path from 'path'
 import { pipeline } from 'stream/promises'
-import { StorageProvider, FileInfo } from './storage'
+import { StorageProvider, FileInfo, StorageCapabilities } from './storage'
 
 export class LocalStorage implements StorageProvider {
   private basePath: string
@@ -217,6 +217,16 @@ export class LocalStorage implements StorageProvider {
     await walk(searchDir, prefix || '')
     return results.slice(0, 100) // Limit result count.
   }
+
+  async getCapabilities(): Promise<StorageCapabilities> {
+    return {
+      nativeDirectoryRename: true,
+      nativeDirectoryMove: true,
+      nativeDirectoryCopy: true,
+      recommendedAsyncTreeThreshold: 1000,
+    }
+  }
+
   async resolveLocalPath(filePath: string): Promise<string | null> {
     return this.resolvePath(filePath)
   }

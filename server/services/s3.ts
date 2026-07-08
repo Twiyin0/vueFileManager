@@ -9,7 +9,7 @@ import {
 } from '@aws-sdk/client-s3'
 import { Readable } from 'stream'
 import path from 'path'
-import { StorageProvider, FileInfo } from './storage'
+import { StorageProvider, FileInfo, StorageCapabilities } from './storage'
 
 export class S3Storage implements StorageProvider {
   private client: S3Client
@@ -252,5 +252,14 @@ export class S3Storage implements StorageProvider {
   async search(prefix: string, keyword: string): Promise<FileInfo[]> {
     const allFiles = await this.list(prefix || '')
     return allFiles.filter(f => f.name.toLowerCase().includes(keyword.toLowerCase()))
+  }
+
+  async getCapabilities(): Promise<StorageCapabilities> {
+    return {
+      nativeDirectoryRename: false,
+      nativeDirectoryMove: false,
+      nativeDirectoryCopy: false,
+      recommendedAsyncTreeThreshold: 150,
+    }
   }
 }

@@ -7,6 +7,7 @@ import { getStorageByPoolId } from '../services/factory'
 import { Logger } from '../services/logger'
 import { safeEqual } from '../services/password'
 import { resolvePreviewCacheFile } from '../services/preview-cache'
+import { renameStorageEntry } from '../services/storage-ops'
 import { getThumbnail, streamThumbnail } from '../services/thumbnail'
 import { buildTrashPath, moveToTrash } from '../services/trash'
 import config from '../config'
@@ -913,7 +914,7 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
     const basePath = normalizeShareBasePath(share.folder_path)
     const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
-    await storage.rename(fullPath, newName)
+    await renameStorageEntry(storage, fullPath, newName)
     res.json({ message: 'guest.renameSuccessful' })
   } catch (err: any) {
     res.status(500).json({ error: err.message })

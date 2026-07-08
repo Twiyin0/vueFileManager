@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import { flexibleAuth, type ApiKeyRequest } from '../middleware/apikey'
 import { getStorageByPoolId } from '../services/factory'
 import { Logger } from '../services/logger'
+import { copyStorageEntry, moveStorageEntry } from '../services/storage-ops'
 import db from '../db'
 import { sendServerError } from './admin/shared'
 
@@ -300,7 +301,7 @@ ${responses.join('\n')}
         return res.status(400).json({ error: 'webdav.crossPoolMoveUnsupported' })
       }
 
-      await storage.move(pathFromRoute, targetScope.storagePath)
+      await moveStorageEntry(storage, pathFromRoute, targetScope.storagePath)
       await Logger.info('webdav', 'webdav.ts', `User ${username} moved a file in poolID:#${poolId} ${pathFromRoute} -> ${targetScope.storagePath}`)
       res.status(201).end()
       return
@@ -321,7 +322,7 @@ ${responses.join('\n')}
         return res.status(400).json({ error: 'webdav.crossPoolCopyUnsupported' })
       }
 
-      await storage.copy(pathFromRoute, targetScope.storagePath)
+      await copyStorageEntry(storage, pathFromRoute, targetScope.storagePath)
       await Logger.info('webdav', 'webdav.ts', `User ${username} copied a file in poolID:#${poolId} ${pathFromRoute} -> ${targetScope.storagePath}`)
       res.status(201).end()
       return

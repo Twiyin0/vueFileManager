@@ -1,8 +1,9 @@
 // @ts-ignore - upyun has no type declarations
 import upyun from 'upyun'
 import https from 'https'
+import path from 'path'
 import { PassThrough } from 'stream'
-import { StorageProvider, FileInfo } from './storage'
+import { StorageProvider, FileInfo, StorageCapabilities } from './storage'
 
 // Global HTTPS agent with keepalive for connection reuse
 const httpsAgent = new https.Agent({
@@ -12,6 +13,12 @@ const httpsAgent = new https.Agent({
   maxFreeSockets: 5,
   timeout: 60000,
 })
+
+type UpyunHeadResult = false | {
+  type?: 'file' | 'folder'
+  size?: number
+  date?: number
+}
 
 /** Retry wrapper with exponential backoff for transient Upyun errors */
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
@@ -38,12 +45,13 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
 
 export class UpyunStorage implements StorageProvider {
   private client: upyun.Client
-  private bucket: string
+  private serviceName: string
 
   constructor(operator: string, password: string, bucket: string, endpoint: string = 'v0.api.upyun.com') {
     const service = new upyun.Service(bucket, operator, password, endpoint)
     this.client = new upyun.Client(service)
-    this.bucket = bucket
+    this.serviceName = bucket
+
     // Inject keepalive agent into the underlying axios instance
     try {
       const req = (this.client as any).req
@@ -51,13 +59,130 @@ export class UpyunStorage implements StorageProvider {
         req.defaults.httpsAgent = httpsAgent
         req.defaults.timeout = 30000
       }
-    } catch { /* ignore if internal API changes */ }
+    } catch {
+      // Ignore internal SDK changes.
+    }
   }
 
   private normalizePath(filePath: string): string {
-    let p = filePath.startsWith('/') ? filePath : '/' + filePath
-    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
-    return p
+    let normalized = filePath.startsWith('/') ? filePath : `/${filePath}`
+    if (normalized.length > 1 && normalized.endsWith('/')) normalized = normalized.slice(0, -1)
+    return normalized
+  }
+
+  private basename(filePath: string): string {
+    const normalized = this.normalizePath(filePath)
+    return normalized === '/' ? '' : path.posix.basename(normalized)
+  }
+
+  private joinPath(basePath: string, name: string): string {
+    return this.normalizePath(path.posix.join(basePath, name))
+  }
+
+  private async stat(filePath: string): Promise<UpyunHeadResult> {
+    return withRetry(() => this.client.headFile(this.normalizePath(filePath)))
+  }
+
+  private toFileInfo(filePath: string, stat: Exclude<UpyunHeadResult, false>): FileInfo {
+    return {
+      name: this.basename(filePath),
+      type: stat.type === 'folder' ? 'folder' : 'file',
+      size: stat.type === 'folder' ? 0 : stat.size || 0,
+      modified: typeof stat.date === 'number'
+        ? new Date(stat.date * 1000).toISOString()
+        : new Date().toISOString(),
+      path: this.normalizePath(filePath),
+    }
+  }
+
+  private async ensureDirectory(dirPath: string): Promise<void> {
+    const normalized = this.normalizePath(dirPath)
+    if (normalized === '/') return
+
+    const parts = normalized.split('/').filter(Boolean)
+    let current = ''
+
+    for (const part of parts) {
+      current += `/${part}`
+      const stat = await this.stat(current)
+      if (stat) {
+        if (stat.type !== 'folder') {
+          throw new Error('common.invalidPath')
+        }
+        continue
+      }
+      const created = await withRetry(() => this.client.makeDir(current))
+      if (!created) {
+        throw new Error('Failed to create directory in UpYun')
+      }
+    }
+  }
+
+  private async ensureParentDirectory(filePath: string): Promise<void> {
+    const parentDir = path.posix.dirname(this.normalizePath(filePath))
+    if (parentDir !== '/') {
+      await this.ensureDirectory(parentDir)
+    }
+  }
+
+  private encodeHeaderPath(filePath: string): string {
+    const normalized = this.normalizePath(filePath)
+    const encodedPath = normalized
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    return `/${this.serviceName}${encodedPath ? `/${encodedPath}` : ''}`
+  }
+
+  private async requestFileOperation(
+    operation: 'copy' | 'move',
+    sourcePath: string,
+    targetPath: string
+  ): Promise<boolean> {
+    const req = (this.client as any).req
+    const headerName = operation === 'copy' ? 'x-upyun-copy-source' : 'x-upyun-move-source'
+    const response = await withRetry<{ status: number }>(() => req.put(targetPath, null, {
+      headers: {
+        [headerName]: this.encodeHeaderPath(sourcePath),
+      },
+    }))
+    return response.status >= 200 && response.status < 300
+  }
+
+  private async moveFile(sourcePath: string, targetPath: string): Promise<void> {
+    await this.ensureParentDirectory(targetPath)
+    const moved = await this.requestFileOperation('move', sourcePath, targetPath)
+    if (!moved) {
+      throw new Error('Failed to move file in UpYun')
+    }
+  }
+
+  private async copyFile(sourcePath: string, targetPath: string): Promise<void> {
+    await this.ensureParentDirectory(targetPath)
+    const copied = await this.requestFileOperation('copy', sourcePath, targetPath)
+    if (!copied) {
+      throw new Error('Failed to copy file in UpYun')
+    }
+  }
+
+  private async copyDirectory(sourcePath: string, targetPath: string): Promise<void> {
+    await this.ensureDirectory(targetPath)
+
+    const entries = await this.list(sourcePath)
+    for (const entry of entries) {
+      const nextTarget = this.joinPath(targetPath, entry.name)
+      if (entry.type === 'folder') {
+        await this.copyDirectory(entry.path, nextTarget)
+      } else {
+        await this.copyFile(this.normalizePath(entry.path), nextTarget)
+      }
+    }
+  }
+
+  private async moveDirectory(sourcePath: string, targetPath: string): Promise<void> {
+    await this.copyDirectory(sourcePath, targetPath)
+    await this.remove(sourcePath)
   }
 
   async list(prefix: string): Promise<FileInfo[]> {
@@ -71,7 +196,7 @@ export class UpyunStorage implements StorageProvider {
         return {
           name: file.name,
           type: file.type === 'F' ? 'folder' : 'file',
-          size: file.size || 0,
+          size: file.type === 'F' ? 0 : file.size || 0,
           modified: file.time ? new Date(file.time * 1000).toISOString() : new Date().toISOString(),
           path: filePath,
         }
@@ -89,11 +214,13 @@ export class UpyunStorage implements StorageProvider {
 
   async upload(filePath: string, data: Buffer): Promise<void> {
     const remotePath = this.normalizePath(filePath)
+    await this.ensureParentDirectory(remotePath)
     await withRetry(() => this.client.putFile(remotePath, data))
   }
 
   async uploadStream(filePath: string, stream: NodeJS.ReadableStream): Promise<void> {
     const remotePath = this.normalizePath(filePath)
+    await this.ensureParentDirectory(remotePath)
     await withRetry(() => this.client.putFile(remotePath, stream as any))
   }
 
@@ -102,94 +229,107 @@ export class UpyunStorage implements StorageProvider {
     const chunks: Buffer[] = []
     const passThrough = new PassThrough()
     passThrough.on('data', (chunk: Buffer) => chunks.push(chunk))
-    await withRetry(() => this.client.getFile(remotePath, passThrough))
-    if (chunks.length === 0) throw new Error('common.fileNotFound')
+
+    const result = await withRetry(() => this.client.getFile(remotePath, passThrough))
+    if (!result) {
+      throw new Error('common.fileNotFound')
+    }
+
     return Buffer.concat(chunks)
   }
 
   async remove(filePath: string): Promise<void> {
     const remotePath = this.normalizePath(filePath)
-    try {
-      await withRetry(() => this.client.deleteFile(remotePath))
-      return
-    } catch (err: any) {
-      if (err.statusCode !== 404) { /* continue to dir removal */ }
-    }
-    try {
-      const files = await this.list(filePath)
-      for (const file of files) {
-        await this.remove(file.path)
-        await new Promise(r => setTimeout(r, 100))
+    const stat = await this.stat(remotePath)
+    if (!stat) return
+
+    if (stat.type === 'file') {
+      const deleted = await withRetry(() => this.client.deleteFile(remotePath))
+      if (!deleted) {
+        throw new Error('Failed to delete file in UpYun')
       }
-      await withRetry(() => this.client.deleteDir(remotePath))
-    } catch (err: any) {
-      if (err.statusCode === 404) return
-      throw err
+      return
+    }
+
+    const files = await this.list(remotePath)
+    for (const file of files) {
+      await this.remove(file.path)
+      await new Promise(r => setTimeout(r, 100))
+    }
+
+    const deleted = await withRetry(() => this.client.deleteDir(remotePath))
+    if (!deleted) {
+      throw new Error('Failed to delete directory in UpYun')
     }
   }
 
   async mkdir(dirPath: string): Promise<void> {
-    const remotePath = this.normalizePath(dirPath)
-    await withRetry(() => this.client.makeDir(remotePath))
+    await this.ensureDirectory(dirPath)
   }
 
   async info(filePath: string): Promise<FileInfo> {
-    const remotePath = this.normalizePath(filePath)
-    try {
-      const stat = await withRetry(() => this.client.headFile(remotePath))
-      return {
-        name: filePath.split('/').pop() || '',
-        type: 'file',
-        size: (stat as any)?.size || 0,
-        modified: (stat as any)?.lastModified || new Date().toISOString(),
-        path: filePath,
-      }
-    } catch (err: any) {
-      const files = await this.list(filePath)
-      if (Array.isArray(files)) {
-        return {
-          name: filePath.split('/').pop() || '',
-          type: 'folder',
-          size: 0,
-          modified: new Date().toISOString(),
-          path: filePath,
-        }
-      }
-      throw err
+    const stat = await this.stat(filePath)
+    if (!stat) {
+      throw new Error('common.fileNotFound')
     }
+    return this.toFileInfo(filePath, stat)
   }
 
   async exists(filePath: string): Promise<boolean> {
-    try {
-      await withRetry(() => this.client.headFile(this.normalizePath(filePath)))
-      return true
-    } catch {
-      return false
-    }
+    return !!(await this.stat(filePath))
   }
 
   async rename(oldPath: string, newName: string): Promise<void> {
-    const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'))
-    const destPath = parentDir ? `${parentDir}/${newName}` : `/${newName}`
-    await this.move(oldPath, destPath)
+    const sourcePath = this.normalizePath(oldPath)
+    const parentDir = path.posix.dirname(sourcePath)
+    const targetPath = parentDir === '/' ? `/${newName}` : this.joinPath(parentDir, newName)
+    await this.move(sourcePath, targetPath)
   }
 
   async move(srcPath: string, destPath: string): Promise<void> {
     const sourcePath = this.normalizePath(srcPath)
     const targetPath = this.normalizePath(destPath)
-    const moved = await withRetry(() => this.client.move(targetPath, sourcePath))
-    if (!moved) {
-      throw new Error('Failed to move file in UpYun')
+    const stat = await this.stat(sourcePath)
+
+    if (!stat) {
+      throw new Error('common.fileNotFound')
     }
+    if (sourcePath === targetPath) {
+      return
+    }
+    if (stat.type === 'folder' && targetPath.startsWith(`${sourcePath}/`)) {
+      throw new Error('common.invalidPath')
+    }
+
+    if (stat.type === 'folder') {
+      await this.moveDirectory(sourcePath, targetPath)
+      return
+    }
+
+    await this.moveFile(sourcePath, targetPath)
   }
 
   async copy(srcPath: string, destPath: string): Promise<void> {
     const sourcePath = this.normalizePath(srcPath)
     const targetPath = this.normalizePath(destPath)
-    const copied = await withRetry(() => this.client.copy(targetPath, sourcePath))
-    if (!copied) {
-      throw new Error('Failed to copy file in UpYun')
+    const stat = await this.stat(sourcePath)
+
+    if (!stat) {
+      throw new Error('common.fileNotFound')
     }
+    if (sourcePath === targetPath) {
+      return
+    }
+    if (stat.type === 'folder' && targetPath.startsWith(`${sourcePath}/`)) {
+      throw new Error('common.invalidPath')
+    }
+
+    if (stat.type === 'folder') {
+      await this.copyDirectory(sourcePath, targetPath)
+      return
+    }
+
+    await this.copyFile(sourcePath, targetPath)
   }
 
   async search(prefix: string, keyword: string): Promise<FileInfo[]> {
@@ -204,10 +344,21 @@ export class UpyunStorage implements StorageProvider {
           if (file.type === 'folder' && results.length < 100) await walk.call(this, file.path)
           if (results.length >= 100) break
         }
-      } catch { /* ignore */ }
+      } catch {
+        // Ignore search misses under partial permission or transient list failures.
+      }
     }
 
     await walk.call(this, prefix || '/')
     return results
+  }
+
+  async getCapabilities(): Promise<StorageCapabilities> {
+    return {
+      nativeDirectoryRename: false,
+      nativeDirectoryMove: false,
+      nativeDirectoryCopy: false,
+      recommendedAsyncTreeThreshold: 80,
+    }
   }
 }

@@ -158,6 +158,36 @@ async function main() {
   })
   await delay(500)
 
+  await test('重命名文件夹', async () => {
+    await storage.rename(`${TEST_DIR}/sub-dir`, 'sub-dir-renamed')
+    await delay(500)
+    const folderExists = await storage.exists(`${TEST_DIR}/sub-dir-renamed`)
+    const nestedExists = await storage.exists(`${TEST_DIR}/sub-dir-renamed/hello-moved.txt`)
+    assert(folderExists, '重命名后的文件夹不存在')
+    assert(nestedExists, '重命名后的文件夹内容不存在')
+  })
+  await delay(500)
+
+  await test('复制文件夹', async () => {
+    await storage.copy(`${TEST_DIR}/sub-dir-renamed`, `${TEST_DIR}/sub-dir-copy`)
+    await delay(500)
+    const folderExists = await storage.exists(`${TEST_DIR}/sub-dir-copy`)
+    const nestedExists = await storage.exists(`${TEST_DIR}/sub-dir-copy/hello-moved.txt`)
+    assert(folderExists, '复制后的文件夹不存在')
+    assert(nestedExists, '复制后的文件夹内容不存在')
+  })
+  await delay(500)
+
+  await test('移动文件夹', async () => {
+    await storage.move(`${TEST_DIR}/sub-dir-copy`, `${TEST_DIR}/archive/sub-dir-moved`)
+    await delay(500)
+    const folderExists = await storage.exists(`${TEST_DIR}/archive/sub-dir-moved`)
+    const nestedExists = await storage.exists(`${TEST_DIR}/archive/sub-dir-moved/hello-moved.txt`)
+    assert(folderExists, '移动后的文件夹不存在')
+    assert(nestedExists, '移动后的文件夹内容不存在')
+  })
+  await delay(500)
+
   await test('搜索文件', async () => {
     const results = await storage.search(TEST_DIR, 'hello')
     assert(results.length >= 1, `搜索结果数量不正确: ${results.length}`)
@@ -165,12 +195,20 @@ async function main() {
   })
   await delay(500)
 
+  await test('检查不存在路径', async () => {
+    const exists = await storage.exists(`${TEST_DIR}/not-found.txt`)
+    assert(!exists, '不存在的文件被误判为存在')
+  })
+  await delay(500)
+
   await test('删除文件', async () => {
     await storage.remove(`${TEST_DIR}/hello-renamed.txt`)
     await delay(500)
-    await storage.remove(`${TEST_DIR}/sub-dir/hello-moved.txt`)
+    await storage.remove(`${TEST_DIR}/sub-dir-renamed/hello-moved.txt`)
     await delay(500)
-    await storage.remove(`${TEST_DIR}/sub-dir`)
+    await storage.remove(`${TEST_DIR}/sub-dir-renamed`)
+    await delay(500)
+    await storage.remove(`${TEST_DIR}/archive`)
     await delay(500)
   })
 

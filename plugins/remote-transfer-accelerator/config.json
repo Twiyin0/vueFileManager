@@ -7,6 +7,10 @@
     {
       "sourceHost": "i.pximg.net",
       "targetHost": "p.in0.re"
+    },
+    {
+      "sourceHost": "video.twimg.com",
+      "targetHost": "x.in0.re"
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { StorageProvider, FileInfo } from './storage'
+import { StorageProvider, FileInfo, StorageCapabilities } from './storage'
 import { normalizeStoragePath, sanitizeUploadFileName } from '../routes/files/shared'
 
 /**
@@ -96,6 +96,19 @@ export class PrefixStorage implements StorageProvider {
       path: this.stripPrefix(f.path)
     }))
   }
+
+  async getCapabilities(): Promise<StorageCapabilities> {
+    if (!this.inner.getCapabilities) {
+      return {
+        nativeDirectoryRename: true,
+        nativeDirectoryMove: true,
+        nativeDirectoryCopy: true,
+        recommendedAsyncTreeThreshold: 200,
+      }
+    }
+    return this.inner.getCapabilities()
+  }
+
   async resolveLocalPath(filePath: string): Promise<string | null> {
     if (!this.inner.resolveLocalPath) {
       return null
