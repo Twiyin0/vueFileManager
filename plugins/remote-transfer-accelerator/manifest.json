@@ -1,0 +1,14 @@
+{
+  "name": "remote-transfer-accelerator",
+  "version": "1.0.0",
+  "description": "Rewrite remote upload and offline download URLs through custom mirror hosts.",
+  "author": "VueFileManager",
+  "enabled": true,
+  "kind": "feature",
+  "server": "server.js",
+  "docs": "docs.md",
+  "capabilities": [
+    "server-hooks",
+    "remote-url-transform"
+  ]
+}

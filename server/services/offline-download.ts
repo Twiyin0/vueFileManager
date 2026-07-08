@@ -1,6 +1,7 @@
 import { Readable } from 'stream'
 import db from '../db'
 import { getStorageByPoolId } from './factory'
+import { resolveRemoteUrlThroughPlugins } from '../plugins/loader'
 
 type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
@@ -42,7 +43,14 @@ async function processTask(task: DownloadTaskRow) {
   await updateTask(task.id, { status: 'running', error_message: '', progress: 0, downloaded_bytes: 0 })
 
   try {
-    const response = await fetch(task.url)
+    const remoteUrl = await resolveRemoteUrlThroughPlugins({
+      url: task.url,
+      operation: 'offline-download',
+      userId: task.user_id,
+      poolId: task.pool_id,
+      dirPath: task.dir_path || ''
+    })
+    const response = await fetch(remoteUrl)
     if (!response.ok || !response.body) {
       throw new Error(`Download failed: ${response.status} ${response.statusText}`)
     }

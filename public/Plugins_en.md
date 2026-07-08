@@ -17,6 +17,13 @@ plugins/
     entry.js
     docs.md
     docs_en.md
+
+  remote-transfer-accelerator/
+    manifest.json
+    server.js
+    config.json
+    docs.md
+    docs_en.md
 ```
 
 Each plugin directory must be self-contained and include at least one `manifest.json`.
@@ -26,7 +33,7 @@ Each plugin directory must be self-contained and include at least one `manifest.
 - `theme`
 - `feature`
 
-If `kind` is omitted, the current loader treats the plugin as a theme plugin.
+If `kind` is omitted, the loader treats the plugin as a theme plugin.
 
 ## Common Manifest Fields
 
@@ -71,33 +78,61 @@ Notes:
 
 ## Feature Plugins
 
-Feature plugins can declare static assets and capability metadata:
+Feature plugins can expose frontend assets, docs, capability metadata, and optional server runtime hooks:
 
 ```json
 {
-  "name": "example-feature",
+  "name": "remote-transfer-accelerator",
   "version": "1.0.0",
-  "description": "Example feature plugin",
+  "description": "Rewrite remote URLs through mirror hosts",
   "author": "VueFileManager",
-  "enabled": false,
+  "enabled": true,
   "kind": "feature",
-  "entry": "entry.js",
+  "server": "server.js",
   "docs": "docs.md",
-  "capabilities": ["offline-task-hooks", "admin-panel-link"]
+  "capabilities": ["server-hooks", "remote-url-transform"]
 }
 ```
 
 Field notes:
 
-- `entry`: optional JS entry file
+- `entry`: optional browser-side JS entry file
+- `server`: optional server runtime entry file
 - `docs`: optional documentation file
 - `capabilities`: optional capability declaration list
 
-Important note:
+## Server Runtime Hooks
 
-- Feature plugins are currently used mostly for metadata display and static file exposure
-- They are not yet full runtime auto-extension points
-- Real business behavior usually still requires changes in the main repository
+If an enabled feature plugin declares `server`, VueFileManager loads that module during server bootstrap.
+
+The module should export `setup(context)`:
+
+```js
+export function setup(context) {
+  context.hooks.registerRemoteUrlTransformer(({ url, operation }) => {
+    if (operation !== 'remote-upload') return url
+    return url.replace('pbs.twimg.com', 'api.example.com')
+  })
+}
+```
+
+`context` currently provides:
+
+- `plugin`: plugin registry record
+- `manifest`: parsed feature manifest
+- `pluginDir`: absolute plugin directory path
+- `logger`: namespaced `info` / `warn` / `error` helpers
+- `hooks.registerRemoteUrlTransformer(transformer)`: rewrites remote URLs before `remote-upload` and `offline-download` fetches
+
+The remote URL transformer receives:
+
+- `url`
+- `operation`: `remote-upload` or `offline-download`
+- `userId`
+- `poolId`
+- `dirPath`
+
+Return the original URL to leave it unchanged, or return a new URL to rewrite the fetch target.
 
 ## Documentation Naming Convention
 
@@ -117,8 +152,14 @@ Cross-link both files:
 - Paths must stay inside the plugin directory
 - Do not reference private temporary outputs that only exist after build
 
+## Runtime Notes
+
+- Feature plugin server hooks are loaded only when the plugin is enabled
+- Toggling a plugin or editing `server.js` still requires a service restart to reload the runtime module
+- Plugin-private config files can stay inside the plugin directory instead of `config.yml`
+
 ## Debugging Tips
 
 - After changing a manifest, check `/api/plugins/list`
 - After changing theme styles, check `/api/themes/styles`
-- Plugin toggle changes often require a service restart to fully apply
+- After changing a feature plugin runtime, restart the service and test the related API flow

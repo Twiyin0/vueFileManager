@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "sourceHost": "pbs.twimg.com",
+      "targetHost": "x.in0.re"
+    },
+    {
+      "sourceHost": "i.pximg.net",
+      "targetHost": "p.in0.re"
+    }
+  ]
+}

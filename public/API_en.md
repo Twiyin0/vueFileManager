@@ -287,12 +287,19 @@ Response notes:
 - `count` is the number of successful uploads
 - `files` contains uploaded file metadata and direct URLs
 - `errors` contains per-URL failures if only part of the batch succeeds
+- Enabled feature plugins may rewrite the remote fetch URL before download begins
+- The bundled `remote-transfer-accelerator` plugin uses this hook to swap source hosts for mirror hosts while keeping the original request URL in API responses
 
 ### `POST /api/files/offline-download`
 
 Creates one or more background offline download tasks.
 
 Request body accepts the same `url` / `urls` / comma-separated formats as remote upload.
+
+Notes:
+
+- Enabled feature plugins may rewrite the remote fetch URL before the background worker starts downloading
+- Offline task records still keep the original URL submitted by the client
 
 ### `GET /api/files/offline-download/tasks`
 

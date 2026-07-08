@@ -9,6 +9,7 @@ import type {
   PublicPluginSummary,
   ThemePluginManifest
 } from './types'
+import { reloadPluginRuntime } from './runtime'
 
 const pluginRegistry = new Map<string, PluginRecord>()
 
@@ -69,6 +70,9 @@ function createPluginRecord(dirName: string, dirPath: string, manifestPath: stri
     if (featureManifest.entry) {
       ensurePluginAssetPath(dirPath, featureManifest.entry, 'entry')
     }
+    if (featureManifest.server) {
+      ensurePluginAssetPath(dirPath, featureManifest.server, 'server')
+    }
     if (featureManifest.docs) {
       ensurePluginAssetPath(dirPath, featureManifest.docs, 'docs')
     }
@@ -98,6 +102,7 @@ export function loadPlugins(): void {
   pluginRegistry.clear()
 
   if (!config.plugins?.enabled) {
+    reloadPluginRuntime([])
     console.log('Plugin system is disabled')
     return
   }
@@ -107,6 +112,7 @@ export function loadPlugins(): void {
 
   if (!fs.existsSync(pluginsDir)) {
     fs.mkdirSync(pluginsDir, { recursive: true })
+    reloadPluginRuntime([])
     console.log('Created plugin directory')
     return
   }
@@ -131,6 +137,7 @@ export function loadPlugins(): void {
   }
 
   console.log(`Discovered ${pluginRegistry.size} plugins, ${loaded} enabled`)
+  reloadPluginRuntime(getAllPlugins())
 }
 
 export function getPluginsDirPath() {

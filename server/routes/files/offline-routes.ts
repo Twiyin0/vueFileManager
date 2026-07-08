@@ -9,6 +9,7 @@ import {
   listOfflineDownloadTasks,
   retryOfflineDownloadTask
 } from '../../services/offline-download'
+import { resolveRemoteUrlThroughPlugins } from '../../plugins/loader'
 import { buildDirectUrl, getStorageForRequest, resolvePoolId } from './shared'
 
 interface NormalizedRemoteUploadRequest {
@@ -85,14 +86,21 @@ async function uploadRemoteFile(
   poolId?: string | number | null
 ): Promise<RemoteUploadResultItem> {
   const storage = poolId ? getStorageByPoolId(req.userId!, Number(poolId)) : getStorageForRequest(req)
-  const response = await fetch(url)
+  const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
+  const remoteUrl = await resolveRemoteUrlThroughPlugins({
+    url,
+    operation: 'remote-upload',
+    userId: req.userId!,
+    poolId: resolvedPoolId,
+    dirPath
+  })
+  const response = await fetch(remoteUrl)
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status} ${response.statusText}`)
   }
 
   const arrayBuffer = await response.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
-  const resolvedPoolId = await resolvePoolId(req.userId!, poolId)
   const quotaCheck = await checkLocalQuota(req.userId!, resolvedPoolId, buffer.length)
   if (!quotaCheck.allowed) {
     throw new Error(quotaCheck.message || 'Quota exceeded')

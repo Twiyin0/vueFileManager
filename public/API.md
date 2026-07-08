@@ -288,11 +288,21 @@ API Key 的通用权限模型：
 - `files` 返回成功文件的元数据和直链
 - 如果批量任务部分成功，`errors` 会返回逐链接失败信息
 
+说明：
+
+- 已启用的功能插件可以在真正开始抓取前改写远程请求 URL
+- 内置的 `remote-transfer-accelerator` 插件就利用这个 Hook 将源站域名替换为镜像加速域名，同时接口返回里仍保留原始 URL
+
 ### `POST /api/files/offline-download`
 
 创建一个或多个后台离线下载任务。
 
 请求体支持与远程上传相同的 `url` / `urls` / 逗号分隔格式。
+
+说明：
+
+- 已启用的功能插件可以在后台任务开始下载前改写远程请求 URL
+- 离线任务记录里保留的仍然是客户端提交的原始 URL
 
 ### `GET /api/files/offline-download/tasks`
 

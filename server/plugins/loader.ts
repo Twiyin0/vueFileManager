@@ -8,3 +8,4 @@ export {
   togglePlugin as toggleTheme,
   getPluginsDirPath
 } from './registry'
+export { resolveRemoteUrlThroughPlugins } from './runtime'
