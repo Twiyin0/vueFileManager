@@ -75,12 +75,15 @@ export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
 }
 
 /** Fetch a remote URL with SSRF protection, validating each redirect hop. */
-export async function safeFetch(rawUrl: string, maxRedirects = 5): Promise<Response> {
+export async function safeFetch(rawUrl: string, maxRedirects = 5, init?: RequestInit): Promise<Response> {
   let currentUrl = rawUrl
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     await assertPublicHttpUrl(currentUrl)
-    const response = await fetch(currentUrl, { redirect: 'manual' })
+    const response = await fetch(currentUrl, {
+      ...init,
+      redirect: 'manual',
+    })
 
     const location = response.headers.get('location')
     if (response.status >= 300 && response.status < 400 && location) {

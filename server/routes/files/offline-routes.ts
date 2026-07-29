@@ -7,7 +7,8 @@ import {
   clearFinishedOfflineDownloadTasks,
   createOfflineDownloadTask,
   listOfflineDownloadTasks,
-  retryOfflineDownloadTask
+  retryOfflineDownloadTask,
+  validateOfflineDownloadTaskSource
 } from '../../services/offline-download'
 import { getStorageByPoolId } from '../../services/factory'
 import { assertPublicHttpUrl, safeFetch } from '../../services/url-guard'
@@ -189,6 +190,16 @@ export function registerOfflineTaskRoutes(router: Router) {
         } catch (err: any) {
           errors.push({ url, error: err.message || 'file.remoteUrlNotAllowed' })
           continue
+        }
+
+        try {
+          const validation = await validateOfflineDownloadTaskSource(req.userId!, resolvedPoolId, url, dirPath || '')
+          if (!validation.ok && validation.shouldSkip) {
+            errors.push({ url, error: validation.error })
+            continue
+          }
+        } catch {
+          // Fall back to queue execution for transient probe failures.
         }
 
         const taskId = await createOfflineDownloadTask(req.userId!, resolvedPoolId, url, dirPath || '')

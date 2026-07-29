@@ -14,6 +14,7 @@ import {
   cleanupExpiredUploads,
   getStorageForRequest,
   isJunkFile,
+  isTrashPath,
   isTemporaryUploadFile,
   normalizeStoragePath,
   processConcurrently,
@@ -60,6 +61,7 @@ async function listFilesRecursively(storage: StorageProvider, prefix: string, li
     for (const entry of entries) {
       if (visited.has(entry.path)) continue
       visited.add(entry.path)
+      if (isTrashPath(entry.path)) continue
       results.push(entry)
 
       if (results.length >= limit) return
@@ -483,7 +485,7 @@ router.get('/search', flexibleAuth, requirePermission('read'), async (req: ApiKe
     }
     const resolvedPoolId = await resolvePoolId(req.userId!, req.query.poolId as string)
     const normalized = files
-      .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
+      .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name) && !isTrashPath(file.path || file.name))
       .map((file: any) => withDirectUrl(req, { ...file, poolId: resolvedPoolId }, resolvedPoolId))
     res.json({ files: normalized })
   } catch (err) {

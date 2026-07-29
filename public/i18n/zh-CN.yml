@@ -113,6 +113,7 @@ file:
   remoteUploadPartialSuccess: 已上传 {count} 个文件，失败 {failed} 个
   remoteUploadOfflineCreated: 离线下载任务已创建，文件将保存到 {destination}
   remoteUploadOfflineBatchCreated: 已创建 {count} 个离线下载任务，文件将保存到 {destination}
+  remoteUploadOfflinePartialCreated: 已创建 {count} 个离线下载任务，已跳过 {failed} 个无效链接，文件将保存到 {destination}
   selectAll: 全选
   unselectAll: 取消全选
   selectedItems: 已选择 {count} 项

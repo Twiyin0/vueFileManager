@@ -6,7 +6,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 
 ## Current Status
 
-- Version: `2.0.0-beta.9`
+- Version: `2.0.0-beta.10`
 - Frontend: Vue 3 + Vite
 - Backend: Express + TypeScript
 - Runtime databases: `sqlite`, `mysql`, `postgres`
@@ -18,6 +18,7 @@ VueFileManager is a file manager built with Vue 3, Express, and TypeScript. It s
 - Admin user management, quota control, ban or unban, and manual verification
 - Per-user multi-storage-pool management
 - File listing, upload, stream upload, resumable upload, clipboard paste upload with auto-generated 16-digit hexadecimal filenames, download, preview, search with optional `//` regex mode, and ZIP download
+- Desktop spotlight search (`Ctrl+K`) can be closed with `Esc` or by clicking the backdrop, excludes `.trash` paths, and flashes the matching item three times after jumping to its folder location
 - Medium List View with lazy video thumbnails backed by the server thumbnail cache and adaptive list height
 - Cross-pool copy and move
 - Cross-pool shared mounts under `/share`

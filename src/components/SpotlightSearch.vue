@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '@/api'
 import Icon from '@/components/Icon.vue'
 import { useI18n } from '@/composables/useI18n'
+import type { FileItem } from '@/stores/files'
 
 const emit = defineEmits<{
-  (e: 'navigate', path: string, poolId?: number): void
+  (e: 'navigate', path: string, poolId?: number, highlightPath?: string): void
 }>()
 
 const props = withDefaults(defineProps<{
@@ -19,20 +20,48 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const visible = ref(false)
 const query = ref('')
-const results = ref<any[]>([])
+const results = ref<FileItem[]>([])
 const loading = ref(false)
 const error = ref('')
 const selectedIndex = ref(0)
 const searchTimeout = ref<number>()
+const inputRef = ref<HTMLInputElement | null>(null)
+
+function clearPendingSearch() {
+  if (searchTimeout.value !== undefined) {
+    window.clearTimeout(searchTimeout.value)
+    searchTimeout.value = undefined
+  }
+}
+
+function focusInput() {
+  nextTick(() => {
+    inputRef.value?.focus()
+    inputRef.value?.select()
+  })
+}
+
+function open() {
+  visible.value = true
+  query.value = ''
+  results.value = []
+  error.value = ''
+  selectedIndex.value = 0
+  focusInput()
+}
+
+function close() {
+  visible.value = false
+  loading.value = false
+  clearPendingSearch()
+}
 
 function toggle() {
-  visible.value = !visible.value
   if (visible.value) {
-    query.value = ''
-    results.value = []
-    error.value = ''
-    selectedIndex.value = 0
+    close()
+    return
   }
+  open()
 }
 
 async function search() {
@@ -48,7 +77,7 @@ async function search() {
     params.set('q', query.value)
     if (props.currentPath) params.set('path', props.currentPath)
     if (props.currentPoolId) params.set('poolId', String(props.currentPoolId))
-    const res = await api.get<{ files: any[] }>(`/files/search?${params.toString()}`)
+    const res = await api.get<{ files: FileItem[] }>(`/files/search?${params.toString()}`)
     results.value = res.files.slice(0, 20)
     selectedIndex.value = 0
   } catch (err: any) {
@@ -62,6 +91,8 @@ async function search() {
 }
 
 function handleKeydown(event: KeyboardEvent) {
+  if (!visible.value) return
+
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     selectedIndex.value = Math.min(selectedIndex.value + 1, results.value.length - 1)
@@ -69,29 +100,34 @@ function handleKeydown(event: KeyboardEvent) {
     event.preventDefault()
     selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
   } else if (event.key === 'Enter' && results.value[selectedIndex.value]) {
+    event.preventDefault()
     selectResult(results.value[selectedIndex.value])
-  } else if (event.key === 'Escape') {
-    visible.value = false
   }
 }
 
-function selectResult(item: any) {
-  if (item.type === 'folder') {
-    const parentPath = item.path.substring(0, item.path.lastIndexOf('/'))
-    emit('navigate', parentPath || '')
-  }
-  visible.value = false
+function selectResult(item: FileItem) {
+  const targetPoolId = item.poolId ?? props.currentPoolId
+  const targetPath = item.path.split('/').slice(0, -1).join('/')
+
+  emit('navigate', targetPath, targetPoolId, item.path)
+  close()
 }
 
 function handleGlobalKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
     event.preventDefault()
     toggle()
+    return
+  }
+
+  if (visible.value && event.key === 'Escape') {
+    event.preventDefault()
+    close()
   }
 }
 
 watch(query, () => {
-  clearTimeout(searchTimeout.value)
+  clearPendingSearch()
   searchTimeout.value = window.setTimeout(search, 300)
 })
 
@@ -100,14 +136,15 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearPendingSearch()
   document.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-overlay-top backdrop-blur-[2px]" style="padding-top: 18vh" @click.self="visible = false">
-      <div class="dialog-backdrop bg-black/45 dark:bg-black/55" />
+    <div v-if="visible" class="dialog-overlay-top backdrop-blur-[2px]" style="padding-top: 18vh">
+      <div class="dialog-backdrop bg-black/45 dark:bg-black/55" @click="close" />
       <div class="dialog-panel dialog-panel-2xl overflow-hidden">
         <div class="dialog-section pb-4">
           <div
@@ -116,11 +153,11 @@ onUnmounted(() => {
           >
             <Icon name="search" class="h-5 w-5 flex-shrink-0" style="color: var(--text-secondary-color)" />
             <input
+              ref="inputRef"
               v-model="query"
               class="flex-1 bg-transparent text-base outline-none sm:text-lg"
               style="color: var(--text-color)"
               :placeholder="t('spotlight.placeholder', 'Search files and folders... (Ctrl+K, //regex)')"
-              autofocus
               @keydown="handleKeydown"
             />
             <kbd

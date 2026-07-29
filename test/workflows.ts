@@ -261,6 +261,25 @@ async function testFiles() {
     assert(res.ok, `上传失败: ${res.status}`)
   })
 
+  await test('POST /files/upload - 上传搜索测试文件', async () => {
+    const visible = await fetch(`${BASE}/files/upload?path=test-dir&poolId=${testPoolId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: (() => { const fd = new FormData(); fd.append('file', new Blob(['visible search target']), 'visible-search-target.txt'); return fd })()
+    })
+    assert(visible.ok, `可见搜索文件上传失败: ${visible.status}`)
+
+    const { status: mkdirStatus } = await api('POST', '/files/mkdir', { path: 'test-dir/.trash', poolId: testPoolId }, auth(adminToken))
+    assert(mkdirStatus === 200, `创建 .trash 目录失败: ${mkdirStatus}`)
+
+    const hidden = await fetch(`${BASE}/files/upload?path=test-dir/.trash&poolId=${testPoolId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: (() => { const fd = new FormData(); fd.append('file', new Blob(['hidden search target']), 'hidden-search-target.txt'); return fd })()
+    })
+    assert(hidden.ok, `隐藏搜索文件上传失败: ${hidden.status}`)
+  })
+
   await test('GET /files/list - 验证上传文件存在', async () => {
     const { status, data } = await api('GET', '/files/list?path=test-dir', null, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)
@@ -283,9 +302,11 @@ async function testFiles() {
   })
 
   await test('GET /files/search - 搜索', async () => {
-    const { status, data } = await api('GET', '/files/search?q=test', null, auth(adminToken))
+    const { status, data } = await api('GET', `/files/search?q=search-target&poolId=${testPoolId}`, null, auth(adminToken))
     assert(status === 200, `状态码 ${status}`)
     assert(Array.isArray(data.files), '返回非数组')
+    assert(data.files.some((f: any) => f.name === 'visible-search-target.txt'), '未找到可见搜索结果')
+    assert(!data.files.some((f: any) => String(f.path || '').includes('/.trash/')), '搜索结果不应包含 .trash 子项')
   })
 
   await test('GET /files/info - 文件信息', async () => {

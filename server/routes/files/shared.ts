@@ -38,6 +38,14 @@ export function isTemporaryUploadFile(filename: string): boolean {
   return name.startsWith(TEMP_UPLOAD_PREFIX)
 }
 
+export function isTrashPath(filePath: string): boolean {
+  return filePath
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .some((segment) => /^\.trash$/i.test(segment))
+}
+
 export function shouldUseAtomicTempUpload(storageType?: string) {
   return storageType === 'local' || storageType === 'ftp'
 }

@@ -80,6 +80,8 @@ export function useHomeView() {
   const clipboardMode = ref<'copy' | 'move'>('copy')
 
   const toast = ref({ show: false, message: '', type: 'info' as 'success' | 'error' | 'info' })
+  const spotlightFlashPath = ref('')
+  const spotlightFlashRequestKey = ref(0)
 
   const showMoveDialog = ref(false)
   const filesToMove = ref<{ path: string; name: string; poolId?: number }[]>([])
@@ -715,7 +717,7 @@ export function useHomeView() {
     remoteUploading.value = true
     try {
       if (remoteUploadMode.value === 'offline') {
-        const res = await api.post<{ count: number }>('/files/offline-download', {
+        const res = await api.post<{ count: number; errors?: Array<{ url: string; error: string }> }>('/files/offline-download', {
           urls,
           dirPath: currentPath.value,
           poolId: currentPoolId.value
@@ -724,10 +726,13 @@ export function useHomeView() {
         await loadOfflineTasks()
         const destination = getRemoteUploadDestinationLabel()
         const count = res.count || urls.length
-        const message = count > 1
-          ? format('file.remoteUploadOfflineBatchCreated', 'Created {count} offline download tasks. Files will be saved to {destination}', { count, destination })
-          : format('file.remoteUploadOfflineCreated', 'Offline download task created. The file will be saved to {destination}', { destination })
-        showToast(message, 'success')
+        const failedCount = res.errors?.length || 0
+        const message = failedCount > 0
+          ? format('file.remoteUploadOfflinePartialCreated', 'Created {count} offline download tasks, skipped {failed} invalid link(s). Files will be saved to {destination}', { count, failed: failedCount, destination })
+          : count > 1
+            ? format('file.remoteUploadOfflineBatchCreated', 'Created {count} offline download tasks. Files will be saved to {destination}', { count, destination })
+            : format('file.remoteUploadOfflineCreated', 'Offline download task created. The file will be saved to {destination}', { destination })
+        showToast(message, failedCount > 0 ? 'info' : 'success')
       } else {
         const res = await api.post<{ count: number; errors?: Array<{ url: string; error: string }> }>('/files/remote-upload', {
           urls,
@@ -1199,8 +1204,16 @@ export function useHomeView() {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
   }
 
-  function handleSpotlightNavigate(path: string, poolId?: number) {
-    navigateToPath(path, poolId || currentPoolId.value)
+  function handleSpotlightNavigate(path: string, poolId?: number, highlightPath?: string) {
+    const targetPoolId = poolId || currentPoolId.value
+    if (highlightPath) {
+      spotlightFlashPath.value = highlightPath
+      spotlightFlashRequestKey.value += 1
+    }
+    if (path === currentPath.value && targetPoolId === currentPoolId.value) {
+      return
+    }
+    navigateToPath(path, targetPoolId)
   }
 
   function formatSize(bytes: number) {
@@ -1265,6 +1278,8 @@ export function useHomeView() {
     showMoveDialog,
     filesToMove,
     isDragging,
+    spotlightFlashPath,
+    spotlightFlashRequestKey,
     uploadProgress,
     showUploadProgress,
     uploadPanelCollapsed,

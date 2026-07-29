@@ -240,6 +240,7 @@ Notes:
 - When `q` starts with `//`, the endpoint switches to regular-expression search mode
 - For example, `//^report-\\d+` matches file names that satisfy that expression
 - Invalid regular expressions return `400`
+- Results automatically exclude any `.trash` directory and its descendants
 
 ### `GET /api/files/download`
 
@@ -331,6 +332,7 @@ Notes:
 
 - Enabled feature plugins may rewrite the remote fetch URL before the background worker starts downloading
 - Offline task records still keep the original URL submitted by the client
+- If preflight validation already receives a `4xx` response from the remote source, that invalid link is skipped immediately instead of creating a background task, and the reason is returned in `errors`
 
 ### `GET /api/files/offline-download/tasks`
 

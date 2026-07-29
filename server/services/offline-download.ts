@@ -23,6 +23,53 @@ interface DownloadTaskRow {
 let started = false
 let runningTaskId: number | null = null
 
+function isSkippableStatus(status: number) {
+  return status >= 400 && status < 500
+}
+
+async function closeResponseBody(response: Response) {
+  try {
+    await response.body?.cancel()
+  } catch {
+    // Ignore body cancellation failures.
+  }
+}
+
+async function preflightRemoteDownload(remoteUrl: string) {
+  const headResponse = await safeFetch(remoteUrl, 5, { method: 'HEAD' })
+  if (headResponse.ok) {
+    await closeResponseBody(headResponse)
+    return { ok: true as const }
+  }
+
+  if (headResponse.status === 405 || headResponse.status === 501) {
+    await closeResponseBody(headResponse)
+    const getResponse = await safeFetch(remoteUrl)
+    if (getResponse.ok) {
+      await closeResponseBody(getResponse)
+      return { ok: true as const }
+    }
+
+    const error = `Download failed: ${getResponse.status} ${getResponse.statusText}`
+    await closeResponseBody(getResponse)
+    return {
+      ok: false as const,
+      status: getResponse.status,
+      error,
+      shouldSkip: isSkippableStatus(getResponse.status),
+    }
+  }
+
+  const error = `Download failed: ${headResponse.status} ${headResponse.statusText}`
+  await closeResponseBody(headResponse)
+  return {
+    ok: false as const,
+    status: headResponse.status,
+    error,
+    shouldSkip: isSkippableStatus(headResponse.status),
+  }
+}
+
 async function ensureTable() {
   return
 }
@@ -158,6 +205,18 @@ export async function createOfflineDownloadTask(userId: number, poolId: number, 
 
   processQueue().catch(() => {})
   return result.lastInsertRowid as number
+}
+
+export async function validateOfflineDownloadTaskSource(userId: number, poolId: number, url: string, dirPath: string) {
+  const remoteUrl = await resolveRemoteUrlThroughPlugins({
+    url,
+    operation: 'offline-download',
+    userId,
+    poolId,
+    dirPath: dirPath || ''
+  })
+
+  return preflightRemoteDownload(remoteUrl)
 }
 
 export async function listOfflineDownloadTasks(userId: number) {

@@ -113,6 +113,7 @@ file:
   remoteUploadPartialSuccess: Uploaded {count} files, {failed} failed
   remoteUploadOfflineCreated: Offline download task created. The file will be saved to {destination}
   remoteUploadOfflineBatchCreated: Created {count} offline download tasks. Files will be saved to {destination}
+  remoteUploadOfflinePartialCreated: Created {count} offline download tasks, skipped {failed} invalid link(s). Files will be saved to {destination}
   selectAll: Select All
   unselectAll: Unselect All
   selectedItems: "{count} items selected"

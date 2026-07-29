@@ -64,6 +64,8 @@ const props = withDefaults(defineProps<{
   guestAccessPassword?: string
   sortKey?: FileSortKey
   sortDirection?: FileSortDirection
+  flashTargetPath?: string
+  flashRequestKey?: number
 }>(), {
   viewMode: 'list'
 })
@@ -81,9 +83,11 @@ const emit = defineEmits<{
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
 const longPressThreshold = 500
 const contextHighlighted = ref<string | null>(null)
+const activeFlashPath = ref<string | null>(null)
 const mediumScrollTop = ref(0)
 const mediumViewportHeight = ref(0)
 const mediumContainer = ref<HTMLElement | null>(null)
+const fileItemElements = new Map<string, HTMLElement>()
 const thumbnailStates = ref<Record<string, ThumbnailState>>({})
 const thumbnailRetryTimers = new Map<string, number>()
 const thumbnailObjectUrls = new Set<string>()
@@ -102,6 +106,8 @@ const mediumOverscan = 6
 const maxConcurrentThumbnailRequests = 4
 let activeThumbnailRequests = 0
 let gridObserver: IntersectionObserver | null = null
+let flashResetTimer: number | null = null
+let handledFlashRequestKey = 0
 
 const mediumRows = computed(() => {
   let top = 0
@@ -140,6 +146,10 @@ watch(() => [props.files, props.currentPoolId, props.guestThumbnailBaseUrl] as c
   mediumScrollTop.value = 0
   pruneThumbnailStates()
   void nextTick(updateMediumViewport)
+}, { deep: false })
+
+watch(() => [props.flashTargetPath, props.flashRequestKey, props.files, props.viewMode] as const, () => {
+  void maybeFlashTarget()
 }, { deep: false })
 
 watch(() => props.viewMode, () => {
@@ -198,6 +208,14 @@ function handleItemContext(e: MouseEvent, file: FileItem) {
 function handleContainerContext(e: MouseEvent) {
   contextHighlighted.value = null
   emit('contextmenu', e)
+}
+
+function setFileItemRef(element: Element | ComponentPublicInstance | null, filePath: string) {
+  if (!(element instanceof HTMLElement)) {
+    fileItemElements.delete(filePath)
+    return
+  }
+  fileItemElements.set(filePath, element)
 }
 
 function formatSize(bytes: number): string {
@@ -275,6 +293,58 @@ function handleMediumScroll(event: Event) {
   const target = event.target as HTMLElement
   mediumScrollTop.value = target.scrollTop
   mediumViewportHeight.value = target.clientHeight || mediumContentHeight.value || mediumViewportHeight.value
+}
+
+async function maybeFlashTarget() {
+  const targetPath = props.flashTargetPath
+  const requestKey = props.flashRequestKey || 0
+  if (!targetPath || requestKey === 0 || requestKey === handledFlashRequestKey) return
+
+  const targetFile = props.files.find((file) => file.path === targetPath)
+  if (!targetFile) return
+
+  await ensureFileVisible(targetFile)
+  handledFlashRequestKey = requestKey
+  await startFlash(targetPath)
+}
+
+async function ensureFileVisible(file: FileItem) {
+  if (props.viewMode === 'medium-list') {
+    await nextTick()
+    const row = mediumRows.value.items.find((item) => item.file.path === file.path)
+    if (row && mediumContainer.value) {
+      const viewportHeight = mediumContainer.value.clientHeight || mediumViewportHeight.value || mediumDefaultRowHeight
+      const nextTop = Math.max(0, row.top - Math.max(0, (viewportHeight - row.height) / 2))
+      mediumContainer.value.scrollTop = nextTop
+      mediumScrollTop.value = nextTop
+      mediumViewportHeight.value = viewportHeight
+    }
+    await nextTick()
+  } else {
+    await nextTick()
+  }
+
+  fileItemElements.get(file.path)?.scrollIntoView({
+    block: 'center',
+    inline: 'nearest'
+  })
+}
+
+async function startFlash(filePath: string) {
+  if (flashResetTimer !== null) {
+    window.clearTimeout(flashResetTimer)
+    flashResetTimer = null
+  }
+
+  activeFlashPath.value = null
+  await nextTick()
+  activeFlashPath.value = filePath
+  flashResetTimer = window.setTimeout(() => {
+    if (activeFlashPath.value === filePath) {
+      activeFlashPath.value = null
+    }
+    flashResetTimer = null
+  }, 1500)
 }
 
 function ensureGridObserver() {
@@ -657,6 +727,10 @@ function clearThumbnailStates() {
 }
 
 onBeforeUnmount(() => {
+  if (flashResetTimer !== null) {
+    window.clearTimeout(flashResetTimer)
+    flashResetTimer = null
+  }
   for (const timer of thumbnailRetryTimers.values()) {
     window.clearTimeout(timer)
   }
@@ -699,10 +773,12 @@ onBeforeUnmount(() => {
         <div
           v-for="file in files"
           :key="file.path"
+          :ref="(element) => setFileItemRef(element, file.path)"
           class="file-grid-item group cursor-pointer overflow-hidden rounded-lg border transition-all"
           :class="[
             selectedFiles?.has(file.path) ? 'ring-2 ring-blue-500 border-blue-300 dark:border-blue-600' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600',
-            contextHighlighted === file.path ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''
+            contextHighlighted === file.path ? 'ring-2 ring-blue-400 dark:ring-blue-500' : '',
+            activeFlashPath === file.path ? 'file-item-flash' : ''
           ]"
           style="background-color: var(--hover-color); touch-action: manipulation"
           @click.prevent="emit('open', file)"
@@ -767,10 +843,12 @@ onBeforeUnmount(() => {
         <div
           v-for="{ file, top, height } in mediumVisibleFiles"
           :key="file.path"
+          :ref="(element) => setFileItemRef(element, file.path)"
           class="file-row absolute left-0 right-0 flex cursor-pointer items-center gap-3 border-b px-3 py-3 transition-colors sm:px-4"
           :class="[
             selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
-            contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : ''
+            contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : '',
+            activeFlashPath === file.path ? 'file-item-flash' : ''
           ]"
           :style="{ top: `${top}px`, height: `${height}px`, borderColor: 'var(--border-color)', touchAction: 'manipulation' }"
           @click.prevent="emit('open', file)"
@@ -883,10 +961,12 @@ onBeforeUnmount(() => {
       <div
         v-for="file in files"
         :key="file.path"
+        :ref="(element) => setFileItemRef(element, file.path)"
         class="file-row grid grid-cols-12 items-center gap-2 border-b px-4 py-2.5 last:border-0"
         :class="[
           selectedFiles?.has(file.path) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
           contextHighlighted === file.path ? 'bg-blue-50/70 dark:bg-blue-900/30' : '',
+          activeFlashPath === file.path ? 'file-item-flash' : '',
           'cursor-pointer'
         ]"
         style="border-color: var(--border-color); touch-action: manipulation"
@@ -947,3 +1027,22 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.file-item-flash {
+  animation: file-item-flash 0.42s ease-in-out 3;
+}
+
+@keyframes file-item-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: transparent;
+  }
+
+  50% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 65%, transparent);
+    background-color: color-mix(in srgb, var(--accent-color) 16%, var(--surface-color) 84%);
+  }
+}
+</style>
