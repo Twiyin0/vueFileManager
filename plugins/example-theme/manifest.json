@@ -1,8 +1,0 @@
-{
-  "name": "example-theme",
-  "version": "1.0.0",
-  "description": "示例主题 - 将强调色改为蓝色",
-  "author": "VueFileManager",
-  "enabled": true,
-  "style": "style.css"
-}
