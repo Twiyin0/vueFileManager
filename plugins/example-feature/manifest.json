@@ -1,0 +1,14 @@
+{
+  "name": "example-feature",
+  "version": "1.0.0",
+  "description": "示例功能插件，演示 feature 类型 manifest 与文档暴露方式",
+  "author": "VueFileManager",
+  "enabled": false,
+  "kind": "feature",
+  "entry": "entry.js",
+  "docs": "docs.md",
+  "capabilities": [
+    "offline-task-hooks",
+    "admin-panel-link"
+  ]
+}

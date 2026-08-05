@@ -1,0 +1,8 @@
+{
+  "rules": [
+    {
+      "sourceHost": "pbs.twimg.com",
+      "targetHost": "api.example.com"
+    }
+  ]
+}
