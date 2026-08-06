@@ -173,6 +173,28 @@ function normalizeShareBasePath(folderPath: string): string {
   return normalizeStoragePath((folderPath || '').replace(/\\/g, '/'))
 }
 
+function normalizeGuestRelativePath(basePath: string, targetPath: string): string {
+  const normalizedBase = normalizeShareBasePath(basePath)
+  const normalizedTarget = normalizeStoragePath((targetPath || '').replace(/^\/+/, ''))
+
+  if (!normalizedBase) {
+    return normalizedTarget
+  }
+  if (!normalizedTarget) {
+    return ''
+  }
+  if (normalizedTarget === normalizedBase) {
+    return ''
+  }
+
+  const prefix = `${normalizedBase}/`
+  if (normalizedTarget.startsWith(prefix)) {
+    return normalizedTarget.slice(prefix.length)
+  }
+
+  return normalizedTarget
+}
+
 function isTemporaryUploadFile(filename: string): boolean {
   const name = filename.split('/').pop() || filename
   return name.startsWith('.temp_')
@@ -309,24 +331,22 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
       })
     }
 
+    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
+    const basePath = normalizeShareBasePath(share.folder_path)
     let relativePath = ''
     try {
-      relativePath = normalizeStoragePath((req.query.path as string) || '')
+      relativePath = normalizeGuestRelativePath(basePath, String(req.query.path || ''))
     } catch {
       return res.status(400).json({ error: 'common.invalidPath' })
     }
-
-    const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
     const fullPath = joinStoragePath(basePath, relativePath)
 
     const files = await storage.list(fullPath)
-    const prefix = basePath ? `${basePath}/` : ''
     const result = files
       .filter((file) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
       .map((file) => ({
         ...file,
-        path: prefix ? (file.path.startsWith(prefix) ? file.path.slice(prefix.length) : file.path) : file.path,
+        path: normalizeGuestRelativePath(basePath, file.path),
       }))
 
     let readme: { name: string; path: string; directUrl: string; fileUrl: string } | null = null
@@ -339,7 +359,7 @@ router.get('/:username/:shareId/list', async (req: Request, res: Response) => {
       const previewUrl = `/api/guest/${encodeURIComponent(user.username)}/${share.id}/preview?${previewParams.toString()}`
       readme = {
         name: readmeFile.name,
-        path: readmeFile.path,
+        path: normalizeGuestRelativePath(basePath, readmeFile.path),
         directUrl: previewUrl,
         fileUrl: previewUrl,
       }
@@ -385,7 +405,8 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'guest.previewPermissionRequired' })
     }
 
-    const relativePath = req.query.path as string
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const relativePath = normalizeGuestRelativePath(basePath, String(req.query.path || ''))
     if (!relativePath) {
       return res.status(400).json({ error: 'common.missingFilePath' })
     }
@@ -394,18 +415,16 @@ router.get('/:username/:shareId/preview', async (req: Request, res: Response) =>
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
-    const normalizedRelativePath = normalizeStoragePath(relativePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
-    const fullPath = joinStoragePath(basePath, normalizedRelativePath)
+    const fullPath = joinStoragePath(basePath, relativePath)
 
     const fileInfo = await storage.info(fullPath)
     if (fileInfo.type !== 'file') {
       return res.status(400).json({ error: 'guest.folderPreviewUnsupported' })
     }
 
-    const ext = normalizedRelativePath.split('.').pop()?.toLowerCase() || ''
-    const fileName = normalizedRelativePath.split('/').pop() || 'file'
+    const ext = relativePath.split('.').pop()?.toLowerCase() || ''
+    const fileName = relativePath.split('/').pop() || 'file'
     const contentType = mimeTypes[ext] || 'application/octet-stream'
 
     const isMedia = contentType.startsWith('audio/') || contentType.startsWith('video/')
@@ -508,7 +527,8 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
       return res.status(403).json({ error: 'guest.downloadPermissionRequired' })
     }
 
-    const relativePath = req.query.path as string
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const relativePath = normalizeGuestRelativePath(basePath, String(req.query.path || ''))
     if (!relativePath) {
       return res.status(400).json({ error: 'common.missingFilePath' })
     }
@@ -517,12 +537,10 @@ router.get('/:username/:shareId/download', async (req: Request, res: Response) =
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
-    const normalizedRelativePath = normalizeStoragePath(relativePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
-    const fullPath = joinStoragePath(basePath, normalizedRelativePath)
+    const fullPath = joinStoragePath(basePath, relativePath)
     const data = await storage.download(fullPath)
-    const fileName = normalizedRelativePath.split('/').pop() || 'download'
+    const fileName = relativePath.split('/').pop() || 'download'
 
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`)
     res.setHeader('Content-Type', 'application/octet-stream')
@@ -560,7 +578,8 @@ router.get('/:username/:shareId/thumbnail', async (req: Request, res: Response) 
       return res.status(403).json({ error: 'guest.previewPermissionRequired' })
     }
 
-    const relativePath = req.query.path as string
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const relativePath = normalizeGuestRelativePath(basePath, String(req.query.path || ''))
     if (!relativePath) {
       return res.status(400).json({ error: 'common.missingFilePath' })
     }
@@ -569,10 +588,8 @@ router.get('/:username/:shareId/thumbnail', async (req: Request, res: Response) 
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
-    const normalizedRelativePath = normalizeStoragePath(relativePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
-    const fullPath = joinStoragePath(basePath, normalizedRelativePath)
+    const fullPath = joinStoragePath(basePath, relativePath)
     const result = await getThumbnail(
       `guest:${user.username}:share:${share.id}`,
       user.id,
@@ -662,11 +679,12 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
     }
 
     const queryFilename = (req.query.filename as string) || null
+    const basePath = normalizeShareBasePath(share.folder_path)
     const dirPathInput = (req.body.dirPath as string) || (req.query.dirPath as string) || ''
-    if (dirPathInput && !isPathSafe(dirPathInput)) {
+    const dirPath = normalizeGuestRelativePath(basePath, dirPathInput)
+    if (dirPathInput && !isPathSafe(dirPath)) {
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
-    const dirPath = normalizeStoragePath(dirPathInput)
 
     let fallbackName = req.file.originalname
     try {
@@ -678,7 +696,6 @@ router.post('/:username/:shareId/upload', guestUploadSingle('file'), async (req:
       return res.status(400).json({ error: 'file.invalidFileName' })
     }
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
     const relativePath = joinStoragePath(dirPath, normalizedName)
     const filePath = joinStoragePath(basePath, relativePath)
 
@@ -744,7 +761,12 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'guest.missingContentOrPath' })
     }
 
-    if (!isPathSafe(filePath)) {
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const normalizedFilePath = normalizeGuestRelativePath(basePath, filePath)
+    if (!normalizedFilePath) {
+      return res.status(400).json({ error: 'common.missingFilePath' })
+    }
+    if (!isPathSafe(normalizedFilePath)) {
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
@@ -752,9 +774,7 @@ router.post('/:username/:shareId/write', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'guest.contentTooLarge' })
     }
 
-    const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
     const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
     const buffer = Buffer.from(content, 'utf-8')
@@ -799,13 +819,16 @@ router.post('/:username/:shareId/delete', async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'common.missingFilePath' })
     }
 
-    if (!isPathSafe(filePath)) {
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const normalizedFilePath = normalizeGuestRelativePath(basePath, filePath)
+    if (!normalizedFilePath) {
+      return res.status(400).json({ error: 'common.missingFilePath' })
+    }
+    if (!isPathSafe(normalizedFilePath)) {
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
-    const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
     const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
     const stat = await storage.info(fullPath).catch(() => ({ type: 'file' as const }))
@@ -855,13 +878,16 @@ router.post('/:username/:shareId/mkdir', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'guest.missingDirectoryPath' })
     }
 
-    if (!isPathSafe(dirPath)) {
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const normalizedDirPath = normalizeGuestRelativePath(basePath, dirPath)
+    if (!normalizedDirPath) {
+      return res.status(400).json({ error: 'guest.missingDirectoryPath' })
+    }
+    if (!isPathSafe(normalizedDirPath)) {
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
-    const normalizedDirPath = normalizeStoragePath(dirPath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
     const fullPath = joinStoragePath(basePath, normalizedDirPath)
 
     await storage.mkdir(fullPath)
@@ -901,7 +927,12 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'guest.missingContentOrPath' })
     }
 
-    if (!isPathSafe(filePath)) {
+    const basePath = normalizeShareBasePath(share.folder_path)
+    const normalizedFilePath = normalizeGuestRelativePath(basePath, filePath)
+    if (!normalizedFilePath) {
+      return res.status(400).json({ error: 'guest.missingContentOrPath' })
+    }
+    if (!isPathSafe(normalizedFilePath)) {
       return res.status(403).json({ error: 'guest.pathAccessDenied' })
     }
 
@@ -909,9 +940,7 @@ router.post('/:username/:shareId/rename', async (req: Request, res: Response) =>
     if (!newName || newName === '.' || newName === '..') {
       return res.status(400).json({ error: 'file.invalidFileName' })
     }
-    const normalizedFilePath = normalizeStoragePath(filePath)
     const storage = getStorageByPoolId(user.id, share.storage_pool_id)
-    const basePath = normalizeShareBasePath(share.folder_path)
     const fullPath = joinStoragePath(basePath, normalizedFilePath)
 
     await renameStorageEntry(storage, fullPath, newName)

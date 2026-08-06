@@ -6,7 +6,7 @@ VueFileManager 是一个基于 Vue 3、Express 和 TypeScript 的文件管理系
 
 ## 当前状态
 
-- 版本：`2.0.0-beta.10`
+- 版本：`2.0.0-beta.11`
 - 前端：Vue 3 + Vite
 - 后端：Express + TypeScript
 - 运行时数据库：`sqlite`、`mysql`、`postgres`

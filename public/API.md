@@ -580,6 +580,7 @@ API Key 的通用权限模型：
 - 如果相同 `folderPath` 和 `storagePoolId` 的访客分享已存在，`POST /api/user/guest-shares` 会更新现有分享，而不是返回重复错误。
 - `PUT /api/user/guest-shares/:id` 支持可选的 `password`；不传表示保留当前密码，传空字符串表示清除密码。
 - 带密码的访客公开接口可在 `list`、`preview`、`download`、`thumbnail` 的查询参数中传入 `password`，写入类操作也可在请求体中传入。
+- `list`、`preview`、`download`、`thumbnail` 这些访客接口里的 `path` 都是相对于访客分享根目录的相对路径。
 - `GET /api/guest/:username/:shareId/thumbnail` 返回受支持文件的缓存缩略图；缓存不存在时会加入后台生成队列并返回 `202`。
 
 ## 管理接口

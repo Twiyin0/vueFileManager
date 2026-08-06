@@ -571,6 +571,8 @@ Deletes one guest folder share.
 
 ## Guest Public Endpoints
 
+For `list`, `preview`, `download`, and `thumbnail`, `path` is always relative to the guest share root.
+
 ### `GET /api/guest/:username/:shareId/list`
 
 Lists a guest folder share. Password-protected guest shares accept `password` as a query parameter. When the password is missing or incorrect, the response contains `needPassword: true` and does not include files.
