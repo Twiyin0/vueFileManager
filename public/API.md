@@ -511,6 +511,11 @@ API Key 的通用权限模型：
 
 ## 用户接口
 
+### `list` / `download` / `preview`
+
+- `path` 使用相对分享根目录的路径
+- `list` 返回的 `path` 已统一为相对路径
+
 ### `GET /api/user/info`
 
 返回当前用户资料、存储池列表、空间统计和面板计数。

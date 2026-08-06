@@ -75,6 +75,28 @@ function getShareFileName(filePath: string): string {
   return filePath.split('/').filter(Boolean).pop() || ''
 }
 
+function normalizeShareRelativePath(basePath: string, targetPath: string): string {
+  const normalizedBase = normalizeStoragePath((basePath || '').replace(/\\/g, '/'))
+  const normalizedTarget = normalizeStoragePath((targetPath || '').replace(/^\/+/, ''))
+
+  if (!normalizedBase) {
+    return normalizedTarget
+  }
+  if (!normalizedTarget) {
+    return ''
+  }
+  if (normalizedTarget === normalizedBase) {
+    return ''
+  }
+
+  const prefix = `${normalizedBase}/`
+  if (normalizedTarget.startsWith(prefix)) {
+    return normalizedTarget.slice(prefix.length)
+  }
+
+  return normalizedTarget
+}
+
 router.post('/create', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { filePath, fileType, password, expiresIn, maxDownloads, storagePoolId } = req.body
@@ -248,14 +270,19 @@ router.get('/list/:code', async (req: Request, res: Response) => {
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
     let subPath = ''
     try {
-      subPath = normalizeStoragePath((req.query.path as string) || '')
+      subPath = normalizeShareRelativePath(share.file_path, String(req.query.path || ''))
     } catch {
       return res.status(400).json({ error: 'common.invalidPath' })
     }
     const fullPath = joinStoragePath(share.file_path, subPath)
 
     const files = await storage.list(fullPath)
-    const filteredFiles = files.filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
+    const filteredFiles = files
+      .filter((file: any) => !isJunkFile(file.name) && !isTemporaryUploadFile(file.name))
+      .map((file: any) => ({
+        ...file,
+        path: normalizeShareRelativePath(share.file_path, file.path),
+      }))
     res.json({ files: filteredFiles, sharePath: share.file_path, subPath })
   } catch (err) {
     await sendServerError(req, res, err, {
@@ -308,7 +335,7 @@ router.get('/download/:code', async (req: Request, res: Response) => {
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
     let subPath = ''
     try {
-      subPath = normalizeStoragePath((req.query.path as string) || '')
+      subPath = normalizeShareRelativePath(share.file_path, String(req.query.path || ''))
     } catch {
       return res.status(400).json({ error: 'common.invalidPath' })
     }
@@ -372,7 +399,7 @@ router.get('/preview/:code', async (req: Request, res: Response) => {
     const storage = share.storage_pool_id ? getStorageByPoolId(share.user_id, share.storage_pool_id) : getStorage(share.user_id)
     let subPath = ''
     try {
-      subPath = normalizeStoragePath((req.query.path as string) || '')
+      subPath = normalizeShareRelativePath(share.file_path, String(req.query.path || ''))
     } catch {
       return res.status(400).json({ error: 'common.invalidPath' })
     }

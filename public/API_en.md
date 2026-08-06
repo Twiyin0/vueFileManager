@@ -501,6 +501,7 @@ Notes:
 - JWT auth is required
 - `fileType` accepts `file` or `folder`
 - For folder shares, `filePath: ""` represents the selected storage pool root
+- For `list`, `download`, and `preview`, `path` is relative to the share root, and `list` returns normalized relative paths
 
 ## User Endpoints
 
